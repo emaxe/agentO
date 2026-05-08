@@ -24,8 +24,8 @@
 - [x] #9: Адаптер OpenCode
 
 ### Блок 5 — Launcher
-- [ ] #10: Child launcher (spawn + cleanup hooks)
-- [ ] #11: Independent launcher (detached spawn)
+- [x] #10: Child launcher (spawn + cleanup hooks)
+- [x] #11: Independent launcher (detached spawn)
 
 ### Блок 6 — CLI
 - [ ] #12: CLI launch
