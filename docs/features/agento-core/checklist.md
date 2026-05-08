@@ -42,9 +42,9 @@
 
 ### Блок 8 — Tests + Final
 - [x] #21: Unit-тесты
-- [ ] #22: Final polish (package.json bin/files, README)
+- [x] #22: Final polish (package.json bin/files, README)
 
 ## Финализация
-- [ ] Все проверки пройдены
-- [ ] Код закоммичен
-- [ ] Статус в README.md обновлён на `Done`
+- [x] Все проверки пройдены
+- [x] Код закоммичен
+- [x] Статус в README.md обновлён на `Done`

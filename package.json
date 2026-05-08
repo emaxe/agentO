@@ -14,13 +14,16 @@
     }
   },
   "files": [
-    "dist",
-    "bin"
+    "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   },
   "scripts": {
+    "prepublishOnly": "npm run build && npm test",
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest run",
