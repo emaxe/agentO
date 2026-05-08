@@ -20,8 +20,8 @@
 
 ### Блок 4 — Adapter system
 - [x] #7: Интерфейс AgentAdapter
-- [ ] #8: Адаптер Claude Code
-- [ ] #9: Адаптер OpenCode
+- [x] #8: Адаптер Claude Code
+- [x] #9: Адаптер OpenCode
 
 ### Блок 5 — Launcher
 - [ ] #10: Child launcher (spawn + cleanup hooks)

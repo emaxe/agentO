@@ -1,4 +1,4 @@
-import type { Profile } from '../config/schema.js';
+import type { Profile, Provider } from '../config/schema.js';
 import type { LaunchScope } from '../config/schema.js';
 
 /** Режим области действия конфига агента */
@@ -27,8 +27,10 @@ export interface AgentAdapter {
   /** Читает текущий конфиг агента для указанного scope */
   readConfig(scope: LaunchScope, cwd?: string): Promise<AgentConfig | null>;
 
-  /** Генерирует конфиг агента из профиля AgentO */
-  buildConfig(profile: Profile): AgentConfig;
+  /** Генерирует конфиг агента из профиля AgentO и списка провайдеров.
+   * Использует первую пару (провайдер, модель) из профиля.
+   */
+  buildConfig(profile: Profile, providers: Provider[]): AgentConfig;
 
   /** Записывает конфиг агента для указанного scope */
   writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string): Promise<void>;
