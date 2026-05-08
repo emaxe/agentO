@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
-import { Box, Text, useApp } from 'ink';
+import { useApp } from 'ink';
 import { MainMenu } from './screens/MainMenu.js';
+import { LaunchAgent } from './screens/LaunchAgent.js';
+import { Providers } from './screens/Providers.js';
+import { Profiles } from './screens/Profiles.js';
+import { Agents } from './screens/Agents.js';
+import { Settings } from './screens/Settings.js';
 
 export type Screen = 'main' | 'launch' | 'providers' | 'profiles' | 'agents' | 'settings';
 
@@ -20,11 +25,25 @@ export function App(): React.JSX.Element {
     return <MainMenu onSelect={navigate} onExit={exit} />;
   }
 
-  // Заглушки для остальных экранов — реализация в задачах #17-20
-  return (
-    <Box flexDirection="column" padding={1}>
-      <Text bold>{screen.charAt(0).toUpperCase() + screen.slice(1)}</Text>
-      <Text dimColor>Press Esc to go back</Text>
-    </Box>
-  );
+  if (screen === 'launch') {
+    return <LaunchAgent onBack={goBack} />;
+  }
+
+  if (screen === 'providers') {
+    return <Providers onBack={goBack} />;
+  }
+
+  if (screen === 'profiles') {
+    return <Profiles onBack={goBack} />;
+  }
+
+  if (screen === 'agents') {
+    return <Agents onBack={goBack} />;
+  }
+
+  if (screen === 'settings') {
+    return <Settings onBack={goBack} />;
+  }
+
+  return <MainMenu onSelect={navigate} onExit={exit} />;
 }

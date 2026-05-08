@@ -35,10 +35,10 @@
 
 ### Блок 7 — TUI
 - [x] #16: TUI App + MainMenu
-- [ ] #17: TUI LaunchAgent
-- [ ] #18: TUI Providers
-- [ ] #19: TUI Profiles
-- [ ] #20: TUI Agents + Settings
+- [x] #17: TUI LaunchAgent
+- [x] #18: TUI Providers
+- [x] #19: TUI Profiles
+- [x] #20: TUI Agents + Settings
 
 ### Блок 8 — Tests + Final
 - [ ] #21: Unit-тесты

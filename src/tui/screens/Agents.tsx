@@ -1,0 +1,88 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Box, Text, useInput } from 'ink';
+import { backupExists } from '../../config/store.js';
+import { claudeCodeAdapter } from '../../adapters/claude-code.js';
+import { openCodeAdapter } from '../../adapters/opencode.js';
+import type { AgentAdapter } from '../../adapters/base.js';
+import { readBackup } from '../../config/store.js';
+
+const ADAPTERS: AgentAdapter[] = [claudeCodeAdapter, openCodeAdapter];
+const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
+
+interface AgentStatus {
+  adapterId: string;
+  displayName: string;
+  scope: 'global' | 'project';
+  configPath: string;
+  modified: boolean;
+}
+
+interface AgentsProps {
+  onBack: () => void;
+}
+
+export function Agents({ onBack }: AgentsProps): React.JSX.Element {
+  const [statuses, setStatuses] = useState<AgentStatus[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [status, setStatus] = useState('');
+
+  const loadStatuses = useCallback(() => {
+    const result: AgentStatus[] = [];
+    for (const adapter of ADAPTERS) {
+      const paths = adapter.configPaths();
+      for (const scope of SCOPES) {
+        result.push({
+          adapterId: adapter.id,
+          displayName: adapter.displayName,
+          scope,
+          configPath: paths[scope],
+          modified: backupExists(adapter.id, scope),
+        });
+      }
+    }
+    setStatuses(result);
+  }, []);
+
+  useEffect(() => { loadStatuses(); }, [loadStatuses]);
+
+  useInput((input, key) => {
+    if (key.escape || input === 'q') { onBack(); return; }
+    if (key.upArrow) setSelectedIndex((i) => Math.max(0, i - 1));
+    else if (key.downArrow) setSelectedIndex((i) => Math.min(statuses.length - 1, i + 1));
+    else if (input === 'r' && statuses[selectedIndex]?.modified) {
+      const s = statuses[selectedIndex];
+      if (!s) return;
+      const adapter = ADAPTERS.find((a) => a.id === s.adapterId);
+      if (!adapter) return;
+      readBackup(s.adapterId, s.scope)
+        .then((backup) => {
+          if (!backup) { setStatus('No backup found'); return null; }
+          return adapter.writeConfig(backup as Record<string, unknown>, s.scope);
+        })
+        .then(() => { setStatus(`Restored ${s.displayName} [${s.scope}]`); loadStatuses(); })
+        .catch((err) => setStatus(`Error: ${String(err)}`));
+    }
+  });
+
+  return (
+    <Box flexDirection="column" padding={1}>
+      <Text bold>Agent Config Status</Text>
+      <Text dimColor>↑↓ navigate | r: restore (if modified) | Esc: back</Text>
+      {status && <Text color="green">{status}</Text>}
+      <Box flexDirection="column" marginTop={1}>
+        {statuses.map((s, i) => (
+          <Box key={`${s.adapterId}-${s.scope}`} flexDirection="column">
+            <Text color={i === selectedIndex ? 'green' : undefined}>
+              {i === selectedIndex ? '▶ ' : '  '}
+              {s.displayName} [{s.scope}]:{' '}
+              <Text color={s.modified ? 'yellow' : 'green'}>
+                {s.modified ? 'modified' : 'original'}
+              </Text>
+              {s.modified && i === selectedIndex && <Text dimColor> (press r to restore)</Text>}
+            </Text>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
