@@ -41,7 +41,7 @@
 - [x] #20: TUI Agents + Settings
 
 ### Блок 8 — Tests + Final
-- [ ] #21: Unit-тесты
+- [x] #21: Unit-тесты
 - [ ] #22: Final polish (package.json bin/files, README)
 
 ## Финализация
