@@ -53,8 +53,7 @@ program
 
 // Default action: launch TUI
 program.action(() => {
-  console.log('Starting TUI...');
-  // TODO: запустить TUI (src/tui/App.tsx)
+  import('../src/tui/start.js').then(({ startTui }) => startTui()).catch(console.error);
 });
 
 program.parse(process.argv);

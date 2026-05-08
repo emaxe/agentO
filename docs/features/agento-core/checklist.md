@@ -28,13 +28,13 @@
 - [x] #11: Independent launcher (detached spawn)
 
 ### Блок 6 — CLI
-- [ ] #12: CLI launch
-- [ ] #13: CLI provider
-- [ ] #14: CLI profile
-- [ ] #15: CLI restore + agent status
+- [x] #12: CLI launch
+- [x] #13: CLI provider
+- [x] #14: CLI profile
+- [x] #15: CLI restore + agent status
 
 ### Блок 7 — TUI
-- [ ] #16: TUI App + MainMenu
+- [x] #16: TUI App + MainMenu
 - [ ] #17: TUI LaunchAgent
 - [ ] #18: TUI Providers
 - [ ] #19: TUI Profiles
