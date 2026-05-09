@@ -14,7 +14,7 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 | [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | Multi-tier support (small/base/smart) |
 | [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | Custom provider prefix |
 | [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | OpenAI-compatible providers |
-| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | Environment variable injection |
+| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | Environment variable injection. Hidden by default (`--dev` to show). |
 
 ## Installation
 
@@ -106,6 +106,11 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 
 Launches the interactive TUI by default.
 
+```bash
+agento          # Launch interactive TUI
+agento --dev    # Show development agents (e.g. codex) in TUI
+```
+
 ### `agento launch` — Launch Agent
 
 ```bash
@@ -115,7 +120,8 @@ Options:
   -p, --profile <name>   Profile name to use (required)
   -a, --agent <id>       Agent to launch: claude-code, opencode, qwen, codex (required)
   -m, --mode <mode>      Launch mode: child or independent (default: from settings)
-  -s, --scope <scope>     Config scope: global or project (default: from settings)
+  -s, --scope <scope>    Config scope: global or project (default: from settings)
+  -d, --dev              Show development agents (e.g. codex)
 ```
 
 **Launch Modes:**
@@ -157,6 +163,7 @@ agento profile remove <name>                  # Remove a profile
 
 ```bash
 agento agent status                           # Show config status for all agents
+agento agent status --dev                     # Include development agents (e.g. codex)
 ```
 
 ### `agento restore` — Restore Config
@@ -215,7 +222,7 @@ Each supported agent has a dedicated adapter that translates AgentO's generic co
 - **Claude Code**: Generates `~/.claude/settings.json` with tier-based model selection
 - **OpenCode**: Generates `~/.config/opencode/config.json` with provider-prefixed model names
 - **Qwen CLI**: Generates `~/.qwen/settings.json` with OpenAI-compatible provider structure
-- **Codex CLI**: Generates `~/.codex/config.toml` with environment variable references
+- **Codex CLI** (`--dev` to show): Generates `~/.codex/config.toml` with `wire_api: responses`, profiles, and environment variable references. In project scope, splits config between global (`model_providers`) and project (`model`) configs.
 
 ### Backup & Restore
 

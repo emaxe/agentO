@@ -50,6 +50,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`--dev` flag** across CLI and TUI: show development agents (Codex CLI) hidden by default
+- **Codex CLI adapter improvements**:
+  - `wire_api` changed from `'openai'` to `'responses'`
+  - Generates `default_profile` and `profiles.default` blocks in TOML config
+  - `writeConfig` now handles `project` scope correctly: writes `model_providers` to global config and `model` to project config, with backup/restore of global config
+  - Added `buildEnv` support for API key injection via environment variables
+- **TUI Profiles screen**: redesigned detail view — `a` to add model, `d` to delete model, `↑↓` for navigation (removed implicit reorder)
+- **TUI Providers screen**: `Enter` on the trailing row now opens add form (in addition to `a`)
+- **Base adapter interface**: added optional `dev?: boolean` flag for marking development agents
+
+### Changed
+
+- Codex CLI is now marked as `dev: true` — hidden from TUI and CLI unless `--dev` is passed
+- Launch command now passes `args` (e.g. `['-p', 'default']` for Codex) to child/independent launchers
+
 ### Planned
 
 - Additional agent support (continue.dev, aider, etc.)

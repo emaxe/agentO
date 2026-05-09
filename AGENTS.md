@@ -109,6 +109,7 @@ AgentO — CLI-инструмент для управления конфигур
 
 - `id` — уникальный идентификатор
 - `displayName` — человекочитаемое имя
+- `dev?` — флаг разработки: скрывает агента из UI/CLI по умолчанию
 - `configPaths(cwd?)` → `{ global, project }` — пути к конфигам агента
 - `readConfig(scope, cwd?)` — читает текущий конфиг агента
 - `buildConfig(profile, providers)` — генерирует конфиг агента из профиля
@@ -122,7 +123,7 @@ AgentO — CLI-инструмент для управления конфигур
 | Claude Code | `claude-code` | `claude` | JSON (`~/.claude/settings.json`) | Поддерживает tiers (small/base/smart). Только один провайдер на профиль. |
 | OpenCode | `opencode` | `opencode` | JSON (`~/.config/opencode/config.json` или `./opencode.json`) | Префикс модели: `providerKey/model`. |
 | Qwen CLI | `qwen` | `qwen` | JSON (`~/.qwen/settings.json`) | **modelProviders ключ всегда `"openai"`** для openai-compatible провайдеров. Группирует модели по baseUrl. |
-| Codex CLI | `codex` | `codex` | TOML (`~/.codex/config.toml`) | Использует `buildEnv` для инжекта API ключа. |
+| Codex CLI | `codex` | `codex` | TOML (`~/.codex/config.toml`) | `dev: true` (скрыт по умолчанию). `wire_api: responses`. При `project` scope `model_providers` пишет в global config, а `model` — в project config. Использует `buildEnv` для инжекта API ключа. |
 
 ### Важная деталь: Qwen Adapter
 
@@ -140,6 +141,8 @@ const providerKey = 'openai';  // Было: provider.name.toLowerCase().replace(
 ```bash
 # Интерактивный TUI (default)
 agento
+# Показать development agents (e.g. codex):
+agento --dev
 
 # Запуск агента напрямую
 agento launch -p <profile> -a <agent> [-m child|independent] [-s global|project]
@@ -147,6 +150,8 @@ agento launch -p <profile> -a <agent> [-m child|independent] [-s global|project]
 # Примеры:
 agento launch -p default -a claude-code
 agento launch -p default -a qwen -m child -s project
+# Запуск development агента:
+agento launch -p default -a codex --dev
 ```
 
 ### Управление провайдерами
@@ -169,6 +174,7 @@ agento profile remove <name>
 
 ```bash
 agento agent status           # Статус конфигов агентов
+agento agent status --dev     # Показать статус включая development agents
 agento restore -a <agent> -s <scope>  # Восстановить конфиг из бэкапа
 ```
 
@@ -195,9 +201,14 @@ agento restore -a <agent> -s <scope>  # Восстановить конфиг и
 
 - **MainMenu**: Выбор раздела (↑↓, Enter, Esc/q)
 - **LaunchAgent**: Двухшаговый выбор (профиль → агент → запуск)
-- **Providers/Profiles/Agents/Settings**: Просмотр и управление сущностями
+- **Providers**: ↑↓ navigate | Enter/a: add | e: edit | d: delete | Esc: back
+- **Profiles**: В списке ↑↓ navigate | Enter: детали | a: add | d: delete | Esc: back. В деталях профиля: ↑↓ navigate models | a: add model | d: delete model | e: edit | Esc: back
+- **Agents**: Просмотр статуса конфигов (global/project, backup наличие)
+- **Settings**: Настройки по умолчанию
 
 Важно: перед передачей управления child process TUI вызывает `process.stdin.pause()` чтобы сбросить состояние stdin.
+
+Агенты с `dev: true` (например, Codex CLI) скрыты из TUI и CLI по умолчанию. Чтобы показать их, используйте `agento --dev` или `agento launch --dev`.
 
 ## Тесты
 
