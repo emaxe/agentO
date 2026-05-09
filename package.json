@@ -1,6 +1,6 @@
 {
-  "name": "agento",
-  "version": "0.1.0",
+  "name": "@emaxe/agento",
+  "version": "0.1.2",
   "description": "Manage AI agent configurations with profiles and providers",
   "author": "emaxe",
   "license": "MIT",
@@ -28,7 +28,7 @@
   "homepage": "https://github.com/emaxe/agentO#readme",
   "type": "module",
   "bin": {
-    "agento": "./dist/bin/agento.js"
+    "agento": "dist/bin/agento.js"
   },
   "main": "./dist/index.js",
   "exports": {

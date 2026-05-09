@@ -1,6 +1,6 @@
 # AgentO — AI Agent Configuration Manager
 
-[![npm version](https://badge.fury.io/js/agento.svg)](https://www.npmjs.com/package/agento)
+[![npm version](https://badge.fury.io/js/@emaxe%2fagento.svg)](https://www.npmjs.com/package/@emaxe/agento)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > Manage AI agent configurations with profiles and providers. Switch between models, providers, and agents seamlessly.
@@ -21,14 +21,14 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 ### Global Installation (Recommended)
 
 ```bash
-npm install -g agento
+npm install -g @emaxe/agento
 ```
 
 ### Local Installation
 
 ```bash
-npm install --save-dev agento
-npx agento
+npm install --save-dev @emaxe/agento
+npx @emaxe/agento
 ```
 
 ### Requirements
@@ -82,10 +82,12 @@ agento launch -p default -a qwen -m child -s project
 
 ## Interactive TUI
 
-Running `agento` without arguments launches an interactive Terminal User Interface:
+Running `agento` without arguments launches an interactive Terminal User Interface built with [Ink](https://github.com/vadimdemedes/ink) and React.
+
+### Main Menu
 
 ```
-┌────────── AgentO v0.1.0 ──────────┐
+┌────────── AgentO v0.1.1 ──────────┐
 │                                   │
 │ ▶  Launch Agent                   │
 │    Providers                      │
@@ -96,9 +98,85 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 └───────────────────────────────────┘
 ```
 
-- **↑↓** Navigate
-- **Enter** Select
-- **Esc / q** Back/Quit
+**Navigation:** **↑↓** to move, **Enter** to select, **Esc / q** to quit.
+
+### Screens Overview
+
+| Screen | What You Can Do | Key Shortcuts |
+|--------|----------------|---------------|
+| **Launch Agent** | Select profile → select agent → choose mode/scope → launch | **Enter** select, **Esc** back |
+| **Providers** | View, add, edit, delete API providers | **Enter** details, **a** add, **e** edit, **d** delete, **Esc** back |
+| **Profiles** | View, add, delete profiles. In profile details: add/remove/edit models | **Enter** details, **a** add, **d** delete, **Esc** back |
+| **Agents** | Check config status (global/project), backup availability | **Enter** details, **Esc** back |
+| **Settings** | Change default launch mode, default config scope, independent mode | **↑↓** change, **Enter** toggle, **Esc** save & back |
+
+### Launch Agent Workflow
+
+1. **Select Profile** — Choose from your saved profiles
+2. **Select Agent** — Pick which agent to launch (claude-code, opencode, qwen, or codex with `--dev`)
+3. **Optional:** Adjust **Mode** (child/independent) and **Scope** (global/project)
+4. **Launch** — AgentO patches the agent config and starts the agent
+
+```
+Profile: default
+├─ Agent: claude-code
+├─ Mode: child
+├─ Scope: global
+└─ [ Launch ]
+```
+
+In **child mode**, you'll be returned to AgentO when the agent exits, and the original config is automatically restored.
+
+In **independent mode**, AgentO exits immediately and leaves the patched config in place.
+
+### Providers Screen
+
+Manage your API providers without memorizing CLI flags:
+
+- **View** all providers with their type, models count, and base URL
+- **Add** a new provider with guided prompts (name, type, API key, models, base URL)
+- **Edit** existing provider details
+- **Delete** providers you no longer need
+
+### Profiles Screen
+
+Organize your model configurations:
+
+- **View** all profiles with their models and tiers
+- **Add** profiles with single or multi-tier model configurations
+- **In profile details:** add/remove/edit individual model assignments
+
+### Agents Screen
+
+Monitor the status of your agent configurations:
+
+- See if each agent has a **global** or **project** config
+- Check if **backups** exist (indicating AgentO has previously patched the config)
+- View config file paths for each agent
+
+### Settings Screen
+
+Configure defaults for AgentO behavior:
+
+| Setting | Options | Description |
+|---------|---------|-------------|
+| **Default Launch Mode** | `child` / `independent` | How agents are launched by default |
+| **Default Config Scope** | `global` / `project` | Where agent configs are written |
+| **Independent Mode** | `spawn-detached` / `pty` | How independent mode spawns agents |
+
+**Controls:** **↑↓** navigate between settings, **Enter** or **Space** toggle values, **Esc** save and return.
+
+### TUI vs CLI
+
+| Task | TUI | CLI |
+|------|-----|-----|
+| Explore providers visually | ✅ | — |
+| Quick one-off launch | — | `agento launch -p <p> -a <a>` |
+| Script automation | — | ✅ |
+| Check agent config status | ✅ | `agento agent status` |
+| Guided provider/profile creation | ✅ | Manual flag composition |
+
+Use **TUI** for exploration and interactive workflows. Use **CLI** for scripting, aliases, and quick launches.
 
 ## CLI Reference
 
