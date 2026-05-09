@@ -7,6 +7,8 @@
 
 AgentO is a CLI tool that centralizes configuration management for popular AI coding agents. Define your API providers once, create profiles with different model combinations, and switch between them with a single command.
 
+**Русская версия:** [README.ru.md](README.ru.md)
+
 ## Supported Agents
 
 | Agent | Command | Config Format | Special Features |
