@@ -127,6 +127,12 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
         setDeleteTarget(providers[selectedIndex] ?? null);
         setMode('confirm-delete');
       }
+      else if (key.return && selectedIndex === providers.length) {
+        setMode('add');
+        setForm(INITIAL_FORM);
+        setActiveFieldIndex(0);
+        setStatus('');
+      }
       return;
     }
 
@@ -305,7 +311,7 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold>Providers</Text>
-      <Text dimColor>↑↓ navigate | a: add | e: edit | d: delete | Esc: back</Text>
+      <Text dimColor>↑↓ navigate | Enter/a: add | e: edit | d: delete | Esc: back</Text>
       {status && <Text color="green">{status}</Text>}
       <Box flexDirection="column" marginTop={1}>
         {providers.map((p, i) => (

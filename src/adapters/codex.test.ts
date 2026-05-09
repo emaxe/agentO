@@ -45,7 +45,20 @@ describe('CodexAdapter', () => {
       const entry = providers['fireworks-ai'] as Record<string, unknown>;
       expect(entry.name).toBe('Fireworks AI');
       expect(entry.base_url).toBe('https://api.fireworks.ai/inference/v1');
-      expect(entry.wire_api).toBe('openai');
+      expect(entry.wire_api).toBe('responses');
+    });
+
+    it('sets default_profile to default', () => {
+      const config = adapter.buildConfig(testProfile, [testProvider]);
+      expect(config.default_profile).toBe('default');
+    });
+
+    it('creates profiles.default with model and model_provider', () => {
+      const config = adapter.buildConfig(testProfile, [testProvider]);
+      const profiles = config.profiles as Record<string, Record<string, unknown>>;
+      expect('default' in profiles).toBe(true);
+      expect(profiles.default.model).toBe('accounts/fireworks/models/kimi-k2');
+      expect(profiles.default.model_provider).toBe('fireworks-ai');
     });
 
     it('derives env_key from provider name', () => {

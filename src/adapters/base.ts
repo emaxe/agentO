@@ -21,6 +21,9 @@ export interface AgentAdapter {
   /** Отображаемое имя агента */
   readonly displayName: string;
 
+  /** Флаг разработки: скрыт из UI/CLI по умолчанию */
+  readonly dev?: boolean;
+
   /** Возвращает пути к конфигам агента (global и project) */
   configPaths(cwd?: string): AgentConfigPaths;
 

@@ -8,8 +8,13 @@ import { qwenAdapter } from '../../adapters/qwen.js';
 import { codexAdapter } from '../../adapters/codex.js';
 import type { AgentAdapter } from '../../adapters/base.js';
 
-const ADAPTERS: AgentAdapter[] = [claudeCodeAdapter, openCodeAdapter, qwenAdapter, codexAdapter];
+const ALL_ADAPTERS: AgentAdapter[] = [claudeCodeAdapter, openCodeAdapter, qwenAdapter, codexAdapter];
 const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
+
+function getAdapters(dev = false): AgentAdapter[] {
+  if (dev) return ALL_ADAPTERS;
+  return ALL_ADAPTERS.filter((a) => !a.dev);
+}
 
 interface AgentStatus {
   adapterId: string;
@@ -20,17 +25,19 @@ interface AgentStatus {
 }
 
 interface AgentsProps {
+  dev?: boolean;
   onBack: () => void;
 }
 
-export function Agents({ onBack }: AgentsProps): React.JSX.Element {
+export function Agents({ dev, onBack }: AgentsProps): React.JSX.Element {
   const [statuses, setStatuses] = useState<AgentStatus[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [status, setStatus] = useState('');
 
   const loadStatuses = useCallback(() => {
+    const adapters = getAdapters(dev);
     const result: AgentStatus[] = [];
-    for (const adapter of ADAPTERS) {
+    for (const adapter of adapters) {
       const paths = adapter.configPaths();
       for (const scope of SCOPES) {
         result.push({
@@ -43,7 +50,7 @@ export function Agents({ onBack }: AgentsProps): React.JSX.Element {
       }
     }
     setStatuses(result);
-  }, []);
+  }, [dev]);
 
   useEffect(() => { loadStatuses(); }, [loadStatuses]);
 
@@ -54,7 +61,7 @@ export function Agents({ onBack }: AgentsProps): React.JSX.Element {
     else if (input === 'r' && statuses[selectedIndex]?.modified) {
       const s = statuses[selectedIndex];
       if (!s) return;
-      const adapter = ADAPTERS.find((a) => a.id === s.adapterId);
+      const adapter = getAdapters(dev).find((a) => a.id === s.adapterId);
       if (!adapter) return;
       readBackup(s.adapterId, s.scope)
         .then(async (backup) => {

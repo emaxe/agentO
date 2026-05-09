@@ -12,21 +12,27 @@ import type { ExecRequest } from '../../launcher/independent.js';
 import type { Profile, Provider, Settings } from '../../config/schema.js';
 import type { AgentAdapter } from '../../adapters/base.js';
 
-const AGENTS: Array<{ id: string; label: string; adapter: AgentAdapter; command: string }> = [
-  { id: 'claude-code', label: 'Claude Code', adapter: claudeCodeAdapter, command: 'claude' },
-  { id: 'opencode', label: 'OpenCode', adapter: openCodeAdapter, command: 'opencode' },
-  { id: 'qwen', label: 'Qwen CLI', adapter: qwenAdapter, command: 'qwen' },
-  { id: 'codex', label: 'Codex CLI', adapter: codexAdapter, command: 'codex' },
-];
-
 type Step = 'profile' | 'agent' | 'launching';
 
 interface LaunchAgentProps {
+  dev?: boolean;
   onBack: () => void;
   onExec?: (req: ExecRequest) => void;
 }
 
-export function LaunchAgent({ onBack, onExec }: LaunchAgentProps): React.JSX.Element {
+const ALL_AGENTS: Array<{ id: string; label: string; adapter: AgentAdapter; command: string; args?: string[] }> = [
+  { id: 'claude-code', label: 'Claude Code', adapter: claudeCodeAdapter, command: 'claude' },
+  { id: 'opencode', label: 'OpenCode', adapter: openCodeAdapter, command: 'opencode' },
+  { id: 'qwen', label: 'Qwen CLI', adapter: qwenAdapter, command: 'qwen' },
+  { id: 'codex', label: 'Codex CLI', adapter: codexAdapter, command: 'codex', args: ['-p', 'default'] },
+];
+
+function getAgents(dev = false): typeof ALL_AGENTS {
+  if (dev) return ALL_AGENTS;
+  return ALL_AGENTS.filter((a) => !a.adapter.dev);
+}
+
+export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JSX.Element {
   const [step, setStep] = useState<Step>('profile');
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -60,7 +66,8 @@ export function LaunchAgent({ onBack, onExec }: LaunchAgentProps): React.JSX.Ele
       return;
     }
 
-    const items = step === 'profile' ? profiles : AGENTS;
+    const agents = getAgents(dev);
+    const items = step === 'profile' ? profiles : agents;
     const selected = step === 'profile' ? selectedProfile : selectedAgent;
     const setSelected = step === 'profile' ? setSelectedProfile : setSelectedAgent;
 
@@ -76,7 +83,7 @@ export function LaunchAgent({ onBack, onExec }: LaunchAgentProps): React.JSX.Ele
 
       if (step === 'agent') {
         const profile = profiles[selectedProfile];
-        const agentEntry = AGENTS[selectedAgent];
+        const agentEntry = agents[selectedAgent];
 
         if (!profile || !agentEntry || !settings) {
           setError('Invalid selection');
@@ -95,6 +102,7 @@ export function LaunchAgent({ onBack, onExec }: LaunchAgentProps): React.JSX.Ele
           providers,
           scope,
           command: agentEntry.command,
+          args: agentEntry.args,
         };
 
         if (mode === 'child') {
@@ -146,7 +154,7 @@ export function LaunchAgent({ onBack, onExec }: LaunchAgentProps): React.JSX.Ele
   );
 
   if (step === 'profile') return renderList(profiles, selectedProfile, 'Select Profile');
-  if (step === 'agent') return renderList(AGENTS, selectedAgent, 'Select Agent');
+  if (step === 'agent') return renderList(getAgents(dev), selectedAgent, 'Select Agent');
 
   return (
     <Box flexDirection="column" padding={1}>

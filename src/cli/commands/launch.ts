@@ -9,12 +9,19 @@ import { launchChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
 import type { AgentAdapter } from '../../adapters/base.js';
 
-const AGENT_COMMANDS: Record<string, { adapter: AgentAdapter; command: string }> = {
+const ALL_AGENT_COMMANDS: Record<string, { adapter: AgentAdapter; command: string; args?: string[] }> = {
   'claude-code': { adapter: claudeCodeAdapter, command: 'claude' },
   'opencode': { adapter: openCodeAdapter, command: 'opencode' },
   'qwen': { adapter: qwenAdapter, command: 'qwen' },
-  'codex': { adapter: codexAdapter, command: 'codex' },
+  'codex': { adapter: codexAdapter, command: 'codex', args: ['-p', 'default'] },
 };
+
+function getAgentCommands(dev = false): Record<string, { adapter: AgentAdapter; command: string; args?: string[] }> {
+  if (dev) return ALL_AGENT_COMMANDS;
+  return Object.fromEntries(
+    Object.entries(ALL_AGENT_COMMANDS).filter(([, entry]) => !entry.adapter.dev),
+  );
+}
 
 export function createLaunchCommand(): Command {
   const cmd = new Command('launch')
@@ -23,7 +30,9 @@ export function createLaunchCommand(): Command {
     .requiredOption('-a, --agent <id>', 'Agent to launch (claude-code, opencode, qwen, codex)')
     .option('-m, --mode <mode>', 'Launch mode: child or independent')
     .option('-s, --scope <scope>', 'Config scope: global or project')
-    .action(async (opts: { profile: string; agent: string; mode?: string; scope?: string }) => {
+    .option('-d, --dev', 'Show development agents (e.g. codex)')
+    .action(async (opts: { profile: string; agent: string; mode?: string; scope?: string; dev?: boolean }) => {
+      const AGENT_COMMANDS = getAgentCommands(opts.dev);
       try {
         const config = await readConfig();
 
@@ -47,7 +56,7 @@ export function createLaunchCommand(): Command {
         const mode = (opts.mode ?? config.settings.defaultLaunchMode) as 'child' | 'independent';
         const scope = (opts.scope ?? config.settings.defaultConfigScope) as 'global' | 'project';
 
-        const { adapter, command } = agentEntry;
+        const { adapter, command, args } = agentEntry;
 
         if (mode === 'child') {
           const exitCode = await launchChild({
@@ -56,6 +65,7 @@ export function createLaunchCommand(): Command {
             providers: config.providers,
             scope,
             command,
+            args,
           });
           process.exit(exitCode);
         } else {
@@ -65,6 +75,7 @@ export function createLaunchCommand(): Command {
             providers: config.providers,
             scope,
             command,
+            args,
           });
           spawnSync(execReq.command, execReq.args, { stdio: 'inherit', env: execReq.env });
           process.exit(0);

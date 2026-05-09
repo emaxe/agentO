@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
 import TextInput from 'ink-text-input';
-import { listProfiles, addProfile, updateProfile, removeProfile, moveModelUp, moveModelDown } from '../../profiles/profile-manager.js';
+import { listProfiles, addProfile, updateProfile, removeProfile } from '../../profiles/profile-manager.js';
 import { listProviders } from '../../providers/provider-manager.js';
 import type { Profile, Provider, ProfileModel, ModelTier } from '../../config/schema.js';
 
@@ -156,12 +156,42 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
 
     if (mode === 'detail' && detailProfile) {
       if (key.escape || input === 'q') { setMode('list'); return; }
+      if (input === 'd') {
+        if (detailProfile.models.length <= 1) {
+          setStatus('Cannot delete the last model');
+          return;
+        }
+        const newModels = detailProfile.models.filter((_, i) => i !== detailModelIndex);
+        updateProfile(detailProfile.id, { models: newModels })
+          .then((updated) => {
+            setDetailProfile(updated);
+            reload();
+            setDetailModelIndex(Math.max(0, detailModelIndex - 1));
+            setStatus('');
+          })
+          .catch((err) => setStatus(`Error: ${String(err)}`));
+        return;
+      }
+      if (input === 'a') {
+        setEditProfile(detailProfile);
+        setEditName(detailProfile.name);
+        setEditModels([...detailProfile.models]);
+        setEditModelCursor(detailProfile.models.length); // курсор на [+ add model]
+        setEditFocus('models');
+        setEditSubStep('select-provider');
+        setProviderCursor(0);
+        setModelCursor(0);
+        setCustomModel('');
+        setStatus('');
+        setMode('edit');
+        return;
+      }
       if (input === 'e') {
         setEditProfile(detailProfile);
         setEditName(detailProfile.name);
         setEditModels([...detailProfile.models]);
         setEditModelCursor(0);
-        setEditFocus('models');
+        setEditFocus('name');
         setEditSubStep(null);
         setProviderCursor(0);
         setModelCursor(0);
@@ -171,13 +201,9 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
         return;
       }
       if (key.upArrow) {
-        moveModelUp(detailProfile.id, detailModelIndex)
-          .then((updated) => { setDetailProfile(updated); reload(); setDetailModelIndex(Math.max(0, detailModelIndex - 1)); })
-          .catch(console.error);
+        setDetailModelIndex(Math.max(0, detailModelIndex - 1));
       } else if (key.downArrow) {
-        moveModelDown(detailProfile.id, detailModelIndex)
-          .then((updated) => { setDetailProfile(updated); reload(); setDetailModelIndex(Math.min(detailProfile.models.length - 1, detailModelIndex + 1)); })
-          .catch(console.error);
+        setDetailModelIndex(Math.min(detailProfile.models.length - 1, detailModelIndex + 1));
       }
       return;
     }
@@ -656,7 +682,7 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>{detailProfile.name}</Text>
-        <Text dimColor>↑↓ reorder models | e: edit | Esc back</Text>
+        <Text dimColor>↑↓ navigate | a: add | d: delete | e: edit | Esc back</Text>
         <Box flexDirection="column" marginTop={1}>
           {detailProfile.models.map((m, i) => {
             const p = providers.find((pr) => pr.id === m.providerId);

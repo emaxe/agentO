@@ -11,10 +11,11 @@ import type { ExecRequest } from '../launcher/independent.js';
 export type Screen = 'main' | 'launch' | 'providers' | 'profiles' | 'agents' | 'settings';
 
 interface AppProps {
+  dev?: boolean;
   onExec?: (req: ExecRequest) => void;
 }
 
-export function App({ onExec }: AppProps): React.JSX.Element {
+export function App({ dev, onExec }: AppProps): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>('main');
   const { exit } = useApp();
 
@@ -36,7 +37,7 @@ export function App({ onExec }: AppProps): React.JSX.Element {
   }
 
   if (screen === 'launch') {
-    return <LaunchAgent onBack={goBack} onExec={handleExec} />;
+    return <LaunchAgent dev={dev} onBack={goBack} onExec={handleExec} />;
   }
 
   if (screen === 'providers') {
@@ -48,7 +49,7 @@ export function App({ onExec }: AppProps): React.JSX.Element {
   }
 
   if (screen === 'agents') {
-    return <Agents onBack={goBack} />;
+    return <Agents dev={dev} onBack={goBack} />;
   }
 
   if (screen === 'settings') {

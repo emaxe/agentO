@@ -14,7 +14,8 @@ const pkg = require('../../package.json') as { version: string };
 program
   .name('agento')
   .description('Manage AI agent configurations with profiles and providers')
-  .version(pkg.version);
+  .version(pkg.version)
+  .option('-d, --dev', 'Show development agents (e.g. codex)');
 
 program.addCommand(createLaunchCommand());
 program.addCommand(createProviderCommand());
@@ -24,9 +25,10 @@ program.addCommand(createAgentCommand());
 
 // Default action: launch TUI
 program.action(() => {
+  const opts = program.opts() as { dev?: boolean };
   import('../src/tui/start.js')
     .then(async ({ startTui }) => {
-      let execReq = await startTui();
+      let execReq = await startTui({ dev: opts.dev });
       while (execReq) {
         // Ink may leave stdin in "flowing" state — pause before handing fd to child
         process.stdin.pause();
@@ -36,7 +38,7 @@ program.action(() => {
         });
         await execReq.cleanup?.();
         if (!execReq.relaunch) break;
-        execReq = await startTui();
+        execReq = await startTui({ dev: opts.dev });
       }
     })
     .catch(console.error);
