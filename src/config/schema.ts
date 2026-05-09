@@ -15,10 +15,15 @@ export const ProviderSchema = z.object({
 });
 export type Provider = z.infer<typeof ProviderSchema>;
 
+// Уровень модели в профиле (REQ: small / base / smart)
+export const ModelTierSchema = z.enum(['small', 'base', 'smart']);
+export type ModelTier = z.infer<typeof ModelTierSchema>;
+
 // Пара провайдер+модель в профиле
 export const ProfileModelSchema = z.object({
   providerId: z.string().uuid(),
   model: z.string().min(1),
+  tier: ModelTierSchema.optional(),
 });
 export type ProfileModel = z.infer<typeof ProfileModelSchema>;
 
@@ -31,7 +36,7 @@ export const ProfileSchema = z.object({
 export type Profile = z.infer<typeof ProfileSchema>;
 
 // Поддерживаемые агенты (REQ-8)
-export const AgentIdSchema = z.enum(['claude-code', 'opencode']);
+export const AgentIdSchema = z.enum(['claude-code', 'opencode', 'qwen', 'codex']);
 export type AgentId = z.infer<typeof AgentIdSchema>;
 
 // Scope конфига (REQ-5)
@@ -42,10 +47,15 @@ export type LaunchScope = z.infer<typeof LaunchScopeSchema>;
 export const LaunchModeSchema = z.enum(['child', 'independent']);
 export type LaunchMode = z.infer<typeof LaunchModeSchema>;
 
+// Вариант independent-запуска
+export const IndependentModeSchema = z.enum(['spawn-detached', 'pty']);
+export type IndependentMode = z.infer<typeof IndependentModeSchema>;
+
 // Настройки AgentO (REQ-3, REQ-11)
 export const SettingsSchema = z.object({
   defaultLaunchMode: LaunchModeSchema.default('child'),
   defaultConfigScope: LaunchScopeSchema.default('global'),
+  independentMode: IndependentModeSchema.default('pty'),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

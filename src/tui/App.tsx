@@ -6,10 +6,15 @@ import { Providers } from './screens/Providers.js';
 import { Profiles } from './screens/Profiles.js';
 import { Agents } from './screens/Agents.js';
 import { Settings } from './screens/Settings.js';
+import type { ExecRequest } from '../launcher/independent.js';
 
 export type Screen = 'main' | 'launch' | 'providers' | 'profiles' | 'agents' | 'settings';
 
-export function App(): React.JSX.Element {
+interface AppProps {
+  onExec?: (req: ExecRequest) => void;
+}
+
+export function App({ onExec }: AppProps): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>('main');
   const { exit } = useApp();
 
@@ -21,12 +26,17 @@ export function App(): React.JSX.Element {
     setScreen('main');
   };
 
+  const handleExec = (req: ExecRequest): void => {
+    onExec?.(req);
+    exit();
+  };
+
   if (screen === 'main') {
     return <MainMenu onSelect={navigate} onExit={exit} />;
   }
 
   if (screen === 'launch') {
-    return <LaunchAgent onBack={goBack} />;
+    return <LaunchAgent onBack={goBack} onExec={handleExec} />;
   }
 
   if (screen === 'providers') {

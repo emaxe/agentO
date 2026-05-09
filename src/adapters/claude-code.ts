@@ -4,7 +4,19 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
-import type { Profile, Provider } from '../config/schema.js';
+import type { ModelTier, Profile, ProfileModel, Provider } from '../config/schema.js';
+
+function escapeForSingleQuoted(value: string): string {
+  return value.replace(/'/g, "'\\''");
+}
+
+function pickByTier(
+  models: ProfileModel[],
+  tier: ModelTier,
+  fallback: ProfileModel,
+): ProfileModel {
+  return models.find((m) => m.tier === tier) ?? fallback;
+}
 
 export class ClaudeCodeAdapter implements AgentAdapter {
   readonly id = 'claude-code';
@@ -28,18 +40,44 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     const first = profile.models[0];
     if (!first) throw new Error(`Profile "${profile.name}" has no models`);
 
-    const provider = providers.find((p) => p.id === first.providerId);
-    if (!provider) throw new Error(`Provider not found for id: ${first.providerId}`);
+    // Базовая модель: явный tier=base, иначе первая в списке.
+    const base =
+      profile.models.find((m) => m.tier === 'base') ?? first;
 
-    const env: Record<string, string> = {
-      ANTHROPIC_API_KEY: provider.apiKey,
-      ANTHROPIC_MODEL: first.model,
-    };
-    if (provider.baseUrl) {
-      env['ANTHROPIC_BASE_URL'] = provider.baseUrl;
+    const baseProvider = providers.find((p) => p.id === base.providerId);
+    if (!baseProvider) throw new Error(`Provider not found for id: ${base.providerId}`);
+
+    // Если в профиле одна модель — она применяется ко всем уровням.
+    const small = pickByTier(profile.models, 'small', base);
+    const smart = pickByTier(profile.models, 'smart', base);
+
+    // Claude Code supports only one provider per profile
+    const providerIds = new Set([small.providerId, base.providerId, smart.providerId]);
+    if (providerIds.size > 1) {
+      throw new Error(
+        `Claude Code supports only one provider per profile. Found providers for different tiers: ${[...providerIds].join(', ')}`
+      );
     }
 
-    return { env };
+    const env: Record<string, string> = {
+      ANTHROPIC_MODEL: base.model,
+      ANTHROPIC_SMALL_FAST_MODEL: small.model,
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: small.model,
+      ANTHROPIC_DEFAULT_SONNET_MODEL: base.model,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: smart.model,
+    };
+    if (baseProvider.baseUrl) {
+      env['ANTHROPIC_BASE_URL'] = baseProvider.baseUrl;
+    }
+
+    const config: AgentConfig = {
+      $schema: 'https://json.schemastore.org/claude-code-settings.json',
+      apiKeyHelper: `bash -c 'echo ${escapeForSingleQuoted(baseProvider.apiKey)}'`,
+      env,
+      model: base.model,
+    };
+
+    return config;
   }
 
   async writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string): Promise<void> {

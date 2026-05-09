@@ -1,42 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
+import { useKeyInput } from '../use-key-input.js';
 import { readConfig } from '../../config/store.js';
 import { claudeCodeAdapter } from '../../adapters/claude-code.js';
 import { openCodeAdapter } from '../../adapters/opencode.js';
-import { launchChild } from '../../launcher/child.js';
+import { qwenAdapter } from '../../adapters/qwen.js';
+import { codexAdapter } from '../../adapters/codex.js';
+import { prepareChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
-import type { Profile, Provider } from '../../config/schema.js';
-import type { AgentAdapter, LaunchScope } from '../../adapters/base.js';
+import type { ExecRequest } from '../../launcher/independent.js';
+import type { Profile, Provider, Settings } from '../../config/schema.js';
+import type { AgentAdapter } from '../../adapters/base.js';
 
 const AGENTS: Array<{ id: string; label: string; adapter: AgentAdapter; command: string }> = [
   { id: 'claude-code', label: 'Claude Code', adapter: claudeCodeAdapter, command: 'claude' },
   { id: 'opencode', label: 'OpenCode', adapter: openCodeAdapter, command: 'opencode' },
+  { id: 'qwen', label: 'Qwen CLI', adapter: qwenAdapter, command: 'qwen' },
+  { id: 'codex', label: 'Codex CLI', adapter: codexAdapter, command: 'codex' },
 ];
 
-const SCOPES: Array<{ value: LaunchScope; label: string }> = [
-  { value: 'global', label: 'Global config' },
-  { value: 'project', label: 'Project config' },
-];
-
-const MODES: Array<{ value: 'child' | 'independent'; label: string }> = [
-  { value: 'child', label: 'Child (wait for exit)' },
-  { value: 'independent', label: 'Independent (detached)' },
-];
-
-type Step = 'profile' | 'agent' | 'scope' | 'mode' | 'launching';
+type Step = 'profile' | 'agent' | 'launching';
 
 interface LaunchAgentProps {
   onBack: () => void;
+  onExec?: (req: ExecRequest) => void;
 }
 
-export function LaunchAgent({ onBack }: LaunchAgentProps): React.JSX.Element {
+export function LaunchAgent({ onBack, onExec }: LaunchAgentProps): React.JSX.Element {
   const [step, setStep] = useState<Step>('profile');
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [selectedProfile, setSelectedProfile] = useState(0);
   const [selectedAgent, setSelectedAgent] = useState(0);
-  const [selectedScope, setSelectedScope] = useState(0);
-  const [selectedMode, setSelectedMode] = useState(0);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
 
@@ -45,38 +41,28 @@ export function LaunchAgent({ onBack }: LaunchAgentProps): React.JSX.Element {
       .then((config) => {
         setProfiles(config.profiles);
         setProviders(config.providers);
+        setSettings(config.settings);
       })
       .catch((err) => setError(String(err)));
   }, []);
 
-  useInput((input, key) => {
-    if (step === 'launching') return;
+  useKeyInput((input, key) => {
+    if (step === 'launching' && !error) return;
 
     if (key.escape || input === 'q') {
       if (step === 'profile') {
         onBack();
         return;
       }
-      const steps: Step[] = ['profile', 'agent', 'scope', 'mode'];
+      const steps: Step[] = ['profile', 'agent'];
       const idx = steps.indexOf(step);
       if (idx > 0) setStep(steps[idx - 1] as Step);
       return;
     }
 
-    const items =
-      step === 'profile' ? profiles :
-      step === 'agent' ? AGENTS :
-      step === 'scope' ? SCOPES : MODES;
-
-    const selected =
-      step === 'profile' ? selectedProfile :
-      step === 'agent' ? selectedAgent :
-      step === 'scope' ? selectedScope : selectedMode;
-
-    const setSelected =
-      step === 'profile' ? setSelectedProfile :
-      step === 'agent' ? setSelectedAgent :
-      step === 'scope' ? setSelectedScope : setSelectedMode;
+    const items = step === 'profile' ? profiles : AGENTS;
+    const selected = step === 'profile' ? selectedProfile : selectedAgent;
+    const setSelected = step === 'profile' ? setSelectedProfile : setSelectedAgent;
 
     if (key.upArrow) {
       setSelected(Math.max(0, selected - 1));
@@ -88,28 +74,20 @@ export function LaunchAgent({ onBack }: LaunchAgentProps): React.JSX.Element {
         return;
       }
 
-      const nextStep: Record<Step, Step> = {
-        profile: 'agent',
-        agent: 'scope',
-        scope: 'mode',
-        mode: 'launching',
-        launching: 'launching',
-      };
-      const next = nextStep[step];
-      setStep(next);
-
-      if (next === 'launching') {
+      if (step === 'agent') {
         const profile = profiles[selectedProfile];
         const agentEntry = AGENTS[selectedAgent];
-        const scope = SCOPES[selectedScope].value;
-        const mode = MODES[selectedMode].value;
 
-        if (!profile || !agentEntry) {
+        if (!profile || !agentEntry || !settings) {
           setError('Invalid selection');
           return;
         }
 
+        setStep('launching');
         setStatus(`Launching ${agentEntry.label}...`);
+
+        const scope = settings.defaultConfigScope;
+        const mode = settings.defaultLaunchMode;
 
         const launchOptions = {
           adapter: agentEntry.adapter,
@@ -120,18 +98,20 @@ export function LaunchAgent({ onBack }: LaunchAgentProps): React.JSX.Element {
         };
 
         if (mode === 'child') {
-          launchChild(launchOptions)
-            .then((exitCode) => {
-              setStatus(`Done (exit code: ${exitCode})`);
+          prepareChild(launchOptions)
+            .then(({ execReq, cleanup }) => {
+              onExec?.({ ...execReq, relaunch: true, cleanup });
             })
             .catch((err) => setError(String(err)));
         } else {
           launchIndependent(launchOptions)
-            .then(() => {
-              setStatus('Launched (detached)');
+            .then((execReq) => {
+              onExec?.(execReq);
             })
             .catch((err) => setError(String(err)));
         }
+      } else {
+        setStep('agent');
       }
     }
   });
@@ -167,8 +147,6 @@ export function LaunchAgent({ onBack }: LaunchAgentProps): React.JSX.Element {
 
   if (step === 'profile') return renderList(profiles, selectedProfile, 'Select Profile');
   if (step === 'agent') return renderList(AGENTS, selectedAgent, 'Select Agent');
-  if (step === 'scope') return renderList(SCOPES, selectedScope, 'Select Config Scope');
-  if (step === 'mode') return renderList(MODES, selectedMode, 'Select Launch Mode');
 
   return (
     <Box flexDirection="column" padding={1}>

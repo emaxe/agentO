@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
+import { useKeyInput } from '../use-key-input.js';
 import { readConfig, writeConfig } from '../../config/store.js';
 
 const SETTINGS = [
@@ -27,7 +28,7 @@ export function Settings({ onBack }: SettingsProps): React.JSX.Element {
 
   useEffect(() => { load(); }, [load]);
 
-  useInput((input, key) => {
+  useKeyInput((input, key) => {
     if (key.escape || input === 'q') { onBack(); return; }
     if (key.upArrow) setSelectedIndex((i) => Math.max(0, i - 1));
     else if (key.downArrow) setSelectedIndex((i) => Math.min(SETTINGS.length - 1, i + 1));

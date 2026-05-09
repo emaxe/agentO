@@ -34,6 +34,12 @@ export interface AgentAdapter {
 
   /** Записывает конфиг агента для указанного scope */
   writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string): Promise<void>;
+
+  /**
+   * Опционально: возвращает env-переменные, которые нужно инжектировать при запуске агента.
+   * Используется адаптерами (например Codex), которые хранят ключ API как ссылку на env-переменную.
+   */
+  buildEnv?(profile: Profile, providers: Provider[]): Record<string, string>;
 }
 
 /** Карта зарегистрированных адаптеров */

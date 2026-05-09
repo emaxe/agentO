@@ -22,31 +22,55 @@ const testProfile: Profile = {
 describe('OpenCodeAdapter', () => {
   it('buildConfig returns correct model and provider', () => {
     const config = adapter.buildConfig(testProfile, [testProvider]);
-    expect(config.model).toBe('claude-3-opus');
+    expect(config.model).toBe('anthropic/claude-3-opus');
     const provider = config.provider as Record<string, unknown>;
     expect('anthropic' in provider).toBe(true);
     const anthropic = provider.anthropic as Record<string, unknown>;
-    expect(anthropic.apiKey).toBe('sk-ant-test123');
     const options = anthropic.options as Record<string, string>;
+    expect(options.apiKey).toBe('sk-ant-test123');
     expect(options.baseURL).toBe('https://api.test.com');
   });
 
-  it('buildConfig without baseUrl omits options', () => {
+  it('buildConfig without baseUrl omits baseURL from options', () => {
     const providerNoUrl = { ...testProvider, baseUrl: undefined };
     const config = adapter.buildConfig(testProfile, [providerNoUrl]);
     const provider = config.provider as Record<string, unknown>;
     const anthropic = provider.anthropic as Record<string, unknown>;
-    expect('options' in anthropic).toBe(false);
+    const options = anthropic.options as Record<string, unknown>;
+    expect('baseURL' in options).toBe(false);
+    expect(options.apiKey).toBe('sk-ant-test123');
   });
 
   it('buildConfig throws if provider not found', () => {
     expect(() => adapter.buildConfig(testProfile, [])).toThrow('Provider not found');
   });
 
-  it('configPaths for openai-compatible uses openai key', () => {
-    const openaiProvider = { ...testProvider, type: 'openai-compatible' as const };
+  it('openai-compatible uses normalized provider name as key', () => {
+    const openaiProvider = { ...testProvider, type: 'openai-compatible' as const, name: 'Fireworks AI' };
     const config = adapter.buildConfig(testProfile, [openaiProvider]);
+    expect(config.model).toBe('fireworks-ai/claude-3-opus');
     const provider = config.provider as Record<string, unknown>;
-    expect('openai' in provider).toBe(true);
+    expect('fireworks-ai' in provider).toBe(true);
+    const fw = provider['fireworks-ai'] as Record<string, unknown>;
+    expect(fw.npm).toBe('@ai-sdk/openai-compatible');
+    expect(fw.name).toBe('Fireworks AI');
+    const models = fw.models as Record<string, unknown>;
+    expect('claude-3-opus' in models).toBe(true);
+    const options = fw.options as Record<string, unknown>;
+    expect(options.apiKey).toBe('sk-ant-test123');
+  });
+
+  it('multi-tier profile selects base tier model', () => {
+    const multiTierProfile: Profile = {
+      id: '00000000-0000-0000-0000-000000000003',
+      name: 'Multi Tier',
+      models: [
+        { providerId: testProvider.id, model: 'claude-3-haiku', tier: 'small' },
+        { providerId: testProvider.id, model: 'claude-3-sonnet', tier: 'base' },
+        { providerId: testProvider.id, model: 'claude-3-opus', tier: 'smart' },
+      ],
+    };
+    const config = adapter.buildConfig(multiTierProfile, [testProvider]);
+    expect(config.model).toBe('anthropic/claude-3-sonnet');
   });
 });

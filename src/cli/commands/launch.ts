@@ -1,7 +1,10 @@
 import { Command } from 'commander';
+import { spawnSync } from 'node:child_process';
 import { readConfig } from '../../config/store.js';
 import { claudeCodeAdapter } from '../../adapters/claude-code.js';
 import { openCodeAdapter } from '../../adapters/opencode.js';
+import { qwenAdapter } from '../../adapters/qwen.js';
+import { codexAdapter } from '../../adapters/codex.js';
 import { launchChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
 import type { AgentAdapter } from '../../adapters/base.js';
@@ -9,13 +12,15 @@ import type { AgentAdapter } from '../../adapters/base.js';
 const AGENT_COMMANDS: Record<string, { adapter: AgentAdapter; command: string }> = {
   'claude-code': { adapter: claudeCodeAdapter, command: 'claude' },
   'opencode': { adapter: openCodeAdapter, command: 'opencode' },
+  'qwen': { adapter: qwenAdapter, command: 'qwen' },
+  'codex': { adapter: codexAdapter, command: 'codex' },
 };
 
 export function createLaunchCommand(): Command {
   const cmd = new Command('launch')
     .description('Launch an agent with a profile')
     .requiredOption('-p, --profile <name>', 'Profile name to use')
-    .requiredOption('-a, --agent <id>', 'Agent to launch (claude-code, opencode)')
+    .requiredOption('-a, --agent <id>', 'Agent to launch (claude-code, opencode, qwen, codex)')
     .option('-m, --mode <mode>', 'Launch mode: child or independent')
     .option('-s, --scope <scope>', 'Config scope: global or project')
     .action(async (opts: { profile: string; agent: string; mode?: string; scope?: string }) => {
@@ -54,13 +59,14 @@ export function createLaunchCommand(): Command {
           });
           process.exit(exitCode);
         } else {
-          await launchIndependent({
+          const execReq = await launchIndependent({
             adapter,
             profile,
             providers: config.providers,
             scope,
             command,
           });
+          spawnSync(execReq.command, execReq.args, { stdio: 'inherit', env: execReq.env });
           process.exit(0);
         }
       } catch (err) {

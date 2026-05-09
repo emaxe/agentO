@@ -2,6 +2,30 @@
   "name": "agento",
   "version": "0.1.0",
   "description": "Manage AI agent configurations with profiles and providers",
+  "author": "emaxe",
+  "license": "MIT",
+  "keywords": [
+    "ai",
+    "agent",
+    "cli",
+    "configuration",
+    "claude",
+    "codex",
+    "qwen",
+    "opencode",
+    "profile",
+    "provider",
+    "terminal",
+    "tui"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emaxe/agentO.git"
+  },
+  "bugs": {
+    "url": "https://github.com/emaxe/agentO/issues"
+  },
+  "homepage": "https://github.com/emaxe/agentO#readme",
   "type": "module",
   "bin": {
     "agento": "./dist/bin/agento.js"
@@ -23,6 +47,7 @@
     "node": ">=18"
   },
   "scripts": {
+    "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-x64/spawn-helper node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper 2>/dev/null || true",
     "prepublishOnly": "npm run build && npm test",
     "build": "tsc",
     "dev": "tsc --watch",
@@ -33,11 +58,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "ink": "^4.4.1",
-    "react": "^18.3.1",
-    "zod": "^3.23.8",
+    "chalk": "^5.3.0",
     "commander": "^12.1.0",
-    "chalk": "^5.3.0"
+    "ink": "^4.4.1",
+    "ink-text-input": "^5.0.1",
+    "react": "^18.3.1",
+    "smol-toml": "^1.6.1",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
@@ -48,5 +75,8 @@
     "prettier": "^3.3.2",
     "typescript": "^5.5.2",
     "vitest": "^1.6.0"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.1.0"
   }
 }

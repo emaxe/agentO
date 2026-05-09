@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
+import { useKeyInput } from '../use-key-input.js';
 import type { Screen } from '../App.js';
 
 const MENU_ITEMS: Array<{ label: string; screen: Screen }> = [
@@ -18,7 +19,7 @@ interface MainMenuProps {
 export function MainMenu({ onSelect, onExit }: MainMenuProps): React.JSX.Element {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  useInput((input, key) => {
+  useKeyInput((input, key) => {
     if (key.upArrow) {
       setSelectedIndex((i) => Math.max(0, i - 1));
     } else if (key.downArrow) {

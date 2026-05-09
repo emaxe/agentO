@@ -1,7 +1,15 @@
-import { spawn } from 'node:child_process';
 import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
 import type { Profile, Provider } from '../config/schema.js';
 import { writeBackup } from '../config/store.js';
+import { shellPathResolver } from './shell-path-resolver.js';
+
+export interface ExecRequest {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  relaunch?: boolean;
+  cleanup?: () => Promise<void>;
+}
 
 export interface IndependentLaunchOptions {
   adapter: AgentAdapter;
@@ -14,11 +22,11 @@ export interface IndependentLaunchOptions {
 }
 
 /**
- * Запускает агент как независимый detached-процесс.
- * AgentO завершается после запуска.
- * Конфиг остаётся изменённым — восстановление по команде пользователя (agento restore).
+ * Готовит конфиг для независимого запуска агента.
+ * Записывает backup текущего конфига, генерирует и сохраняет новый,
+ * резолвит PATH и возвращает ExecRequest для запуска в терминале.
  */
-export async function launchIndependent(options: IndependentLaunchOptions): Promise<void> {
+export async function launchIndependent(options: IndependentLaunchOptions): Promise<ExecRequest> {
   const { adapter, profile, providers, scope, command, args = [], cwd } = options;
 
   // 1. Backup текущего конфига агента
@@ -29,14 +37,18 @@ export async function launchIndependent(options: IndependentLaunchOptions): Prom
   const newConfig = adapter.buildConfig(profile, providers);
   await adapter.writeConfig(newConfig, scope, cwd);
 
-  // 3. Запускаем detached-процесс
-  const child = spawn(command, args, {
-    stdio: 'ignore',
-    detached: true,
-    cwd: cwd ?? process.cwd(),
-    shell: false,
-  });
+  // 3. Резолвим PATH чтобы найти исполняемый файл агента
+  const resolvedPath = await shellPathResolver.resolve();
 
-  // 4. Отсоединяем дочерний процесс от родительского
-  child.unref();
+  const cleanEnv = Object.fromEntries(
+    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  );
+
+  const adapterEnv = adapter.buildEnv?.(profile, providers) ?? {};
+
+  return {
+    command,
+    args,
+    env: { ...cleanEnv, PATH: resolvedPath, ...adapterEnv },
+  };
 }

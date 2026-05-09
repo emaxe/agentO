@@ -66,4 +66,17 @@ describe('config store', () => {
     await writeBackup('opencode', 'project', { test: true });
     expect(backupExists('opencode', 'project')).toBe(true);
   });
+
+  it('deleteBackup removes backup file so backupExists returns false', async () => {
+    const { writeBackup, deleteBackup, backupExists } = await getStore();
+    await writeBackup('claude-code', 'global', { test: true });
+    expect(backupExists('claude-code', 'global')).toBe(true);
+    await deleteBackup('claude-code', 'global');
+    expect(backupExists('claude-code', 'global')).toBe(false);
+  });
+
+  it('deleteBackup does not throw when backup does not exist', async () => {
+    const { deleteBackup } = await getStore();
+    await expect(deleteBackup('claude-code', 'global')).resolves.toBeUndefined();
+  });
 });

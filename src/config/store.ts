@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -56,6 +56,12 @@ export async function readBackup(
 export function backupExists(agentId: string, scope: string): boolean {
   const backupPath = join(BACKUPS_DIR, agentId, `${scope}.bak.json`);
   return existsSync(backupPath);
+}
+
+/** Удаляет бэкап конфига агента. Не бросает ошибку если файл не существует. */
+export async function deleteBackup(agentId: string, scope: string): Promise<void> {
+  const backupPath = join(BACKUPS_DIR, agentId, `${scope}.bak.json`);
+  try { await unlink(backupPath); } catch { /* file might not exist */ }
 }
 
 /** Возвращает путь к бэкапу. */

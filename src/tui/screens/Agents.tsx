@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Text, useInput } from 'ink';
-import { backupExists } from '../../config/store.js';
+import { Box, Text } from 'ink';
+import { useKeyInput } from '../use-key-input.js';
+import { backupExists, readBackup, deleteBackup } from '../../config/store.js';
 import { claudeCodeAdapter } from '../../adapters/claude-code.js';
 import { openCodeAdapter } from '../../adapters/opencode.js';
+import { qwenAdapter } from '../../adapters/qwen.js';
+import { codexAdapter } from '../../adapters/codex.js';
 import type { AgentAdapter } from '../../adapters/base.js';
-import { readBackup } from '../../config/store.js';
 
-const ADAPTERS: AgentAdapter[] = [claudeCodeAdapter, openCodeAdapter];
+const ADAPTERS: AgentAdapter[] = [claudeCodeAdapter, openCodeAdapter, qwenAdapter, codexAdapter];
 const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
 
 interface AgentStatus {
@@ -45,7 +47,7 @@ export function Agents({ onBack }: AgentsProps): React.JSX.Element {
 
   useEffect(() => { loadStatuses(); }, [loadStatuses]);
 
-  useInput((input, key) => {
+  useKeyInput((input, key) => {
     if (key.escape || input === 'q') { onBack(); return; }
     if (key.upArrow) setSelectedIndex((i) => Math.max(0, i - 1));
     else if (key.downArrow) setSelectedIndex((i) => Math.min(statuses.length - 1, i + 1));
@@ -55,9 +57,10 @@ export function Agents({ onBack }: AgentsProps): React.JSX.Element {
       const adapter = ADAPTERS.find((a) => a.id === s.adapterId);
       if (!adapter) return;
       readBackup(s.adapterId, s.scope)
-        .then((backup) => {
-          if (!backup) { setStatus('No backup found'); return null; }
-          return adapter.writeConfig(backup as Record<string, unknown>, s.scope);
+        .then(async (backup) => {
+          if (!backup) { setStatus('No backup found'); return; }
+          await adapter.writeConfig(backup as Record<string, unknown>, s.scope);
+          await deleteBackup(s.adapterId, s.scope);
         })
         .then(() => { setStatus(`Restored ${s.displayName} [${s.scope}]`); loadStatuses(); })
         .catch((err) => setStatus(`Error: ${String(err)}`));

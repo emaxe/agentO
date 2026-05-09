@@ -25,22 +25,34 @@ export class OpenCodeAdapter implements AgentAdapter {
   }
 
   buildConfig(profile: Profile, providers: Provider[]): AgentConfig {
-    const first = profile.models[0];
-    if (!first) throw new Error(`Profile "${profile.name}" has no models`);
+    const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
+    if (!base) throw new Error(`Profile "${profile.name}" has no models`);
 
-    const provider = providers.find((p) => p.id === first.providerId);
-    if (!provider) throw new Error(`Provider not found for id: ${first.providerId}`);
+    const provider = providers.find((p) => p.id === base.providerId);
+    if (!provider) throw new Error(`Provider not found for id: ${base.providerId}`);
 
-    const providerKey = provider.type === 'anthropic' ? 'anthropic' : 'openai';
-    const providerConfig: Record<string, unknown> = { apiKey: provider.apiKey };
-    if (provider.baseUrl) {
-      providerConfig['options'] = { baseURL: provider.baseUrl };
+    if (provider.type === 'anthropic') {
+      const options: Record<string, unknown> = { apiKey: provider.apiKey };
+      if (provider.baseUrl) options['baseURL'] = provider.baseUrl;
+      return {
+        model: `anthropic/${base.model}`,
+        provider: { anthropic: { options } },
+      };
     }
 
+    // openai-compatible: кастомный провайдер с именем из agento
+    const providerKey = provider.name.toLowerCase().replace(/\s+/g, '-');
+    const options: Record<string, unknown> = { apiKey: provider.apiKey };
+    if (provider.baseUrl) options['baseURL'] = provider.baseUrl;
     return {
-      model: first.model,
+      model: `${providerKey}/${base.model}`,
       provider: {
-        [providerKey]: providerConfig,
+        [providerKey]: {
+          npm: '@ai-sdk/openai-compatible',
+          name: provider.name,
+          options,
+          models: { [base.model]: { name: base.model } },
+        },
       },
     };
   }

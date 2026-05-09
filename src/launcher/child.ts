@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { unlink } from 'node:fs/promises';
 import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
 import type { Profile, Provider } from '../config/schema.js';
-import { writeBackup, readBackup } from '../config/store.js';
+import { writeBackup, readBackup, deleteBackup } from '../config/store.js';
+import type { ExecRequest } from './independent.js';
+import { shellPathResolver } from './shell-path-resolver.js';
 
 export interface ChildLaunchOptions {
   adapter: AgentAdapter;
@@ -13,6 +14,57 @@ export interface ChildLaunchOptions {
   command: string;
   args?: string[];
   cwd?: string;
+}
+
+export interface ChildPrepareResult {
+  execReq: ExecRequest;
+  cleanup: () => Promise<void>;
+}
+
+/**
+ * Готовит конфиг для запуска агента из TUI (child mode).
+ * Делает backup и записывает новый конфиг, но не запускает процесс.
+ * Возвращает ExecRequest и cleanup-функцию для последующего вызова из agento.ts.
+ */
+export async function prepareChild(options: ChildLaunchOptions): Promise<ChildPrepareResult> {
+  const { adapter, profile, providers, scope, command, args = [], cwd } = options;
+
+  // 1. Backup текущего конфига агента
+  const currentConfig = await adapter.readConfig(scope, cwd);
+  const hadConfig = currentConfig !== null;
+  await writeBackup(adapter.id, scope, currentConfig ?? {});
+
+  // 2. Генерируем и записываем новый конфиг
+  const newConfig = adapter.buildConfig(profile, providers);
+  await adapter.writeConfig(newConfig, scope, cwd);
+
+  // 3. Резолвим PATH чтобы найти исполняемый файл агента
+  const resolvedPath = await shellPathResolver.resolve();
+
+  const cleanEnv = Object.fromEntries(
+    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  );
+
+  const adapterEnv = adapter.buildEnv?.(profile, providers) ?? {};
+
+  // 4. Cleanup-функция: восстанавливает оригинальный конфиг или удаляет файл
+  const cleanup = async (): Promise<void> => {
+    if (!hadConfig) {
+      const configPath = adapter.configPaths(cwd)[scope];
+      try { await unlink(configPath); } catch { /* file might not exist */ }
+    } else {
+      const backup = await readBackup(adapter.id, scope);
+      if (backup !== null) {
+        await adapter.writeConfig(backup as Record<string, unknown>, scope, cwd);
+      }
+    }
+    await deleteBackup(adapter.id, scope);
+  };
+
+  return {
+    execReq: { command, args, env: { ...cleanEnv, PATH: resolvedPath, ...adapterEnv } },
+    cleanup,
+  };
 }
 
 /**
@@ -26,41 +78,54 @@ export async function launchChild(options: ChildLaunchOptions): Promise<number> 
 
   // 1. Backup текущего конфига агента
   const currentConfig = await adapter.readConfig(scope, cwd);
+  const hadConfig = currentConfig !== null;
   await writeBackup(adapter.id, scope, currentConfig ?? {});
 
   // 2. Генерируем и записываем новый конфиг
   const newConfig = adapter.buildConfig(profile, providers);
   await adapter.writeConfig(newConfig, scope, cwd);
 
-  // 3. Cleanup-функция: восстанавливает оригинальный конфиг
+  // 3. Cleanup-функция: восстанавливает оригинальный конфиг или удаляет файл
   const cleanup = async (): Promise<void> => {
-    const backup = await readBackup(adapter.id, scope);
-    if (backup !== null && Object.keys(backup as object).length > 0) {
-      await adapter.writeConfig(backup as Record<string, unknown>, scope, cwd);
+    if (!hadConfig) {
+      const configPath = adapter.configPaths(cwd)[scope];
+      try { await unlink(configPath); } catch { /* file might not exist */ }
+    } else {
+      const backup = await readBackup(adapter.id, scope);
+      if (backup !== null) {
+        await adapter.writeConfig(backup as Record<string, unknown>, scope, cwd);
+      }
     }
+    await deleteBackup(adapter.id, scope);
   };
 
-  // 4. Регистрируем SIGTERM/SIGINT хуки (REQ-13)
-  const handleSignal = (): void => {
-    cleanup().catch(console.error).finally(() => process.exit(1));
-  };
-  process.once('SIGTERM', handleSignal);
-  process.once('SIGINT', handleSignal);
+  // 4. Запускаем дочерний процесс
+  const cleanEnv = Object.fromEntries(
+    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+  );
+  const resolvedPath = await shellPathResolver.resolve();
+  const adapterEnv = adapter.buildEnv?.(profile, providers) ?? {};
+  const spawnEnv = { ...cleanEnv, PATH: resolvedPath, ...adapterEnv };
 
-  // 5. Запускаем дочерний процесс
   return new Promise<number>((resolve) => {
     const child = spawn(command, args, {
       stdio: 'inherit',
       cwd: cwd ?? process.cwd(),
       shell: false,
+      env: spawnEnv,
     });
 
+    // 5. Регистрируем SIGTERM/SIGINT хуки — пробрасываем сигнал дочернему процессу
+    const handleSignal = (signal: NodeJS.Signals): void => {
+      child.kill(signal);
+      cleanup().catch(console.error).finally(() => process.exit(1));
+    };
+    process.once('SIGTERM', handleSignal);
+    process.once('SIGINT', handleSignal);
+
     child.on('exit', (code) => {
-      // Убираем обработчики сигналов
       process.removeListener('SIGTERM', handleSignal);
       process.removeListener('SIGINT', handleSignal);
-
-      // Restore конфига и возвращаем exit code
       cleanup()
         .catch(console.error)
         .finally(() => resolve(code ?? 0));
