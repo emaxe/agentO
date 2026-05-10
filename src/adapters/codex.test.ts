@@ -165,7 +165,7 @@ describe('CodexAdapter', () => {
       };
       const config = adapter.buildConfig(testProfile, [fireworksProvider]);
       const modelProviders = config.model_providers as Record<string, Record<string, unknown>>;
-      expect(modelProviders['fireworks']?.base_url).toBe('https://api.fireworks.ai/inference');
+      expect(modelProviders['fireworks']?.base_url).toBe('https://api.fireworks.ai/inference/v1');
     });
   });
 });

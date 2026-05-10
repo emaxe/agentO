@@ -94,6 +94,6 @@ describe('OpenCodeAdapter', () => {
     const fw = provider.fireworks as Record<string, unknown>;
     expect(fw.npm).toBe('@ai-sdk/openai-compatible');
     const options = fw.options as Record<string, string>;
-    expect(options.baseURL).toBe('https://api.fireworks.ai/inference');
+    expect(options.baseURL).toBe('https://api.fireworks.ai/inference/v1');
   });
 });

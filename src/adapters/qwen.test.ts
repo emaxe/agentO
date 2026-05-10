@@ -149,7 +149,7 @@ describe('QwenAdapter', () => {
       const config = adapter.buildConfig(profile, [fireworksProvider]);
       const modelProviders = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
       expect(modelProviders.openai).toBeDefined();
-      expect(modelProviders.openai![0]!.baseUrl).toBe('https://api.fireworks.ai/inference');
+      expect(modelProviders.openai![0]!.baseUrl).toBe('https://api.fireworks.ai/inference/v1');
     });
   });
 });

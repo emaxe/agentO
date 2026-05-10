@@ -6,7 +6,7 @@ import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
 
-const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference';
+const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1';
 
 /** Генерирует env-ключ для Qwen из baseUrl.
  * Пример: "http://188.132.197.214:20128/v1" → "QWEN_CUSTOM_API_KEY_OPENAI_HTTP_188_132_197_214_20128_V1"

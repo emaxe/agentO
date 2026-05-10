@@ -7,7 +7,7 @@ import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
 
-const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference';
+const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1';
 
 /** Нормализует имя провайдера в ключ: "Fireworks AI" → "fireworks-ai" */
 function deriveProviderKey(name: string): string {
