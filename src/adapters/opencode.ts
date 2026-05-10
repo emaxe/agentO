@@ -11,6 +11,7 @@ const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1';
 export class OpenCodeAdapter implements AgentAdapter {
   readonly id = 'opencode';
   readonly displayName = 'OpenCode';
+  readonly supportedProviderTypes = ['anthropic', 'openai-compatible', 'fireworks'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {

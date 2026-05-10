@@ -74,6 +74,10 @@ describe('OpenCodeAdapter', () => {
     expect(config.model).toBe('anthropic/claude-3-sonnet');
   });
 
+  it('supportedProviderTypes includes all three types', () => {
+    expect(adapter.supportedProviderTypes).toEqual(['anthropic', 'openai-compatible', 'fireworks']);
+  });
+
   it('fireworks provider without baseUrl uses default Fireworks URL', () => {
     const fireworksProvider: Provider = {
       id: '00000000-0000-0000-0000-000000000004',

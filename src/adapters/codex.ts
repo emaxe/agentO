@@ -26,6 +26,7 @@ export class CodexAdapter implements AgentAdapter {
   readonly id = 'codex';
   readonly displayName = 'Codex CLI';
   readonly dev = true;
+  readonly supportedProviderTypes = ['openai-compatible', 'fireworks'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {

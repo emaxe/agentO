@@ -22,6 +22,7 @@ function deriveEnvKey(baseUrl: string): string {
 export class QwenAdapter implements AgentAdapter {
   readonly id = 'qwen';
   readonly displayName = 'Qwen CLI';
+  readonly supportedProviderTypes = ['openai-compatible', 'fireworks'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {

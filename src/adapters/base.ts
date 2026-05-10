@@ -1,4 +1,4 @@
-import type { Profile, Provider } from '../config/schema.js';
+import type { Profile, Provider, ProviderType } from '../config/schema.js';
 import type { LaunchScope } from '../config/schema.js';
 
 /** Режим области действия конфига агента */
@@ -23,6 +23,9 @@ export interface AgentAdapter {
 
   /** Флаг разработки: скрыт из UI/CLI по умолчанию */
   readonly dev?: boolean;
+
+  /** Поддерживаемые типы провайдеров */
+  readonly supportedProviderTypes: readonly ProviderType[];
 
   /** Возвращает пути к конфигам агента (global и project) */
   configPaths(cwd?: string): AgentConfigPaths;

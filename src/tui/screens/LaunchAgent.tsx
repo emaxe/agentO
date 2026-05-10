@@ -9,7 +9,7 @@ import { codexAdapter } from '../../adapters/codex.js';
 import { prepareChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
 import type { ExecRequest } from '../../launcher/independent.js';
-import type { Profile, Provider, Settings } from '../../config/schema.js';
+import type { Profile, Provider, ProviderType, Settings } from '../../config/schema.js';
 import type { AgentAdapter } from '../../adapters/base.js';
 
 type Step = 'profile' | 'agent' | 'launching';
@@ -30,6 +30,21 @@ const ALL_AGENTS: Array<{ id: string; label: string; adapter: AgentAdapter; comm
 function getAgents(dev = false): typeof ALL_AGENTS {
   if (dev) return ALL_AGENTS;
   return ALL_AGENTS.filter((a) => !a.adapter.dev);
+}
+
+function getCompatibleAgents(
+  agents: typeof ALL_AGENTS,
+  profile: Profile,
+  providers: Provider[],
+): typeof ALL_AGENTS {
+  const providerTypes = new Set<ProviderType>();
+  for (const model of profile.models) {
+    const provider = providers.find((p) => p.id === model.providerId);
+    if (provider) providerTypes.add(provider.type);
+  }
+  return agents.filter((a) =>
+    [...providerTypes].every((t) => (a.adapter.supportedProviderTypes as readonly string[]).includes(t)),
+  );
 }
 
 export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JSX.Element {
@@ -67,7 +82,11 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
     }
 
     const agents = getAgents(dev);
-    const items = step === 'profile' ? profiles : agents;
+    const profile = profiles[selectedProfile];
+    const compatibleAgents = profile
+      ? getCompatibleAgents(agents, profile, providers)
+      : agents;
+    const items = step === 'profile' ? profiles : compatibleAgents;
     const selected = step === 'profile' ? selectedProfile : selectedAgent;
     const setSelected = step === 'profile' ? setSelectedProfile : setSelectedAgent;
 
@@ -82,8 +101,7 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
       }
 
       if (step === 'agent') {
-        const profile = profiles[selectedProfile];
-        const agentEntry = agents[selectedAgent];
+        const agentEntry = compatibleAgents[selectedAgent];
 
         if (!profile || !agentEntry || !settings) {
           setError('Invalid selection');
@@ -119,6 +137,7 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
             .catch((err) => setError(String(err)));
         }
       } else {
+        setSelectedAgent(0);
         setStep('agent');
       }
     }
@@ -154,7 +173,11 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
   );
 
   if (step === 'profile') return renderList(profiles, selectedProfile, 'Select Profile');
-  if (step === 'agent') return renderList(getAgents(dev), selectedAgent, 'Select Agent');
+  const profile = profiles[selectedProfile];
+  const visibleAgents = profile
+    ? getCompatibleAgents(getAgents(dev), profile, providers)
+    : getAgents(dev);
+  if (step === 'agent') return renderList(visibleAgents, selectedAgent, 'Select Agent');
 
   return (
     <Box flexDirection="column" padding={1}>

@@ -20,6 +20,10 @@ const testProfile: Profile = {
 };
 
 describe('CodexAdapter', () => {
+  it('supportedProviderTypes includes openai-compatible and fireworks', () => {
+    expect(adapter.supportedProviderTypes).toEqual(['openai-compatible', 'fireworks']);
+  });
+
   describe('configPaths', () => {
     it('returns correct global path', () => {
       const paths = adapter.configPaths();

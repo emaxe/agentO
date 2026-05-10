@@ -23,6 +23,7 @@ function pickByTier(
 export class ClaudeCodeAdapter implements AgentAdapter {
   readonly id = 'claude-code';
   readonly displayName = 'Claude Code';
+  readonly supportedProviderTypes = ['anthropic', 'fireworks'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {

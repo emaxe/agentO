@@ -112,6 +112,10 @@ describe('ClaudeCodeAdapter', () => {
     );
   });
 
+  it('supportedProviderTypes includes anthropic and fireworks', () => {
+    expect(adapter.supportedProviderTypes).toEqual(['anthropic', 'fireworks']);
+  });
+
   it('fireworks provider without baseUrl uses default Fireworks URL', () => {
     const fireworksProvider: Provider = {
       id: '00000000-0000-0000-0000-000000000006',

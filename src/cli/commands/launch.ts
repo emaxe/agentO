@@ -8,6 +8,7 @@ import { codexAdapter } from '../../adapters/codex.js';
 import { launchChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
 import type { AgentAdapter } from '../../adapters/base.js';
+import type { ProviderType } from '../../config/schema.js';
 
 const ALL_AGENT_COMMANDS: Record<string, { adapter: AgentAdapter; command: string; args?: string[] }> = {
   'claude-code': { adapter: claudeCodeAdapter, command: 'claude' },
@@ -57,6 +58,22 @@ export function createLaunchCommand(): Command {
         const scope = (opts.scope ?? config.settings.defaultConfigScope) as 'global' | 'project';
 
         const { adapter, command, args } = agentEntry;
+
+        // Check provider compatibility
+        const unsupported: ProviderType[] = [];
+        for (const model of profile.models) {
+          const provider = config.providers.find((p) => p.id === model.providerId);
+          if (provider && !(adapter.supportedProviderTypes as readonly string[]).includes(provider.type)) {
+            unsupported.push(provider.type);
+          }
+        }
+        if (unsupported.length > 0) {
+          console.error(
+            `Error: ${adapter.displayName} does not support provider type(s): ${[...new Set(unsupported)].join(', ')}. ` +
+            `Supported: ${adapter.supportedProviderTypes.join(', ')}`
+          );
+          process.exit(1);
+        }
 
         if (mode === 'child') {
           const exitCode = await launchChild({
