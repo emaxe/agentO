@@ -38,7 +38,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md",
+    "AGENTS.md"
   ],
   "publishConfig": {
     "access": "public"
