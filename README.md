@@ -11,12 +11,12 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 
 ## Supported Agents
 
-| Agent | Command | Config Format | Special Features |
-|-------|---------|---------------|------------------|
-| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | Multi-tier support (small/base/smart) |
-| [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | Custom provider prefix |
-| [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | OpenAI-compatible providers |
-| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | Environment variable injection. Hidden by default (`--dev` to show). |
+| Agent | Command | Config Format | Supported Providers | Special Features |
+|-------|---------|---------------|---|------------------|
+| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic`, `fireworks` | Multi-tier support (small/base/smart) |
+| [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks` | Full function calling support via Vercel AI SDK |
+| [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks` | OpenAI-compatible API structure |
+| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | All types | Environment variable injection. Hidden by default (`--dev` to show). |
 
 ## Installation
 
@@ -38,25 +38,42 @@ npx @emaxe/agento
 - Node.js ≥ 18
 - One or more supported AI agent CLI tools installed
 
+## Supported Provider Types
+
+| Provider Type | Compatible Agents | Examples |
+|---|---|---|
+| `anthropic` | claude-code | Anthropic |
+| `openai-compatible` | opencode, qwen | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek, etc. |
+| `fireworks` | claude-code, opencode, qwen, codex | Fireworks AI (supports all 3 API types) |
+
+**Note:** `claude-code` only works with `anthropic` and `fireworks` types (Anthropic SDK requirement). Use `opencode` or `qwen` for other OpenAI-compatible providers.
+
 ## Quick Start
 
-### 1. Add an API Provider
+### 1. Add API Providers
 
 ```bash
-# OpenAI-compatible provider (e.g., Fireworks AI)
-agento provider add \
-  -n "Fireworks AI" \
-  -t openai-compatible \
-  -k "sk-your-api-key" \
-  -u "https://api.fireworks.ai/inference/v1" \
-  -M "accounts/fireworks/models/llama-v3p1-70b-instruct,accounts/fireworks/models/kimi-k2p6"
-
 # Anthropic provider
 agento provider add \
   -n "Anthropic" \
   -t anthropic \
   -k "sk-ant-your-key" \
   -M "claude-sonnet-4-20250514,claude-3-5-haiku-20241022"
+
+# Fireworks AI provider (works with all agents)
+agento provider add \
+  -n "Fireworks" \
+  -t fireworks \
+  -k "fw-your-key" \
+  -M "accounts/fireworks/models/llama-v3p1-70b-instruct,accounts/fireworks/models/kimi-k2p6"
+
+# Other OpenAI-compatible providers (use with opencode or qwen)
+agento provider add \
+  -n "Together" \
+  -t openai-compatible \
+  -k "your-api-key" \
+  -u "https://api.together.xyz/v1" \
+  -M "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
 ```
 
 ### 2. Create a Profile
@@ -75,8 +92,11 @@ agento profile add -n "multi" -m "provider-id:claude-3-5-haiku-20241022:small,pr
 # Interactive TUI mode (default)
 agento
 
-# Direct launch
+# Direct launch with Anthropic/Fireworks provider
 agento launch -p default -a claude-code
+
+# Launch with OpenAI-compatible provider (use opencode or qwen)
+agento launch -p openai-profile -a opencode
 
 # Launch with specific mode and scope
 agento launch -p default -a qwen -m child -s project
@@ -180,6 +200,19 @@ Configure defaults for AgentO behavior:
 
 Use **TUI** for exploration and interactive workflows. Use **CLI** for scripting, aliases, and quick launches.
 
+## Provider & Agent Compatibility Matrix
+
+| Provider Type | claude-code | opencode | qwen | codex |
+|---|---|---|---|---|
+| **anthropic** | ✅ Full support | ✅ (via SDK) | ❌ Not supported | ✅ (via Responses API) |
+| **openai-compatible** | ❌ Not supported | ✅ Full support | ✅ Full support | ✅ (via Responses API) |
+| **fireworks** | ✅ (Anthropic API) | ✅ (OpenAI API) | ✅ (OpenAI API) | ✅ (Responses API) |
+
+**Key Constraints:**
+- `claude-code` uses **Anthropic SDK** and only works with `anthropic` or `fireworks` types
+- Other OpenAI-compatible providers must use `opencode` or `qwen` agents
+- `fireworks` type is the most flexible — works with all agents through native Fireworks APIs
+
 ## CLI Reference
 
 ### `agento` — Main Command
@@ -220,12 +253,17 @@ Options:
 agento provider list                          # List all providers
 agento provider add [options]                 # Add a new provider
   -n, --name <name>         Provider display name (required)
-  -t, --type <type>         Provider type: openai-compatible or anthropic (required)
+  -t, --type <type>         Provider type: anthropic, openai-compatible, or fireworks (required)
   -k, --api-key <key>       API key (required)
-  -u, --base-url <url>      Base URL (for openai-compatible)
+  -u, --base-url <url>      Base URL (required for openai-compatible, optional for others)
   -M, --models <models>     Comma-separated list of model names (required)
 agento provider remove <name>                 # Remove a provider
 ```
+
+**Base URL Defaults:**
+- `anthropic`: Uses Anthropic's default endpoint
+- `fireworks`: Auto-defaults to `https://api.fireworks.ai/inference` if not specified
+- `openai-compatible`: Must be explicitly provided with `-u`
 
 ### `agento profile` — Manage Profiles
 
@@ -265,11 +303,25 @@ AgentO stores its configuration in `~/.agento/config.json`:
   "providers": [
     {
       "id": "uuid",
-      "name": "Fireworks AI",
-      "type": "openai-compatible",
-      "apiKey": "sk-...",
-      "baseUrl": "https://api.fireworks.ai/inference/v1",
+      "name": "Anthropic",
+      "type": "anthropic",
+      "apiKey": "sk-ant-...",
+      "models": ["claude-opus-4-20250514", "claude-sonnet-4-20250514"]
+    },
+    {
+      "id": "uuid",
+      "name": "Fireworks",
+      "type": "fireworks",
+      "apiKey": "fw-...",
       "models": ["accounts/fireworks/models/llama-v3p1-70b-instruct"]
+    },
+    {
+      "id": "uuid",
+      "name": "Together",
+      "type": "openai-compatible",
+      "apiKey": "your-api-key",
+      "baseUrl": "https://api.together.xyz/v1",
+      "models": ["meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"]
     }
   ],
   "profiles": [
@@ -299,10 +351,14 @@ AgentO stores its configuration in `~/.agento/config.json`:
 
 Each supported agent has a dedicated adapter that translates AgentO's generic config format into the agent's specific configuration:
 
-- **Claude Code**: Generates `~/.claude/settings.json` with tier-based model selection
-- **OpenCode**: Generates `~/.config/opencode/config.json` with provider-prefixed model names
-- **Qwen CLI**: Generates `~/.qwen/settings.json` with OpenAI-compatible provider structure
-- **Codex CLI** (`--dev` to show): Generates `~/.codex/config.toml` with `wire_api: responses`, profiles, and environment variable references. In project scope, splits config between global (`model_providers`) and project (`model`) configs.
+- **Claude Code** (supports `anthropic`, `fireworks`): Generates `~/.claude/settings.json` with tier-based model selection and ANTHROPIC_* env vars. Uses Anthropic SDK.
+  - ⚠️ **Does NOT support** `openai-compatible` providers (Anthropic SDK incompatibility)
+  
+- **OpenCode** (supports `anthropic`, `openai-compatible`, `fireworks`): Generates `~/.config/opencode/config.json` using Vercel AI SDK with provider-prefixed model names. Full function calling support via `@ai-sdk/openai-compatible`.
+  
+- **Qwen CLI** (supports `openai-compatible`, `fireworks`): Generates `~/.qwen/settings.json` with OpenAI-compatible provider structure. Requires `baseUrl` for all providers. Auto-defaults for `fireworks` type.
+  
+- **Codex CLI** (`--dev` to show): Generates `~/.codex/config.toml` with `wire_api: responses`, profiles, and environment variable references. In project scope, splits config between global (`model_providers`) and project (`model`) configs. Supports all provider types.
 
 ### Backup & Restore
 
@@ -345,6 +401,37 @@ src/
 ├── profiles/         # Profile management
 ├── providers/        # Provider management
 └── tui/              # Terminal UI (Ink + React)
+```
+
+## Limitations & Known Issues
+
+### Claude Code with OpenAI-Compatible Providers
+
+**Problem:** Claude Code only works with Anthropic API due to hard dependency on Anthropic SDK.
+
+**Solution:** Use `opencode` or `qwen` agents instead:
+```bash
+# ❌ This won't work:
+agento launch -p myprofile -a claude-code  # (if profile uses openai-compatible provider)
+
+# ✅ Use OpenCode instead:
+agento launch -p myprofile -a opencode
+```
+
+### Qwen CLI with Missing Base URL
+
+**Problem:** Qwen requires `baseUrl` for all providers. Using `anthropic` type without URL will error.
+
+**Solution:** Always provide `-u` for Qwen with non-standard providers, or use `fireworks` type which auto-defaults.
+
+### Codex CLI Hidden by Default
+
+**Problem:** Codex is a development agent and hidden in TUI/CLI by default.
+
+**Solution:** Add `--dev` flag to show it:
+```bash
+agento --dev                # TUI with Codex
+agento launch -a codex --dev  # CLI with Codex
 ```
 
 ## Troubleshooting
