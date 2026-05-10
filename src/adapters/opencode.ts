@@ -6,6 +6,8 @@ import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
 
+const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference';
+
 export class OpenCodeAdapter implements AgentAdapter {
   readonly id = 'opencode';
   readonly displayName = 'OpenCode';
@@ -37,6 +39,23 @@ export class OpenCodeAdapter implements AgentAdapter {
       return {
         model: `anthropic/${base.model}`,
         provider: { anthropic: { options } },
+      };
+    }
+
+    if (provider.type === 'fireworks') {
+      const providerKey = provider.name.toLowerCase().replace(/\s+/g, '-');
+      const options: Record<string, unknown> = { apiKey: provider.apiKey };
+      options['baseURL'] = provider.baseUrl ?? FIREWORKS_BASE_URL;
+      return {
+        model: `${providerKey}/${base.model}`,
+        provider: {
+          [providerKey]: {
+            npm: '@ai-sdk/openai-compatible',
+            name: provider.name,
+            options,
+            models: { [base.model]: { name: base.model } },
+          },
+        },
       };
     }
 

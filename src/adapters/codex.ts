@@ -7,6 +7,8 @@ import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
 
+const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference';
+
 /** Нормализует имя провайдера в ключ: "Fireworks AI" → "fireworks-ai" */
 function deriveProviderKey(name: string): string {
   return name.toLowerCase().replace(/\s+/g, '-');
@@ -54,7 +56,7 @@ export class CodexAdapter implements AgentAdapter {
       model_providers: {
         [providerKey]: {
           name: provider.name,
-          base_url: provider.baseUrl ?? '',
+          base_url: provider.baseUrl ?? (provider.type === 'fireworks' ? FIREWORKS_BASE_URL : ''),
           env_key: envKey,
           wire_api: 'responses',
         },

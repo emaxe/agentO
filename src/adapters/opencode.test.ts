@@ -73,4 +73,27 @@ describe('OpenCodeAdapter', () => {
     const config = adapter.buildConfig(multiTierProfile, [testProvider]);
     expect(config.model).toBe('anthropic/claude-3-sonnet');
   });
+
+  it('fireworks provider without baseUrl uses default Fireworks URL', () => {
+    const fireworksProvider: Provider = {
+      id: '00000000-0000-0000-0000-000000000004',
+      name: 'Fireworks',
+      type: 'fireworks',
+      apiKey: 'fw-test-key',
+      models: ['llama-3.1-70b-instruct'],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-000000000005',
+      name: 'Fireworks Profile',
+      models: [{ providerId: fireworksProvider.id, model: 'llama-3.1-70b-instruct', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [fireworksProvider]);
+    expect(config.model).toBe('fireworks/llama-3.1-70b-instruct');
+    const provider = config.provider as Record<string, unknown>;
+    expect('fireworks' in provider).toBe(true);
+    const fw = provider.fireworks as Record<string, unknown>;
+    expect(fw.npm).toBe('@ai-sdk/openai-compatible');
+    const options = fw.options as Record<string, string>;
+    expect(options.baseURL).toBe('https://api.fireworks.ai/inference');
+  });
 });

@@ -15,7 +15,7 @@ interface ProvidersProps {
 
 interface FormState {
   name: string;
-  type: 'openai-compatible' | 'anthropic';
+  type: 'openai-compatible' | 'anthropic' | 'fireworks';
   apiKey: string;
   baseUrl: string;
   models: string[];
@@ -188,7 +188,10 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
     // Type field toggle
     if (activeField === 'type') {
       if (key.return || input === ' ' || key.leftArrow || key.rightArrow) {
-        setForm((f) => ({ ...f, type: f.type === 'anthropic' ? 'openai-compatible' : 'anthropic' }));
+        const types: Array<'openai-compatible' | 'anthropic' | 'fireworks'> = ['openai-compatible', 'anthropic', 'fireworks'];
+        const currentIndex = types.indexOf(form.type);
+        const nextIndex = (currentIndex + 1) % types.length;
+        setForm((f) => ({ ...f, type: types[nextIndex]! }));
         return;
       }
     }

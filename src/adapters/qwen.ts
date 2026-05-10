@@ -6,6 +6,8 @@ import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
 
+const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference';
+
 /** Генерирует env-ключ для Qwen из baseUrl.
  * Пример: "http://188.132.197.214:20128/v1" → "QWEN_CUSTOM_API_KEY_OPENAI_HTTP_188_132_197_214_20128_V1"
  */
@@ -61,19 +63,20 @@ export class QwenAdapter implements AgentAdapter {
       if (provider.type === 'anthropic') {
         throw new Error(`Qwen CLI does not support Anthropic providers (provider: "${provider.name}")`);
       }
-      if (!provider.baseUrl) {
+      const resolvedBaseUrl = provider.baseUrl ?? (provider.type === 'fireworks' ? FIREWORKS_BASE_URL : undefined);
+      if (!resolvedBaseUrl) {
         throw new Error(`Qwen CLI requires a baseUrl for provider "${provider.name}"`);
       }
 
       const providerKey = 'openai';
-      const envKey = deriveEnvKey(provider.baseUrl);
+      const envKey = deriveEnvKey(resolvedBaseUrl);
       envMap[envKey] = provider.apiKey;
 
       if (!modelProviders[providerKey]) modelProviders[providerKey] = [];
       modelProviders[providerKey].push({
         id: profileModel.model,
         name: profileModel.model,
-        baseUrl: provider.baseUrl,
+        baseUrl: resolvedBaseUrl,
         envKey,
         generationConfig: {
           modalities: { image: false, video: false, audio: false },

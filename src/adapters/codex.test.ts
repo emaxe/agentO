@@ -154,5 +154,18 @@ describe('CodexAdapter', () => {
       expect(toml).toContain('model =');
       expect(toml).toContain('[model_providers.fireworks-ai]');
     });
+
+    it('fireworks provider without baseUrl uses default URL', () => {
+      const fireworksProvider = {
+        id: '00000000-0000-0000-0000-000000000001',
+        name: 'Fireworks',
+        type: 'fireworks' as const,
+        apiKey: 'fw-test-key',
+        models: ['llama-3.1-70b-instruct'],
+      };
+      const config = adapter.buildConfig(testProfile, [fireworksProvider]);
+      const modelProviders = config.model_providers as Record<string, Record<string, unknown>>;
+      expect(modelProviders['fireworks']?.base_url).toBe('https://api.fireworks.ai/inference');
+    });
   });
 });

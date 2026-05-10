@@ -6,6 +6,8 @@ import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { ModelTier, Profile, ProfileModel, Provider } from '../config/schema.js';
 
+const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference';
+
 function escapeForSingleQuoted(value: string): string {
   return value.replace(/'/g, "'\\''");
 }
@@ -66,8 +68,10 @@ export class ClaudeCodeAdapter implements AgentAdapter {
       ANTHROPIC_DEFAULT_SONNET_MODEL: base.model,
       ANTHROPIC_DEFAULT_OPUS_MODEL: smart.model,
     };
-    if (baseProvider.baseUrl) {
-      env['ANTHROPIC_BASE_URL'] = baseProvider.baseUrl;
+    const anthropicBase =
+      baseProvider.baseUrl ?? (baseProvider.type === 'fireworks' ? FIREWORKS_BASE_URL : undefined);
+    if (anthropicBase) {
+      env['ANTHROPIC_BASE_URL'] = anthropicBase;
     }
 
     const config: AgentConfig = {

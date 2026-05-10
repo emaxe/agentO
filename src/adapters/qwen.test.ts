@@ -132,5 +132,24 @@ describe('QwenAdapter', () => {
       const key = Object.keys(env)[0]!;
       expect(key).not.toMatch(/__[_]+/);
     });
+
+    it('fireworks provider without baseUrl uses default Fireworks URL', () => {
+      const fireworksProvider: Provider = {
+        id: '00000000-0000-0000-0000-000000000099',
+        name: 'Fireworks',
+        type: 'fireworks',
+        apiKey: 'fw-test-key',
+        models: ['llama-3.1-70b-instruct'],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-000000000100',
+        name: 'Fireworks Profile',
+        models: [{ providerId: fireworksProvider.id, model: 'llama-3.1-70b-instruct', tier: 'base' }],
+      };
+      const config = adapter.buildConfig(profile, [fireworksProvider]);
+      const modelProviders = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
+      expect(modelProviders.openai).toBeDefined();
+      expect(modelProviders.openai![0]!.baseUrl).toBe('https://api.fireworks.ai/inference');
+    });
   });
 });

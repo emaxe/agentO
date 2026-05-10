@@ -30,7 +30,7 @@ export function createProviderCommand(): Command {
     .command('add')
     .description('Add a new provider')
     .requiredOption('-n, --name <name>', 'Provider name')
-    .requiredOption('-t, --type <type>', 'Provider type (openai-compatible, anthropic)')
+    .requiredOption('-t, --type <type>', 'Provider type (openai-compatible, anthropic, fireworks)')
     .requiredOption('-k, --api-key <key>', 'API key')
     .option('-u, --base-url <url>', 'Base URL (for openai-compatible)')
     .requiredOption('-M, --models <models>', 'Comma-separated list of model names')
@@ -39,7 +39,7 @@ export function createProviderCommand(): Command {
         const models = opts.models.split(',').map((m) => m.trim()).filter(Boolean);
         const provider = await addProvider({
           name: opts.name,
-          type: opts.type as 'openai-compatible' | 'anthropic',
+          type: opts.type as 'openai-compatible' | 'anthropic' | 'fireworks',
           apiKey: opts.apiKey,
           baseUrl: opts.baseUrl,
           models,

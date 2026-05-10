@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Тип провайдера API
-export const ProviderTypeSchema = z.enum(['openai-compatible', 'anthropic']);
+export const ProviderTypeSchema = z.enum(['openai-compatible', 'anthropic', 'fireworks']);
 export type ProviderType = z.infer<typeof ProviderTypeSchema>;
 
 // Провайдер API (REQ-1)

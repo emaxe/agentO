@@ -111,4 +111,22 @@ describe('ClaudeCodeAdapter', () => {
       'Claude Code supports only one provider per profile'
     );
   });
+
+  it('fireworks provider without baseUrl uses default Fireworks URL', () => {
+    const fireworksProvider: Provider = {
+      id: '00000000-0000-0000-0000-000000000006',
+      name: 'Fireworks',
+      type: 'fireworks',
+      apiKey: 'fw-test-key',
+      models: ['llama-3.1-70b-instruct'],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-000000000007',
+      name: 'Fireworks Profile',
+      models: [{ providerId: fireworksProvider.id, model: 'llama-3.1-70b-instruct', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [fireworksProvider]);
+    const env = config.env as Record<string, string>;
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://api.fireworks.ai/inference');
+  });
 });
