@@ -21,7 +21,7 @@ const testProfile: Profile = {
 
 describe('CodexAdapter', () => {
   it('supportedProviderTypes includes openai-compatible and fireworks', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['openai-compatible', 'fireworks']);
+    expect(adapter.supportedProviderTypes).toEqual(['fireworks']);
   });
 
   describe('configPaths', () => {
