@@ -10,7 +10,7 @@ const testProvider: Provider = {
   type: 'openai-compatible',
   apiKey: 'fw_test123',
   baseUrl: 'https://api.fireworks.ai/inference/v1',
-  models: ['accounts/fireworks/models/kimi-k2'],
+  models: [{ name: 'accounts/fireworks/models/kimi-k2', capabilities: { image: true, video: false, audio: false } }],
 };
 
 const testProfile: Profile = {
@@ -165,7 +165,7 @@ describe('CodexAdapter', () => {
         name: 'Fireworks',
         type: 'fireworks' as const,
         apiKey: 'fw-test-key',
-        models: ['llama-3.1-70b-instruct'],
+        models: [{ name: 'llama-3.1-70b-instruct', capabilities: { image: true, video: false, audio: false } }],
       };
       const config = adapter.buildConfig(testProfile, [fireworksProvider]);
       const modelProviders = config.model_providers as Record<string, Record<string, unknown>>;

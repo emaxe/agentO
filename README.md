@@ -48,6 +48,27 @@ npx @emaxe/agento
 
 **Note:** `claude-code` only works with `anthropic` and `fireworks` types (Anthropic SDK requirement). Use `opencode` or `qwen` for other OpenAI-compatible providers.
 
+## Model Capability Flags
+
+Every model in a provider carries three capability flags that describe which modalities it supports:
+
+- **`image`** — model can process image inputs
+- **`video`** — model can process video inputs
+- **`audio`** — model can process audio inputs
+
+Defaults when adding a model: `image=true`, `video=false`, `audio=false`.
+
+**Marker format:** in the TUI and `agento provider list`, capabilities render as `[iva]` (all on), `[i--]` (image only), `[---]` (text only), etc. The marker is informational and is **never** written into the launched agent's config.
+
+**Why it matters:**
+- **Qwen** receives `generationConfig.modalities` derived from these flags (previously hardcoded to `false` — images didn't work).
+- **OpenCode** emits per-model `modalities: { input: ["text", "image", ...], output: ["text"] }` so the agent knows what the model accepts.
+- **Claude Code** and **Codex** ignore these flags today (Anthropic SDK and Codex `responses` API don't expose modality config).
+
+**Toggling capabilities:** open the TUI → Providers → Edit, navigate to a model row, press `i` / `v` / `a` to toggle each flag. Add new models via the `[+ add model]` row (Enter). The CLI `provider add -M ...` creates models with default capabilities.
+
+> Existing configs from older versions (with `string[]` models) are auto-migrated on first read with default capabilities.
+
 ## Quick Start
 
 ### 1. Add API Providers
@@ -109,7 +130,7 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 ### Main Menu
 
 ```
-┌────────── AgentO v0.1.1 ──────────┐
+┌────────── AgentO v0.2.0 ──────────┐
 │                                   │
 │ ▶  Launch Agent                   │
 │    Providers                      │
@@ -127,7 +148,7 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 | Screen | What You Can Do | Key Shortcuts |
 |--------|----------------|---------------|
 | **Launch Agent** | Select profile → select agent → choose mode/scope → launch | **Enter** select, **Esc** back |
-| **Providers** | View, add, edit, delete API providers | **Enter** details, **a** add, **e** edit, **d** delete, **Esc** back |
+| **Providers** | View, add, edit, delete API providers; toggle model capabilities | **Enter** details / add model, **a** add provider, **e** edit, **d** delete, **i/v/a** toggle capability, **Esc** back |
 | **Profiles** | View, add, delete profiles. In profile details: add/remove/edit models | **Enter** details, **a** add, **d** delete, **Esc** back |
 | **Agents** | Check config status (global/project), backup availability | **Enter** details, **Esc** back |
 | **Settings** | Change default launch mode, default config scope, independent mode | **↑↓** change, **Enter** toggle, **Esc** save & back |
@@ -155,10 +176,12 @@ In **independent mode**, AgentO exits immediately and leaves the patched config 
 
 Manage your API providers without memorizing CLI flags:
 
-- **View** all providers with their type, models count, and base URL
+- **View** all providers with their type, models, capability markers, and base URL
 - **Add** a new provider with guided prompts (name, type, API key, models, base URL)
-- **Edit** existing provider details
+- **Edit** existing provider details — including per-model capability flags (`i`/`v`/`a` toggles)
 - **Delete** providers you no longer need
+
+In edit view, models render as `▶ [i--] model-name`. Press `i` / `v` / `a` while a model row is highlighted to toggle image / video / audio capabilities. Use the `[+ add model]` row (Enter) to append models, `d` to delete, `e` to rename.
 
 ### Profiles Screen
 
@@ -306,14 +329,19 @@ AgentO stores its configuration in `~/.agento/config.json`:
       "name": "Anthropic",
       "type": "anthropic",
       "apiKey": "sk-ant-...",
-      "models": ["claude-opus-4-20250514", "claude-sonnet-4-20250514"]
+      "models": [
+        { "name": "claude-opus-4-20250514", "capabilities": { "image": true, "video": false, "audio": false } },
+        { "name": "claude-sonnet-4-20250514", "capabilities": { "image": true, "video": false, "audio": false } }
+      ]
     },
     {
       "id": "uuid",
       "name": "Fireworks",
       "type": "fireworks",
       "apiKey": "fw-...",
-      "models": ["accounts/fireworks/models/llama-v3p1-70b-instruct"]
+      "models": [
+        { "name": "accounts/fireworks/models/llama-v3p1-70b-instruct", "capabilities": { "image": false, "video": false, "audio": false } }
+      ]
     },
     {
       "id": "uuid",
@@ -321,7 +349,9 @@ AgentO stores its configuration in `~/.agento/config.json`:
       "type": "openai-compatible",
       "apiKey": "your-api-key",
       "baseUrl": "https://api.together.xyz/v1",
-      "models": ["meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"]
+      "models": [
+        { "name": "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo", "capabilities": { "image": false, "video": false, "audio": false } }
+      ]
     }
   ],
   "profiles": [
@@ -345,6 +375,8 @@ AgentO stores its configuration in `~/.agento/config.json`:
 }
 ```
 
+> Configs created with AgentO < 0.2.0 use bare `string[]` for `models`. They are migrated automatically on read; capabilities default to `{ image: true, video: false, audio: false }` and can be adjusted in the TUI.
+
 ## How It Works
 
 ### Agent Adapters
@@ -353,12 +385,13 @@ Each supported agent has a dedicated adapter that translates AgentO's generic co
 
 - **Claude Code** (supports `anthropic`, `fireworks`): Generates `~/.claude/settings.json` with tier-based model selection and ANTHROPIC_* env vars. Uses Anthropic SDK.
   - ⚠️ **Does NOT support** `openai-compatible` providers (Anthropic SDK incompatibility)
+  - Capability flags are not propagated (Anthropic SDK doesn't expose modality config)
   
-- **OpenCode** (supports `anthropic`, `openai-compatible`, `fireworks`): Generates `~/.config/opencode/config.json` using Vercel AI SDK with provider-prefixed model names. Full function calling support via `@ai-sdk/openai-compatible`.
+- **OpenCode** (supports `anthropic`, `openai-compatible`, `fireworks`): Generates `~/.config/opencode/config.json` using Vercel AI SDK with provider-prefixed model names. Full function calling support via `@ai-sdk/openai-compatible`. Emits per-model `modalities: { input: [...], output: ["text"] }` derived from capability flags.
   
-- **Qwen CLI** (supports `openai-compatible`, `fireworks`): Generates `~/.qwen/settings.json` with OpenAI-compatible provider structure. Requires `baseUrl` for all providers. Auto-defaults for `fireworks` type.
+- **Qwen CLI** (supports `openai-compatible`, `fireworks`): Generates `~/.qwen/settings.json` with OpenAI-compatible provider structure. Requires `baseUrl` for all providers. Auto-defaults for `fireworks` type. Passes capability flags via `generationConfig.modalities`.
   
-- **Codex CLI** (`--dev` to show): Generates `~/.codex/config.toml` with `wire_api: responses`, profiles, and environment variable references. In project scope, splits config between global (`model_providers`) and project (`model`) configs. Supports all provider types.
+- **Codex CLI** (`--dev` to show): Generates `~/.codex/config.toml` with `wire_api: responses`, profiles, and environment variable references. In project scope, splits config between global (`model_providers`) and project (`model`) configs. Supports all provider types. Capability flags are not propagated (Codex `responses` API has no modality config).
 
 ### Backup & Restore
 

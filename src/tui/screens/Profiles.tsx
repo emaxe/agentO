@@ -5,6 +5,7 @@ import TextInput from 'ink-text-input';
 import { listProfiles, addProfile, updateProfile, removeProfile } from '../../profiles/profile-manager.js';
 import { listProviders } from '../../providers/provider-manager.js';
 import type { Profile, Provider, ProfileModel, ModelTier } from '../../config/schema.js';
+import { capabilityMarker } from '../../config/schema.js';
 
 type Mode = 'list' | 'add' | 'detail' | 'edit' | 'confirm-delete';
 type AddStep = 'name' | 'select-provider' | 'select-model' | 'select-tier' | 'review';
@@ -253,7 +254,7 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
         else if (key.return) {
           let chosen: string | null = null;
           if (modelCursor < provider.models.length) {
-            chosen = provider.models[modelCursor] ?? null;
+            chosen = provider.models[modelCursor]?.name ?? null;
           } else {
             const trimmed = customModel.trim();
             if (!trimmed) { setStatus('Enter custom model name'); return; }
@@ -329,7 +330,7 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
           else if (key.return) {
             let chosen: string | null = null;
             if (modelCursor < provider.models.length) {
-              chosen = provider.models[modelCursor] ?? null;
+              chosen = provider.models[modelCursor]?.name ?? null;
             } else {
               const trimmed = customModel.trim();
               if (!trimmed) { setStatus('Enter custom model name'); return; }
@@ -471,8 +472,8 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
               <Box flexDirection="column" marginTop={1}>
                 <Text>Select model:</Text>
                 {provider.models.map((m, i) => (
-                  <Text key={m} color={i === modelCursor ? 'green' : undefined}>
-                    {i === modelCursor ? '▶ ' : '  '}{m}
+                  <Text key={m.name} color={i === modelCursor ? 'green' : undefined}>
+                    {i === modelCursor ? '▶ ' : '  '}<Text color="gray">{capabilityMarker(m.capabilities)} </Text>{m.name}
                   </Text>
                 ))}
                 <Box>
@@ -588,8 +589,8 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
                 </Box>
                 <Box flexDirection="column" marginTop={1}>
                   {provider.models.map((m, i) => (
-                    <Text key={m} color={i === modelCursor ? 'green' : undefined}>
-                      {i === modelCursor ? '▶ ' : '  '}{m}
+                    <Text key={m.name} color={i === modelCursor ? 'green' : undefined}>
+                      {i === modelCursor ? '▶ ' : '  '}<Text color="gray">{capabilityMarker(m.capabilities)} </Text>{m.name}
                     </Text>
                   ))}
                   <Box>

@@ -34,12 +34,21 @@ export class OpenCodeAdapter implements AgentAdapter {
     const provider = providers.find((p) => p.id === base.providerId);
     if (!provider) throw new Error(`Provider not found for id: ${base.providerId}`);
 
+    const modelConfig = provider.models.find((m) => m.name === base.model);
+    const caps = modelConfig?.capabilities ?? { image: true, video: false, audio: false };
+    const inputModalities: string[] = ['text'];
+    if (caps.image) inputModalities.push('image');
+    if (caps.video) inputModalities.push('video');
+    if (caps.audio) inputModalities.push('audio');
+    const modalities = { input: inputModalities, output: ['text'] };
+
     if (provider.type === 'anthropic') {
       const options: Record<string, unknown> = { apiKey: provider.apiKey };
       if (provider.baseUrl) options['baseURL'] = provider.baseUrl;
       return {
         model: `anthropic/${base.model}`,
         provider: { anthropic: { options } },
+        models: { [base.model]: { modalities } },
       };
     }
 
@@ -54,7 +63,7 @@ export class OpenCodeAdapter implements AgentAdapter {
             npm: '@ai-sdk/openai-compatible',
             name: provider.name,
             options,
-            models: { [base.model]: { name: base.model } },
+            models: { [base.model]: { name: base.model, modalities } },
           },
         },
       };
@@ -71,7 +80,7 @@ export class OpenCodeAdapter implements AgentAdapter {
           npm: '@ai-sdk/openai-compatible',
           name: provider.name,
           options,
-          models: { [base.model]: { name: base.model } },
+          models: { [base.model]: { name: base.model, modalities } },
         },
       },
     };

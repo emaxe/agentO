@@ -11,12 +11,43 @@ AgentO — это CLI-инструмент для централизованно
 
 ## Поддерживаемые агенты
 
-| Агент | Команда | Формат конфига | Особенности |
-|-------|---------|----------------|-------------|
-| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | Поддержка уровней (small/base/smart) |
-| [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | Префикс провайдера |
-| [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | OpenAI-совместимые провайдеры |
-| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | Инжект переменных окружения. Скрыт по умолчанию (флаг `--dev`). |
+| Агент | Команда | Формат конфига | Поддерживаемые провайдеры | Особенности |
+|-------|---------|----------------|---|-------------|
+| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic`, `fireworks` | Поддержка уровней (small/base/smart) |
+| [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks` | Полная поддержка function calling через Vercel AI SDK; пробрасывает модальности |
+| [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks` | Структура OpenAI-совместимого API; пробрасывает модальности |
+| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | Все типы | Инжект переменных окружения. Скрыт по умолчанию (флаг `--dev`). |
+
+## Поддерживаемые типы провайдеров
+
+| Тип провайдера | Совместимые агенты | Примеры |
+|---|---|---|
+| `anthropic` | claude-code | Anthropic |
+| `openai-compatible` | opencode, qwen | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek и т. д. |
+| `fireworks` | claude-code, opencode, qwen, codex | Fireworks AI (поддерживает все 3 типа API) |
+
+**Примечание:** `claude-code` работает только с типами `anthropic` и `fireworks` (требование Anthropic SDK). Для других OpenAI-совместимых провайдеров используйте `opencode` или `qwen`.
+
+## Флаги возможностей моделей
+
+Каждая модель внутри провайдера хранит три флага возможностей:
+
+- **`image`** — модель принимает изображения на вход
+- **`video`** — модель принимает видео на вход
+- **`audio`** — модель принимает аудио на вход
+
+Значения по умолчанию при добавлении: `image=true`, `video=false`, `audio=false`.
+
+**Формат маркера:** в TUI и `agento provider list` возможности отображаются как `[iva]` (всё включено), `[i--]` (только image), `[---]` (только текст) и т. п. Маркер информационный — он **никогда** не записывается в конфиг агента.
+
+**Зачем это нужно:**
+- **Qwen** получает `generationConfig.modalities` из этих флагов (раньше всё было захардкожено в `false` — изображения не работали).
+- **OpenCode** генерирует на каждую модель `modalities: { input: ["text", "image", ...], output: ["text"] }`, чтобы агент знал, что модель принимает.
+- **Claude Code** и **Codex** пока эти флаги игнорируют (Anthropic SDK и Codex `responses` API не имеют поля для модальностей).
+
+**Переключение возможностей:** TUI → Провайдеры → Edit, наведите курсор на модель и нажимайте `i` / `v` / `a`, чтобы переключать флаги. Новые модели добавляются строкой `[+ add model]` (Enter). CLI `provider add -M ...` создаёт модели с дефолтными значениями.
+
+> Конфиги, созданные старыми версиями (с `string[]` моделями), мигрируются автоматически при чтении с дефолтными значениями возможностей.
 
 ## Установка
 
@@ -89,7 +120,7 @@ agento launch -p default -a qwen -m child -s project
 ### Главное меню
 
 ```
-┌────────── AgentO v0.1.1 ──────────┐
+┌────────── AgentO v0.2.0 ──────────┐
 │                                   │
 │ ▶  Запустить агента               │
 │    Провайдеры                     │
@@ -107,7 +138,7 @@ agento launch -p default -a qwen -m child -s project
 | Экран | Возможности | Горячие клавиши |
 |-------|-------------|-----------------|
 | **Запуск агента** | Выбор профиля → агента → режима/области → запуск | **Enter** выбор, **Esc** назад |
-| **Провайдеры** | Просмотр, добавление, редактирование, удаление API-провайдеров | **Enter** детали, **a** добавить, **e** редактировать, **d** удалить, **Esc** назад |
+| **Провайдеры** | Просмотр, добавление, редактирование, удаление провайдеров; переключение возможностей моделей | **Enter** детали / добавить модель, **a** добавить провайдер, **e** редактировать, **d** удалить, **i/v/a** переключить флаг, **Esc** назад |
 | **Профили** | Просмотр, добавление, удаление профилей. В деталях: добавление/удаление/редактирование моделей | **Enter** детали, **a** добавить, **d** удалить, **Esc** назад |
 | **Агенты** | Проверка статуса конфигов (global/project), наличие бэкапов | **Enter** детали, **Esc** назад |
 | **Настройки** | Изменение режима запуска, области конфига, режима independent | **↑↓** изменение, **Enter** переключение, **Esc** сохранить и назад |
@@ -135,10 +166,12 @@ Profile: default
 
 Управляйте API-провайдерами без необходимости запоминать CLI-флаги:
 
-- **Просмотр** всех провайдеров с типом, количеством моделей и base URL
+- **Просмотр** всех провайдеров с типом, моделями, маркерами возможностей и base URL
 - **Добавление** нового провайдера с подсказками (имя, тип, API-ключ, модели, base URL)
-- **Редактирование** существующих провайдеров
+- **Редактирование** существующих провайдеров — включая флаги возможностей моделей (`i`/`v`/`a`)
 - **Удаление** ненужных провайдеров
+
+В режиме редактирования модели отображаются как `▶ [i--] model-name`. Когда выделена модель, нажимайте `i` / `v` / `a`, чтобы переключать image / video / audio. Используйте строку `[+ add model]` (Enter) для добавления моделей, `d` — удалить, `e` — переименовать.
 
 ### Экран профилей
 
@@ -217,15 +250,21 @@ agento launch -p <profile> -a <agent> [options]
 ### `agento provider` — Управление провайдерами
 
 ```bash
-agento provider list                          # Список всех провайдеров
+agento provider list                          # Список всех провайдеров (с маркерами возможностей)
 agento provider add [options]                 # Добавить провайдер
   -n, --name <name>         Отображаемое имя (обязательно)
-  -t, --type <type>         Тип: openai-compatible или anthropic (обязательно)
+  -t, --type <type>         Тип: anthropic, openai-compatible или fireworks (обязательно)
   -k, --api-key <key>       API-ключ (обязательно)
-  -u, --base-url <url>      Base URL (для openai-compatible)
-  -M, --models <models>     Список моделей через запятую (обязательно)
+  -u, --base-url <url>      Base URL (обязателен для openai-compatible, опциональный для других)
+  -M, --models <models>     Список моделей через запятую (обязательно). Возможности по умолчанию:
+                            image=true, video=false, audio=false. Меняйте в TUI клавишами i/v/a.
 agento provider remove <name>                 # Удалить провайдер
 ```
+
+**Дефолты Base URL:**
+- `anthropic`: использует стандартный endpoint Anthropic
+- `fireworks`: автоматически `https://api.fireworks.ai/inference`, если не указан
+- `openai-compatible`: должен быть указан явно через `-u`
 
 ### `agento profile` — Управление профилями
 
@@ -266,10 +305,12 @@ AgentO хранит свою конфигурацию в `~/.agento/config.json`
     {
       "id": "uuid",
       "name": "Fireworks AI",
-      "type": "openai-compatible",
-      "apiKey": "sk-...",
-      "baseUrl": "https://api.fireworks.ai/inference/v1",
-      "models": ["accounts/fireworks/models/llama-v3p1-70b-instruct"]
+      "type": "fireworks",
+      "apiKey": "fw-...",
+      "models": [
+        { "name": "accounts/fireworks/models/llama-v3p1-70b-instruct", "capabilities": { "image": false, "video": false, "audio": false } },
+        { "name": "accounts/fireworks/models/kimi-k2", "capabilities": { "image": true, "video": false, "audio": false } }
+      ]
     }
   ],
   "profiles": [
@@ -293,16 +334,18 @@ AgentO хранит свою конфигурацию в `~/.agento/config.json`
 }
 ```
 
+> Конфиги, созданные AgentO < 0.2.0, имеют `models` как массив строк. Они мигрируются автоматически при чтении; возможности по умолчанию `{ image: true, video: false, audio: false }`, меняются в TUI.
+
 ## Как это работает
 
 ### Адаптеры агентов
 
 Каждый поддерживаемый агент имеет адаптер, который переводит универсальный формат AgentO в специфичный конфиг агента:
 
-- **Claude Code**: Генерирует `~/.claude/settings.json` с выбором модели по уровням
-- **OpenCode**: Генерирует `~/.config/opencode/config.json` с префиксом провайдера
-- **Qwen CLI**: Генерирует `~/.qwen/settings.json` со структурой OpenAI-совместимого провайдера
-- **Codex CLI** (`--dev` для отображения): Генерирует `~/.codex/config.toml` с `wire_api: responses`, профилями и ссылками на переменные окружения. При project-области разделяет конфиг между глобальным (`model_providers`) и проектным (`model`) конфигами.
+- **Claude Code** (`anthropic`, `fireworks`): Генерирует `~/.claude/settings.json` с выбором модели по уровням и переменными окружения `ANTHROPIC_*`. Использует Anthropic SDK. Флаги возможностей не пробрасываются (Anthropic SDK не имеет поля для модальностей).
+- **OpenCode** (`anthropic`, `openai-compatible`, `fireworks`): Генерирует `~/.config/opencode/config.json` через Vercel AI SDK с префиксом провайдера. Полная поддержка function calling через `@ai-sdk/openai-compatible`. Для каждой модели генерируется `modalities: { input: [...], output: ["text"] }` из флагов возможностей.
+- **Qwen CLI** (`openai-compatible`, `fireworks`): Генерирует `~/.qwen/settings.json` со структурой OpenAI-совместимого провайдера. Требует `baseUrl`. Пробрасывает флаги возможностей через `generationConfig.modalities`.
+- **Codex CLI** (`--dev` для отображения): Генерирует `~/.codex/config.toml` с `wire_api: responses`, профилями и ссылками на переменные окружения. При project-области разделяет конфиг между глобальным (`model_providers`) и проектным (`model`) конфигами. Поддерживает все типы провайдеров. Флаги возможностей не пробрасываются (Codex `responses` API не имеет поля для модальностей).
 
 ### Бэкап и восстановление
 

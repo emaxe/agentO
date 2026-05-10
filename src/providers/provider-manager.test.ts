@@ -29,7 +29,7 @@ async function getManager() {
 describe('provider manager', () => {
   it('add then list contains the provider', async () => {
     const { addProvider, listProviders } = await getManager();
-    await addProvider({ name: 'Test', type: 'anthropic', apiKey: 'key123', models: ['claude-3'] });
+    await addProvider({ name: 'Test', type: 'anthropic', apiKey: 'key123', models: [{ name: 'claude-3', capabilities: { image: true, video: false, audio: false } }] });
     const providers = await listProviders();
     expect(providers).toHaveLength(1);
     expect(providers[0].name).toBe('Test');
@@ -37,7 +37,7 @@ describe('provider manager', () => {
 
   it('remove then list does not contain the provider', async () => {
     const { addProvider, listProviders, removeProvider } = await getManager();
-    const p = await addProvider({ name: 'ToDelete', type: 'openai-compatible', apiKey: 'k', models: ['gpt-4'] });
+    const p = await addProvider({ name: 'ToDelete', type: 'openai-compatible', apiKey: 'k', models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }] });
     await removeProvider(p.id);
     const providers = await listProviders();
     expect(providers).toHaveLength(0);
@@ -45,7 +45,7 @@ describe('provider manager', () => {
 
   it('remove by name works', async () => {
     const { addProvider, listProviders, removeProvider } = await getManager();
-    await addProvider({ name: 'ByName', type: 'anthropic', apiKey: 'k', models: ['m1'] });
+    await addProvider({ name: 'ByName', type: 'anthropic', apiKey: 'k', models: [{ name: 'm1', capabilities: { image: true, video: false, audio: false } }] });
     await removeProvider('ByName');
     expect(await listProviders()).toHaveLength(0);
   });

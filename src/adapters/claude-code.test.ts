@@ -10,7 +10,7 @@ const testProvider: Provider = {
   type: 'anthropic',
   apiKey: 'sk-ant-test123',
   baseUrl: 'https://api.test.com',
-  models: ['claude-3-opus'],
+  models: [{ name: 'claude-3-opus', capabilities: { image: true, video: false, audio: false } }],
 };
 
 const singleModelProfile: Profile = {
@@ -97,7 +97,7 @@ describe('ClaudeCodeAdapter', () => {
       name: 'Second Provider',
       type: 'anthropic',
       apiKey: 'sk-ant-other',
-      models: ['claude-3-haiku'],
+      models: [{ name: 'claude-3-haiku', capabilities: { image: true, video: false, audio: false } }],
     };
     const mixedProfile: Profile = {
       id: '00000000-0000-0000-0000-000000000005',
@@ -122,7 +122,7 @@ describe('ClaudeCodeAdapter', () => {
       name: 'Fireworks',
       type: 'fireworks',
       apiKey: 'fw-test-key',
-      models: ['llama-3.1-70b-instruct'],
+      models: [{ name: 'llama-3.1-70b-instruct', capabilities: { image: true, video: false, audio: false } }],
     };
     const profile: Profile = {
       id: '00000000-0000-0000-0000-000000000007',

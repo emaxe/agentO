@@ -33,7 +33,7 @@ const testProvider: Provider = {
   type: 'anthropic',
   apiKey: 'sk-test',
   baseUrl: 'https://api.test.com',
-  models: ['claude-3'],
+  models: [{ name: 'claude-3', capabilities: { image: true, video: false, audio: false } }],
 };
 
 const testProfile: Profile = {

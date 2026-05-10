@@ -82,12 +82,26 @@ AgentO — CLI-инструмент для управления конфигур
 {
   id: string (uuid);
   name: string;                 // "Fireworks AI"
-  type: 'openai-compatible' | 'anthropic';
+  type: 'openai-compatible' | 'anthropic' | 'fireworks';
   apiKey: string;
-  baseUrl?: string;             // URL для openai-compatible
-  models: string[];           // Доступные модели провайдера
+  baseUrl?: string;             // URL для openai-compatible (обязателен), опционален для остальных
+  models: ModelConfig[];        // Доступные модели провайдера
+}
+
+// ModelConfig (с capability-флагами)
+{
+  name: string;                 // "claude-3-opus", "accounts/fireworks/models/kimi-k2"
+  capabilities: {
+    image: boolean;             // default: true
+    video: boolean;             // default: false
+    audio: boolean;             // default: false
+  };
 }
 ```
+
+**Миграция:** конфиги старого формата (`models: string[]`) автоматически мигрируются при чтении в `ModelConfig[]` с дефолтными возможностями. Перезаписываются на следующем save.
+
+**Capability-маркер:** `capabilityMarker(caps)` → `[iva]`, `[i--]`, `[---]` и т. п. Используется в TUI и `agento provider list` для отображения. Никогда не попадает в конфиги агентов.
 
 ### Profile
 
@@ -118,12 +132,12 @@ AgentO — CLI-инструмент для управления конфигур
 
 ### Поддерживаемые агенты
 
-| Агент | ID | Команда | Формат конфига | Особенности |
-|-------|-----|---------|----------------|-------------|
-| Claude Code | `claude-code` | `claude` | JSON (`~/.claude/settings.json`) | Поддерживает tiers (small/base/smart). Только один провайдер на профиль. |
-| OpenCode | `opencode` | `opencode` | JSON (`~/.config/opencode/config.json` или `./opencode.json`) | Префикс модели: `providerKey/model`. |
-| Qwen CLI | `qwen` | `qwen` | JSON (`~/.qwen/settings.json`) | **modelProviders ключ всегда `"openai"`** для openai-compatible провайдеров. Группирует модели по baseUrl. |
-| Codex CLI | `codex` | `codex` | TOML (`~/.codex/config.toml`) | `dev: true` (скрыт по умолчанию). `wire_api: responses`. При `project` scope `model_providers` пишет в global config, а `model` — в project config. Использует `buildEnv` для инжекта API ключа. |
+| Агент | ID | Команда | Поддерживаемые типы | Формат конфига | Capability-флаги | Особенности |
+|-------|-----|---------|---|---|---|---|
+| Claude Code | `claude-code` | `claude` | `anthropic`, `fireworks` | JSON (`~/.claude/settings.json`) | Игнорирует | Поддерживает tiers (small/base/smart). Только один провайдер на профиль. |
+| OpenCode | `opencode` | `opencode` | `anthropic`, `openai-compatible`, `fireworks` | JSON (`~/.config/opencode/config.json` или `./opencode.json`) | Пробрасывает в `models[<name>].modalities` | Префикс модели: `providerKey/model`. |
+| Qwen CLI | `qwen` | `qwen` | `openai-compatible`, `fireworks` | JSON (`~/.qwen/settings.json`) | Пробрасывает в `generationConfig.modalities` | **modelProviders ключ всегда `"openai"`** для openai-compatible провайдеров. Группирует модели по baseUrl. |
+| Codex CLI | `codex` | `codex` | `fireworks` | TOML (`~/.codex/config.toml`) | Игнорирует | `dev: true` (скрыт по умолчанию). `wire_api: responses`. При `project` scope `model_providers` пишет в global config, а `model` — в project config. Использует `buildEnv` для инжекта API ключа. |
 
 ### Важная деталь: Qwen Adapter
 
@@ -201,8 +215,8 @@ agento restore -a <agent> -s <scope>  # Восстановить конфиг и
 
 - **MainMenu**: Выбор раздела (↑↓, Enter, Esc/q)
 - **LaunchAgent**: Двухшаговый выбор (профиль → агент → запуск)
-- **Providers**: ↑↓ navigate | Enter/a: add | e: edit | d: delete | Esc: back
-- **Profiles**: В списке ↑↓ navigate | Enter: детали | a: add | d: delete | Esc: back. В деталях профиля: ↑↓ navigate models | a: add model | d: delete model | e: edit | Esc: back
+- **Providers**: ↑↓ navigate | Enter/a: add | e: edit | d: delete | Esc: back. В режиме edit: `[+ add model]` row → Enter добавляет модель, `i`/`v`/`a` переключают image/video/audio для выделенной модели, `e` редактирует имя, `d` удаляет
+- **Profiles**: В списке ↑↓ navigate | Enter: детали | a: add | d: delete | Esc: back. В деталях профиля: ↑↓ navigate models | a: add model | d: delete model | e: edit | Esc: back. При выборе модели в add/edit wizard рядом с именем отображаются capability-маркеры
 - **Agents**: Просмотр статуса конфигов (global/project, backup наличие)
 - **Settings**: Настройки по умолчанию
 

@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { listProviders, addProvider, removeProvider } from '../../providers/provider-manager.js';
+import { capabilityMarker } from '../../config/schema.js';
 
 export function createProviderCommand(): Command {
   const cmd = new Command('provider').description('Manage API providers');
@@ -16,7 +17,7 @@ export function createProviderCommand(): Command {
           providers.forEach((p) => {
             const maskedKey = p.apiKey.slice(0, 8) + '...';
             console.log(`  ${p.name} (${p.type}) — key: ${maskedKey}${p.baseUrl ? `, url: ${p.baseUrl}` : ''}`);
-            console.log(`    models: ${p.models.join(', ')}`);
+            console.log(`    models: ${p.models.map((m) => `${capabilityMarker(m.capabilities)} ${m.name}`).join(', ')}`);
           });
         }
         process.exit(0);
@@ -36,7 +37,10 @@ export function createProviderCommand(): Command {
     .requiredOption('-M, --models <models>', 'Comma-separated list of model names')
     .action(async (opts: { name: string; type: string; apiKey: string; baseUrl?: string; models: string }) => {
       try {
-        const models = opts.models.split(',').map((m) => m.trim()).filter(Boolean);
+        const models = opts.models.split(',').map((m) => m.trim()).filter(Boolean).map((name) => ({
+          name,
+          capabilities: { image: true, video: false, audio: false },
+        }));
         const provider = await addProvider({
           name: opts.name,
           type: opts.type as 'openai-compatible' | 'anthropic' | 'fireworks',

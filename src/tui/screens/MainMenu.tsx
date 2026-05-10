@@ -36,7 +36,7 @@ export function MainMenu({ onSelect, onExit }: MainMenuProps): React.JSX.Element
     <Box flexDirection="column" borderStyle="round" paddingX={2} paddingY={1} width={40}>
       <Box justifyContent="space-between" marginBottom={1}>
         <Text bold>AgentO</Text>
-        <Text dimColor>v0.1.0</Text>
+        <Text dimColor>v0.2.0</Text>
       </Box>
       <Box flexDirection="column">
         {MENU_ITEMS.map((item, i) => (

@@ -79,4 +79,29 @@ describe('config store', () => {
     const { deleteBackup } = await getStore();
     await expect(deleteBackup('claude-code', 'global')).resolves.toBeUndefined();
   });
+
+  it('migrates old string[] models to ModelConfig[] on read', async () => {
+    const { readConfig, writeConfig } = await getStore();
+    // Write a config with old string[] format manually
+    const { writeFile, mkdir } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    await mkdir(join(testDir, '.agento'), { recursive: true });
+    const oldConfig = {
+      providers: [{
+        id: '00000000-0000-0000-0000-000000000001',
+        name: 'Test',
+        type: 'anthropic',
+        apiKey: 'key123',
+        models: ['claude-3-opus', 'claude-3-sonnet'],
+      }],
+      profiles: [],
+      settings: {},
+    };
+    await writeFile(join(testDir, '.agento', 'config.json'), JSON.stringify(oldConfig), 'utf-8');
+
+    const config = await readConfig();
+    expect(config.providers).toHaveLength(1);
+    const models = config.providers[0]!.models;
+    expect(models[0]).toEqual({ name: 'claude-3-opus', capabilities: { image: true, video: false, audio: false } });
+    expect(models[1]).toEqual({ name: 'claude-3-sonnet', capabilities: { image: true, video: false, audio: false } });
+  });
 });

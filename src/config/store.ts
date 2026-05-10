@@ -8,13 +8,36 @@ const CONFIG_DIR = join(homedir(), '.agento');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
 const BACKUPS_DIR = join(CONFIG_DIR, 'backups');
 
+/** Мигрирует старый формат models: string[] → ModelConfig[]. */
+function migrateConfig(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null) return raw;
+  const obj = raw as Record<string, unknown>;
+  if (Array.isArray(obj.providers)) {
+    obj.providers = (obj.providers as unknown[]).map((p: unknown) => {
+      if (typeof p !== 'object' || p === null) return p;
+      const provider = p as Record<string, unknown>;
+      if (Array.isArray(provider.models)) {
+        provider.models = (provider.models as unknown[]).map((m: unknown) => {
+          if (typeof m === 'string') {
+            return { name: m, capabilities: { image: true, video: false, audio: false } };
+          }
+          return m;
+        });
+      }
+      return provider;
+    });
+  }
+  return obj;
+}
+
 /** Читает конфиг AgentO. Если файл не существует, возвращает дефолтный конфиг. */
 export async function readConfig(): Promise<AgentOConfig> {
   if (!existsSync(CONFIG_PATH)) {
     return AgentOConfigSchema.parse({});
   }
   const raw = await readFile(CONFIG_PATH, 'utf-8');
-  return AgentOConfigSchema.parse(JSON.parse(raw));
+  const migrated = migrateConfig(JSON.parse(raw));
+  return AgentOConfigSchema.parse(migrated);
 }
 
 /** Записывает конфиг AgentO, создаёт директорию при необходимости. */

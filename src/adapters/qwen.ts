@@ -73,6 +73,9 @@ export class QwenAdapter implements AgentAdapter {
       const envKey = deriveEnvKey(resolvedBaseUrl);
       envMap[envKey] = provider.apiKey;
 
+      const modelConfig = provider.models.find((m) => m.name === profileModel.model);
+      const caps = modelConfig?.capabilities ?? { image: true, video: false, audio: false };
+
       if (!modelProviders[providerKey]) modelProviders[providerKey] = [];
       modelProviders[providerKey].push({
         id: profileModel.model,
@@ -80,7 +83,7 @@ export class QwenAdapter implements AgentAdapter {
         baseUrl: resolvedBaseUrl,
         envKey,
         generationConfig: {
-          modalities: { image: false, video: false, audio: false },
+          modalities: { image: caps.image, video: caps.video, audio: caps.audio },
         },
       });
     }

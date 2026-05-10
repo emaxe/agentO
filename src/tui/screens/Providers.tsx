@@ -3,7 +3,8 @@ import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
 import TextInput from 'ink-text-input';
 import { listProviders, addProvider, updateProvider, removeProvider } from '../../providers/provider-manager.js';
-import type { Provider } from '../../config/schema.js';
+import type { Provider, ModelConfig } from '../../config/schema.js';
+import { capabilityMarker } from '../../config/schema.js';
 
 type Mode = 'list' | 'add' | 'edit' | 'confirm-delete';
 type FieldName = 'name' | 'type' | 'apiKey' | 'baseUrl' | 'models';
@@ -18,7 +19,7 @@ interface FormState {
   type: 'openai-compatible' | 'anthropic' | 'fireworks';
   apiKey: string;
   baseUrl: string;
-  models: string[];
+  models: ModelConfig[];
 }
 
 const FIELDS: FieldName[] = ['name', 'type', 'apiKey', 'baseUrl', 'models'];
@@ -67,7 +68,7 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
 
   const submitEdit = useCallback(() => {
     if (!editTarget) return;
-    const models = form.models.map((m) => m.trim()).filter(Boolean);
+    const models = form.models.map((m) => ({ ...m, name: m.name.trim() })).filter((m) => m.name);
     if (!form.name || !form.apiKey || models.length === 0) {
       setStatus('Name, API key and at least one model required');
       return;
@@ -86,7 +87,7 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
   }, [editTarget, form, reload]);
 
   const submitForm = useCallback(() => {
-    const models = form.models.map((m) => m.trim()).filter(Boolean);
+    const models = form.models.map((m) => ({ ...m, name: m.name.trim() })).filter((m) => m.name);
     if (!form.name || !form.apiKey || models.length === 0) {
       setStatus('Name, API key and at least one model required');
       return;
@@ -118,7 +119,7 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
       else if (input === 'e' && providers[selectedIndex]) {
         const p = providers[selectedIndex]!;
         setEditTarget(p);
-        setForm({ name: p.name, type: p.type, apiKey: p.apiKey, baseUrl: p.baseUrl ?? '', models: p.models });
+        setForm({ name: p.name, type: p.type, apiKey: p.apiKey, baseUrl: p.baseUrl ?? '', models: p.models.map((m) => ({ ...m, capabilities: { ...m.capabilities } })) });
         setActiveFieldIndex(0);
         setStatus('');
         setMode('edit');
@@ -164,14 +165,34 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
     // Models list navigation (models field focused, not editing)
     if (activeField === 'models') {
       if (key.upArrow) { setModelsListIndex((i) => Math.max(0, i - 1)); return; }
-      if (key.downArrow) { setModelsListIndex((i) => Math.min(form.models.length - 1, i + 1)); return; }
-      if (input === 'a') { setModelsAddingNew(true); setModelsNewValue(''); return; }
-      if (input === 'd' && form.models.length > 0) {
+      if (key.downArrow) { setModelsListIndex((i) => Math.min(form.models.length, i + 1)); return; }
+      // Capability toggles (only on real models, not [+ add] row)
+      if (modelsListIndex < form.models.length) {
+        if (input === 'i') {
+          setForm((f) => ({ ...f, models: f.models.map((m, j) => j === modelsListIndex ? { ...m, capabilities: { ...m.capabilities, image: !m.capabilities.image } } : m) }));
+          return;
+        }
+        if (input === 'v') {
+          setForm((f) => ({ ...f, models: f.models.map((m, j) => j === modelsListIndex ? { ...m, capabilities: { ...m.capabilities, video: !m.capabilities.video } } : m) }));
+          return;
+        }
+        if (input === 'a') {
+          setForm((f) => ({ ...f, models: f.models.map((m, j) => j === modelsListIndex ? { ...m, capabilities: { ...m.capabilities, audio: !m.capabilities.audio } } : m) }));
+          return;
+        }
+      }
+      if (input === 'd' && form.models.length > 0 && modelsListIndex < form.models.length) {
         setForm((f) => ({ ...f, models: f.models.filter((_, idx) => idx !== modelsListIndex) }));
         setModelsListIndex((i) => Math.max(0, i - 1));
         return;
       }
-      if (input === 'e' && form.models.length > 0) { setModelsEditingIndex(modelsListIndex); return; }
+      if (input === 'e' && form.models.length > 0 && modelsListIndex < form.models.length) { setModelsEditingIndex(modelsListIndex); return; }
+      // Enter on [+ add model] row
+      if (key.return && modelsListIndex === form.models.length) {
+        setModelsAddingNew(true);
+        setModelsNewValue('');
+        return;
+      }
       // Tab, Shift+Tab, Enter fall through to field navigation / submit below
     }
 
@@ -196,8 +217,8 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
       }
     }
 
-    // Submit on Enter when models field is focused
-    if (key.return && activeField === 'models') {
+    // Submit on Enter when models field is focused (on a real model row, not [+ add])
+    if (key.return && activeField === 'models' && modelsListIndex < form.models.length) {
       if (mode === 'add') submitForm();
       else submitEdit();
       return;
@@ -227,7 +248,7 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
     const hint = inModelsEdit
       ? 'Enter: save item  Esc: cancel'
       : activeField === 'models'
-        ? '↑↓: navigate  a: add  d: del  e: edit  Enter: save  Tab: next field'
+        ? '↑↓: navigate  i/v/a: toggle caps  d: del  e: edit  Enter: add/save'
         : 'Tab/↑↓: navigate  Space/←→: toggle type  Enter: save  Esc: cancel';
 
     return (
@@ -269,18 +290,18 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
                         </Text>
                         {modelsEditingIndex === idx ? (
                           <TextInput
-                            value={model}
+                            value={model.name}
                             focus
                             onChange={(v) =>
                               setForm((f) => ({
                                 ...f,
-                                models: f.models.map((m, j) => (j === idx ? v : m)),
+                                models: f.models.map((m, j) => (j === idx ? { ...m, name: v } : m)),
                               }))
                             }
                             onSubmit={() => setModelsEditingIndex(null)}
                           />
                         ) : (
-                          <Text dimColor={!focused}>{model}</Text>
+                          <Text dimColor={!focused}><Text color="gray">{capabilityMarker(model.capabilities)} </Text>{model.name}</Text>
                         )}
                       </Box>
                     ))}
@@ -293,12 +314,20 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
                           onChange={setModelsNewValue}
                           onSubmit={() => {
                             const trimmed = modelsNewValue.trim();
-                            if (trimmed) setForm((f) => ({ ...f, models: [...f.models, trimmed] }));
+                            if (trimmed) setForm((f) => ({ ...f, models: [...f.models, { name: trimmed, capabilities: { image: true, video: false, audio: false } }] }));
                             setModelsAddingNew(false);
                             setModelsNewValue('');
                           }}
                         />
                       </Box>
+                    )}
+                    {!modelsAddingNew && (
+                      <Text
+                        color={focused && modelsListIndex === form.models.length ? 'green' : 'cyan'}
+                        dimColor={!(focused && modelsListIndex === form.models.length)}
+                      >
+                        {focused && modelsListIndex === form.models.length ? '▶ ' : '  '}[+ add model]
+                      </Text>
                     )}
                   </Box>
                 )}
@@ -325,7 +354,7 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
             {i === selectedIndex && (
               <Box flexDirection="column" paddingLeft={3}>
                 <Text dimColor>key: {p.apiKey.slice(0, 8)}...</Text>
-                <Text dimColor>models: {p.models.join(', ')}</Text>
+                <Text dimColor>models: {p.models.map((m) => `${capabilityMarker(m.capabilities)} ${m.name}`).join(', ')}</Text>
                 {p.baseUrl && <Text dimColor>url: {p.baseUrl}</Text>}
               </Box>
             )}

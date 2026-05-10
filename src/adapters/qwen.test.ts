@@ -10,7 +10,7 @@ const testProvider: Provider = {
   type: 'openai-compatible',
   apiKey: 'fw_test123',
   baseUrl: 'http://188.132.197.214:20128/v1',
-  models: ['accounts/fireworks/models/kimi-k2'],
+  models: [{ name: 'accounts/fireworks/models/kimi-k2', capabilities: { image: true, video: false, audio: false } }],
 };
 
 const testProfile: Profile = {
@@ -118,6 +118,30 @@ describe('QwenAdapter', () => {
       const providerNoUrl: Provider = { ...testProvider, baseUrl: undefined };
       expect(() => adapter.buildConfig(testProfile, [providerNoUrl])).toThrow('requires a baseUrl');
     });
+
+    it('passes model capabilities to generationConfig.modalities', () => {
+      const providerWithCaps: Provider = {
+        ...testProvider,
+        models: [{ name: 'accounts/fireworks/models/kimi-k2', capabilities: { image: true, video: true, audio: false } }],
+      };
+      const config = adapter.buildConfig(testProfile, [providerWithCaps]);
+      const mp = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
+      const entry = mp['openai']![0]!;
+      const gc = entry.generationConfig as { modalities: { image: boolean; video: boolean; audio: boolean } };
+      expect(gc.modalities.image).toBe(true);
+      expect(gc.modalities.video).toBe(true);
+      expect(gc.modalities.audio).toBe(false);
+    });
+
+    it('defaults capabilities when model not found in provider', () => {
+      const config = adapter.buildConfig(testProfile, [testProvider]);
+      const mp = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
+      const entry = mp['openai']![0]!;
+      const gc = entry.generationConfig as { modalities: { image: boolean; video: boolean; audio: boolean } };
+      expect(gc.modalities.image).toBe(true);
+      expect(gc.modalities.video).toBe(false);
+      expect(gc.modalities.audio).toBe(false);
+    });
   });
 
   describe('env key derivation edge cases', () => {
@@ -143,7 +167,7 @@ describe('QwenAdapter', () => {
         name: 'Fireworks',
         type: 'fireworks',
         apiKey: 'fw-test-key',
-        models: ['llama-3.1-70b-instruct'],
+        models: [{ name: 'llama-3.1-70b-instruct', capabilities: { image: true, video: false, audio: false } }],
       };
       const profile: Profile = {
         id: '00000000-0000-0000-0000-000000000100',

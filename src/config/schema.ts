@@ -4,6 +4,21 @@ import { z } from 'zod';
 export const ProviderTypeSchema = z.enum(['openai-compatible', 'anthropic', 'fireworks']);
 export type ProviderType = z.infer<typeof ProviderTypeSchema>;
 
+// Возможности модели (image / video / audio)
+export const ModelCapabilitiesSchema = z.object({
+  image: z.boolean().default(true),
+  video: z.boolean().default(false),
+  audio: z.boolean().default(false),
+});
+export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
+
+// Модель провайдера с capabilities
+export const ModelConfigSchema = z.object({
+  name: z.string().min(1),
+  capabilities: ModelCapabilitiesSchema.default({}),
+});
+export type ModelConfig = z.infer<typeof ModelConfigSchema>;
+
 // Провайдер API (REQ-1)
 export const ProviderSchema = z.object({
   id: z.string().uuid(),
@@ -11,9 +26,14 @@ export const ProviderSchema = z.object({
   type: ProviderTypeSchema,
   apiKey: z.string().min(1),
   baseUrl: z.string().url().optional(),
-  models: z.array(z.string().min(1)).min(1),
+  models: z.array(ModelConfigSchema).min(1),
 });
 export type Provider = z.infer<typeof ProviderSchema>;
+
+/** Маркер capabilities для отображения в UI: [i--], [iva] и т.д. */
+export function capabilityMarker(caps: ModelCapabilities): string {
+  return `[${caps.image ? 'i' : '-'}${caps.video ? 'v' : '-'}${caps.audio ? 'a' : '-'}]`;
+}
 
 // Уровень модели в профиле (REQ: small / base / smart)
 export const ModelTierSchema = z.enum(['small', 'base', 'smart']);

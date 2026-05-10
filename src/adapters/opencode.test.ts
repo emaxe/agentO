@@ -10,7 +10,7 @@ const testProvider: Provider = {
   type: 'anthropic',
   apiKey: 'sk-ant-test123',
   baseUrl: 'https://api.test.com',
-  models: ['claude-3-opus'],
+  models: [{ name: 'claude-3-opus', capabilities: { image: true, video: false, audio: false } }],
 };
 
 const testProfile: Profile = {
@@ -78,13 +78,40 @@ describe('OpenCodeAdapter', () => {
     expect(adapter.supportedProviderTypes).toEqual(['anthropic', 'openai-compatible', 'fireworks']);
   });
 
+  it('includes modalities based on model capabilities (anthropic)', () => {
+    const config = adapter.buildConfig(testProfile, [testProvider]);
+    const models = config.models as Record<string, { modalities: { input: string[]; output: string[] } }>;
+    expect(models['claude-3-opus'].modalities.input).toContain('text');
+    expect(models['claude-3-opus'].modalities.input).toContain('image');
+    expect(models['claude-3-opus'].modalities.output).toEqual(['text']);
+  });
+
+  it('includes modalities based on model capabilities (openai-compatible)', () => {
+    const openaiProvider = { ...testProvider, type: 'openai-compatible' as const, name: 'Fireworks AI' };
+    const config = adapter.buildConfig(testProfile, [openaiProvider]);
+    const provider = config.provider as Record<string, { models: Record<string, { modalities: { input: string[] } }> }>;
+    const fw = provider['fireworks-ai']!;
+    expect(fw.models['claude-3-opus'].modalities.input).toContain('image');
+  });
+
+  it('excludes image from modalities when capability is false', () => {
+    const noImageProvider: Provider = {
+      ...testProvider,
+      models: [{ name: 'claude-3-opus', capabilities: { image: false, video: false, audio: true } }],
+    };
+    const config = adapter.buildConfig(testProfile, [noImageProvider]);
+    const models = config.models as Record<string, { modalities: { input: string[] } }>;
+    expect(models['claude-3-opus'].modalities.input).not.toContain('image');
+    expect(models['claude-3-opus'].modalities.input).toContain('audio');
+  });
+
   it('fireworks provider without baseUrl uses default Fireworks URL', () => {
     const fireworksProvider: Provider = {
       id: '00000000-0000-0000-0000-000000000004',
       name: 'Fireworks',
       type: 'fireworks',
       apiKey: 'fw-test-key',
-      models: ['llama-3.1-70b-instruct'],
+      models: [{ name: 'llama-3.1-70b-instruct', capabilities: { image: true, video: false, audio: false } }],
     };
     const profile: Profile = {
       id: '00000000-0000-0000-0000-000000000005',
