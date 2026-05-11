@@ -20,8 +20,8 @@ const testProfile: Profile = {
 };
 
 describe('CodexAdapter', () => {
-  it('supportedProviderTypes includes openai-compatible and fireworks', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['fireworks']);
+  it('supportedProviderTypes includes fireworks and openrouter', () => {
+    expect(adapter.supportedProviderTypes).toEqual(['fireworks', 'openrouter']);
   });
 
   describe('configPaths', () => {
@@ -170,6 +170,43 @@ describe('CodexAdapter', () => {
       const config = adapter.buildConfig(testProfile, [fireworksProvider]);
       const modelProviders = config.model_providers as Record<string, Record<string, unknown>>;
       expect(modelProviders['fireworks']?.base_url).toBe('https://api.fireworks.ai/inference/v1');
+    });
+
+    it('openrouter provider without baseUrl uses default OpenRouter URL with wire_api responses', () => {
+      const openrouterProvider: Provider = {
+        id: '00000000-0000-0000-0000-0000000000b1',
+        name: 'OpenRouter',
+        type: 'openrouter',
+        apiKey: 'sk-or-v1-test',
+        models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-0000000000b2',
+        name: 'OR Profile',
+        models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+      };
+      const config = adapter.buildConfig(profile, [openrouterProvider]);
+      const modelProviders = config.model_providers as Record<string, Record<string, unknown>>;
+      expect(modelProviders['openrouter']?.base_url).toBe('https://openrouter.ai/api/v1');
+      expect(modelProviders['openrouter']?.wire_api).toBe('responses');
+      expect(modelProviders['openrouter']?.env_key).toBe('CODEX_OPENROUTER_API_KEY');
+    });
+
+    it('openrouter buildEnv maps apiKey to CODEX_OPENROUTER_API_KEY', () => {
+      const openrouterProvider: Provider = {
+        id: '00000000-0000-0000-0000-0000000000b3',
+        name: 'OpenRouter',
+        type: 'openrouter',
+        apiKey: 'sk-or-v1-test',
+        models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-0000000000b4',
+        name: 'OR Profile',
+        models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+      };
+      const env = adapter.buildEnv(profile, [openrouterProvider]);
+      expect(env['CODEX_OPENROUTER_API_KEY']).toBe('sk-or-v1-test');
     });
   });
 });

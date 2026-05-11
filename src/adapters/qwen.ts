@@ -4,9 +4,12 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
-import type { Profile, Provider } from '../config/schema.js';
+import type { Profile, Provider, ProviderType } from '../config/schema.js';
 
-const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1';
+const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
+  fireworks: 'https://api.fireworks.ai/inference/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+};
 
 /** Генерирует env-ключ для Qwen из baseUrl.
  * Пример: "http://188.132.197.214:20128/v1" → "QWEN_CUSTOM_API_KEY_OPENAI_HTTP_188_132_197_214_20128_V1"
@@ -22,7 +25,7 @@ function deriveEnvKey(baseUrl: string): string {
 export class QwenAdapter implements AgentAdapter {
   readonly id = 'qwen';
   readonly displayName = 'Qwen CLI';
-  readonly supportedProviderTypes = ['openai-compatible', 'fireworks'] as const;
+  readonly supportedProviderTypes = ['openai-compatible', 'fireworks', 'openrouter'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -64,7 +67,7 @@ export class QwenAdapter implements AgentAdapter {
       if (provider.type === 'anthropic') {
         throw new Error(`Qwen CLI does not support Anthropic providers (provider: "${provider.name}")`);
       }
-      const resolvedBaseUrl = provider.baseUrl ?? (provider.type === 'fireworks' ? FIREWORKS_BASE_URL : undefined);
+      const resolvedBaseUrl = provider.baseUrl ?? DEFAULT_BASE_URLS[provider.type];
       if (!resolvedBaseUrl) {
         throw new Error(`Qwen CLI requires a baseUrl for provider "${provider.name}"`);
       }

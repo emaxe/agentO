@@ -13,10 +13,10 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 
 | Agent | Command | Config Format | Supported Providers | Special Features |
 |-------|---------|---------------|---|------------------|
-| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic`, `fireworks` | Multi-tier support (small/base/smart) |
-| [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks` | Full function calling support via Vercel AI SDK |
-| [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks` | OpenAI-compatible API structure |
-| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | All types | Environment variable injection. Hidden by default (`--dev` to show). |
+| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic`, `fireworks`, `openrouter` | Multi-tier support (small/base/smart) |
+| [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Full function calling support via Vercel AI SDK |
+| [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter` | OpenAI-compatible API structure |
+| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `fireworks`, `openrouter` | Environment variable injection. `wire_api: responses`. |
 
 ## Installation
 
@@ -42,11 +42,15 @@ npx @emaxe/agento
 
 | Provider Type | Compatible Agents | Examples |
 |---|---|---|
-| `anthropic` | claude-code | Anthropic |
+| `anthropic` | claude-code, opencode | Anthropic |
 | `openai-compatible` | opencode, qwen | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek, etc. |
 | `fireworks` | claude-code, opencode, qwen, codex | Fireworks AI (supports all 3 API types) |
+| `openrouter` | claude-code, opencode, qwen, codex | [OpenRouter](https://openrouter.ai) — universal LLM gateway (Anthropic Skin / OpenAI / Responses API) |
 
-**Note:** `claude-code` only works with `anthropic` and `fireworks` types (Anthropic SDK requirement). Use `opencode` or `qwen` for other OpenAI-compatible providers.
+**Notes:**
+- `claude-code` works with `anthropic`, `fireworks`, and `openrouter` types. For `openrouter` it uses OpenRouter's **Anthropic Skin** with `ANTHROPIC_AUTH_TOKEN` (Bearer auth).
+- Use `opencode` or `qwen` for general OpenAI-compatible providers.
+- `openrouter` is the most flexible — works with all 4 agents.
 
 ## Model Capability Flags
 
@@ -95,6 +99,13 @@ agento provider add \
   -k "your-api-key" \
   -u "https://api.together.xyz/v1" \
   -M "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
+
+# OpenRouter (universal gateway — works with all 4 agents)
+agento provider add \
+  -n "OpenRouter" \
+  -t openrouter \
+  -k "sk-or-v1-your-key" \
+  -M "anthropic/claude-sonnet-4.6,openai/gpt-5,google/gemini-2.5-pro"
 ```
 
 ### 2. Create a Profile
@@ -156,7 +167,7 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 ### Launch Agent Workflow
 
 1. **Select Profile** — Choose from your saved profiles
-2. **Select Agent** — Pick which agent to launch (claude-code, opencode, qwen, or codex with `--dev`)
+2. **Select Agent** — Pick which agent to launch (claude-code, opencode, qwen, or codex)
 3. **Optional:** Adjust **Mode** (child/independent) and **Scope** (global/project)
 4. **Launch** — AgentO patches the agent config and starts the agent
 
@@ -227,14 +238,16 @@ Use **TUI** for exploration and interactive workflows. Use **CLI** for scripting
 
 | Provider Type | claude-code | opencode | qwen | codex |
 |---|---|---|---|---|
-| **anthropic** | ✅ Full support | ✅ (via SDK) | ❌ Not supported | ✅ (via Responses API) |
-| **openai-compatible** | ❌ Not supported | ✅ Full support | ✅ Full support | ✅ (via Responses API) |
+| **anthropic** | ✅ Full support | ✅ (via SDK) | ❌ Not supported | ❌ Not supported |
+| **openai-compatible** | ❌ Not supported | ✅ Full support | ✅ Full support | ❌ Not supported |
 | **fireworks** | ✅ (Anthropic API) | ✅ (OpenAI API) | ✅ (OpenAI API) | ✅ (Responses API) |
+| **openrouter** | ✅ (Anthropic Skin) | ✅ (OpenAI API) | ✅ (OpenAI API) | ✅ (Responses API) |
 
 **Key Constraints:**
-- `claude-code` uses **Anthropic SDK** and only works with `anthropic` or `fireworks` types
+- `claude-code` uses Anthropic-compatible APIs and works with `anthropic`, `fireworks`, `openrouter` types
+- For `openrouter` Claude Code uses `ANTHROPIC_AUTH_TOKEN` (Bearer) — not `apiKeyHelper`
 - Other OpenAI-compatible providers must use `opencode` or `qwen` agents
-- `fireworks` type is the most flexible — works with all agents through native Fireworks APIs
+- `fireworks` and `openrouter` are the most flexible — work with all 4 agents
 
 ## CLI Reference
 
@@ -276,7 +289,7 @@ Options:
 agento provider list                          # List all providers
 agento provider add [options]                 # Add a new provider
   -n, --name <name>         Provider display name (required)
-  -t, --type <type>         Provider type: anthropic, openai-compatible, or fireworks (required)
+  -t, --type <type>         Provider type: anthropic, openai-compatible, fireworks, or openrouter (required)
   -k, --api-key <key>       API key (required)
   -u, --base-url <url>      Base URL (required for openai-compatible, optional for others)
   -M, --models <models>     Comma-separated list of model names (required)
@@ -286,6 +299,7 @@ agento provider remove <name>                 # Remove a provider
 **Base URL Defaults:**
 - `anthropic`: Uses Anthropic's default endpoint
 - `fireworks`: Auto-defaults to `https://api.fireworks.ai/inference` if not specified
+- `openrouter`: Auto-defaults to `https://openrouter.ai/api/v1` (Claude Code: `https://openrouter.ai/api`) if not specified
 - `openai-compatible`: Must be explicitly provided with `-u`
 
 ### `agento profile` — Manage Profiles
@@ -383,7 +397,8 @@ AgentO stores its configuration in `~/.agento/config.json`:
 
 Each supported agent has a dedicated adapter that translates AgentO's generic config format into the agent's specific configuration:
 
-- **Claude Code** (supports `anthropic`, `fireworks`): Generates `~/.claude/settings.json` with tier-based model selection and ANTHROPIC_* env vars. Uses Anthropic SDK.
+- **Claude Code** (supports `anthropic`, `fireworks`, `openrouter`): Generates `~/.claude/settings.json` with tier-based model selection and ANTHROPIC_* env vars. Uses Anthropic SDK.
+  - For `openrouter`: uses OpenRouter's **Anthropic Skin** — sets `ANTHROPIC_AUTH_TOKEN` (Bearer) + empty `ANTHROPIC_API_KEY`, no `apiKeyHelper`. Base URL: `https://openrouter.ai/api`
   - ⚠️ **Does NOT support** `openai-compatible` providers (Anthropic SDK incompatibility)
   - Capability flags are not propagated (Anthropic SDK doesn't expose modality config)
   

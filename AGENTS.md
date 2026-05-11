@@ -82,9 +82,9 @@ AgentO — CLI-инструмент для управления конфигур
 {
   id: string (uuid);
   name: string;                 // "Fireworks AI"
-  type: 'openai-compatible' | 'anthropic' | 'fireworks';
+  type: 'openai-compatible' | 'anthropic' | 'fireworks' | 'openrouter';
   apiKey: string;
-  baseUrl?: string;             // URL для openai-compatible (обязателен), опционален для остальных
+  baseUrl?: string;             // URL для openai-compatible (обязателен), опционален для остальных (fireworks/openrouter имеют дефолтные URL)
   models: ModelConfig[];        // Доступные модели провайдера
 }
 
@@ -134,10 +134,10 @@ AgentO — CLI-инструмент для управления конфигур
 
 | Агент | ID | Команда | Поддерживаемые типы | Формат конфига | Capability-флаги | Особенности |
 |-------|-----|---------|---|---|---|---|
-| Claude Code | `claude-code` | `claude` | `anthropic`, `fireworks` | JSON (`~/.claude/settings.json`) | Игнорирует | Поддерживает tiers (small/base/smart). Только один провайдер на профиль. |
-| OpenCode | `opencode` | `opencode` | `anthropic`, `openai-compatible`, `fireworks` | JSON (`~/.config/opencode/config.json` или `./opencode.json`) | Пробрасывает в `models[<name>].modalities` | Префикс модели: `providerKey/model`. |
-| Qwen CLI | `qwen` | `qwen` | `openai-compatible`, `fireworks` | JSON (`~/.qwen/settings.json`) | Пробрасывает в `generationConfig.modalities` | **modelProviders ключ всегда `"openai"`** для openai-compatible провайдеров. Группирует модели по baseUrl. |
-| Codex CLI | `codex` | `codex` | `fireworks` | TOML (`~/.codex/config.toml`) | Игнорирует | `dev: true` (скрыт по умолчанию). `wire_api: responses`. При `project` scope `model_providers` пишет в global config, а `model` — в project config. Использует `buildEnv` для инжекта API ключа. |
+| Claude Code | `claude-code` | `claude` | `anthropic`, `fireworks`, `openrouter` | JSON (`~/.claude/settings.json`) | Игнорирует | Поддерживает tiers (small/base/smart). Только один провайдер на профиль. Для `openrouter` использует Anthropic Skin: `ANTHROPIC_AUTH_TOKEN` (Bearer) + пустой `ANTHROPIC_API_KEY`, БЕЗ `apiKeyHelper`. |
+| OpenCode | `opencode` | `opencode` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | JSON (`~/.config/opencode/config.json` или `./opencode.json`) | Пробрасывает в `models[<name>].modalities` | Префикс модели: `providerKey/model`. Для `openrouter` ключ провайдера всегда `openrouter`. |
+| Qwen CLI | `qwen` | `qwen` | `openai-compatible`, `fireworks`, `openrouter` | JSON (`~/.qwen/settings.json`) | Пробрасывает в `generationConfig.modalities` | **modelProviders ключ всегда `"openai"`** для openai-compatible провайдеров. Группирует модели по baseUrl. |
+| Codex CLI | `codex` | `codex` | `fireworks`, `openrouter` | TOML (`~/.codex/config.toml`) | Игнорирует | `dev: true` (скрыт по умолчанию). `wire_api: responses`. При `project` scope `model_providers` пишет в global config, а `model` — в project config. Использует `buildEnv` для инжекта API ключа. |
 
 ### Важная деталь: Qwen Adapter
 
@@ -336,5 +336,6 @@ grep "const providerKey" dist/src/adapters/qwen.js
 
 - Все адаптеры должны поддерживать `readConfig` → `buildConfig` → `writeConfig` pipeline
 - При добавлении нового агента нужно: создать адаптер, добавить в `AGENT_COMMANDS` (launch.ts), добавить в TUI (`LaunchAgent.tsx`), добавить тесты
-- Провайдеры типа `anthropic` не поддерживаются Qwen и OpenCode (проверяется в адаптерах)
-- BaseUrl обязателен для openai-compatible провайдеров (кроме Claude Code, который использует официальный API по умолчанию)
+- Провайдеры типа `anthropic` не поддерживаются Qwen (проверяется в адаптерах)
+- BaseUrl обязателен для openai-compatible провайдеров (кроме Claude Code, который использует официальный API по умолчанию). Для `fireworks` и `openrouter` есть дефолтные URL: `https://api.fireworks.ai/inference/v1` и `https://openrouter.ai/api/v1`
+- Тип `openrouter` поддерживается всеми 4 агентами. OpenRouter предоставляет три API-формата (OpenAI Chat Completions, Anthropic Skin, Responses API), что позволяет использовать его с Claude Code (Anthropic Skin), OpenCode/Qwen (OpenAI-compatible) и Codex (Responses API)

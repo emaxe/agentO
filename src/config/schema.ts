@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
 // Тип провайдера API
-export const ProviderTypeSchema = z.enum(['openai-compatible', 'anthropic', 'fireworks']);
+export const ProviderTypeSchema = z.enum(['openai-compatible', 'anthropic', 'fireworks', 'openrouter']);
 export type ProviderType = z.infer<typeof ProviderTypeSchema>;
+export const PROVIDER_TYPES = ProviderTypeSchema.options;
 
 // Возможности модели (image / video / audio)
 export const ModelCapabilitiesSchema = z.object({

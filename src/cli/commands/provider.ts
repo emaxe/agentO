@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { listProviders, addProvider, removeProvider } from '../../providers/provider-manager.js';
-import { capabilityMarker } from '../../config/schema.js';
+import { capabilityMarker, PROVIDER_TYPES, type ProviderType } from '../../config/schema.js';
 
 export function createProviderCommand(): Command {
   const cmd = new Command('provider').description('Manage API providers');
@@ -31,7 +31,7 @@ export function createProviderCommand(): Command {
     .command('add')
     .description('Add a new provider')
     .requiredOption('-n, --name <name>', 'Provider name')
-    .requiredOption('-t, --type <type>', 'Provider type (openai-compatible, anthropic, fireworks)')
+    .requiredOption('-t, --type <type>', `Provider type (${PROVIDER_TYPES.join(', ')})`)
     .requiredOption('-k, --api-key <key>', 'API key')
     .option('-u, --base-url <url>', 'Base URL (for openai-compatible)')
     .requiredOption('-M, --models <models>', 'Comma-separated list of model names')
@@ -43,7 +43,7 @@ export function createProviderCommand(): Command {
         }));
         const provider = await addProvider({
           name: opts.name,
-          type: opts.type as 'openai-compatible' | 'anthropic' | 'fireworks',
+          type: opts.type as ProviderType,
           apiKey: opts.apiKey,
           baseUrl: opts.baseUrl,
           models,

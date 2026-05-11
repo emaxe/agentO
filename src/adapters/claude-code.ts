@@ -4,9 +4,12 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
-import type { ModelTier, Profile, ProfileModel, Provider } from '../config/schema.js';
+import type { ModelTier, Profile, ProfileModel, Provider, ProviderType } from '../config/schema.js';
 
-const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference';
+const DEFAULT_ANTHROPIC_BASE_URLS: Partial<Record<ProviderType, string>> = {
+  fireworks: 'https://api.fireworks.ai/inference',
+  openrouter: 'https://openrouter.ai/api',
+};
 
 function escapeForSingleQuoted(value: string): string {
   return value.replace(/'/g, "'\\''");
@@ -23,7 +26,7 @@ function pickByTier(
 export class ClaudeCodeAdapter implements AgentAdapter {
   readonly id = 'claude-code';
   readonly displayName = 'Claude Code';
-  readonly supportedProviderTypes = ['anthropic', 'fireworks'] as const;
+  readonly supportedProviderTypes = ['anthropic', 'fireworks', 'openrouter'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -69,10 +72,22 @@ export class ClaudeCodeAdapter implements AgentAdapter {
       ANTHROPIC_DEFAULT_SONNET_MODEL: base.model,
       ANTHROPIC_DEFAULT_OPUS_MODEL: smart.model,
     };
-    const anthropicBase =
-      baseProvider.baseUrl ?? (baseProvider.type === 'fireworks' ? FIREWORKS_BASE_URL : undefined);
+    const anthropicBase = baseProvider.baseUrl ?? DEFAULT_ANTHROPIC_BASE_URLS[baseProvider.type];
     if (anthropicBase) {
       env['ANTHROPIC_BASE_URL'] = anthropicBase;
+    }
+
+    // OpenRouter Anthropic Skin принимает Bearer-токен (ANTHROPIC_AUTH_TOKEN),
+    // а не x-api-key (apiKeyHelper). ANTHROPIC_API_KEY должен быть пустым,
+    // иначе Claude Code fallback'нется на нативный Anthropic endpoint.
+    if (baseProvider.type === 'openrouter') {
+      env['ANTHROPIC_AUTH_TOKEN'] = baseProvider.apiKey;
+      env['ANTHROPIC_API_KEY'] = '';
+      return {
+        $schema: 'https://json.schemastore.org/claude-code-settings.json',
+        env,
+        model: base.model,
+      };
     }
 
     const config: AgentConfig = {

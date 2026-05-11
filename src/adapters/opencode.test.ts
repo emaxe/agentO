@@ -74,8 +74,8 @@ describe('OpenCodeAdapter', () => {
     expect(config.model).toBe('anthropic/claude-3-sonnet');
   });
 
-  it('supportedProviderTypes includes all three types', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['anthropic', 'openai-compatible', 'fireworks']);
+  it('supportedProviderTypes includes all four types', () => {
+    expect(adapter.supportedProviderTypes).toEqual(['anthropic', 'openai-compatible', 'fireworks', 'openrouter']);
   });
 
   it('includes modalities based on model capabilities (anthropic)', () => {
@@ -103,6 +103,52 @@ describe('OpenCodeAdapter', () => {
     const models = config.models as Record<string, { modalities: { input: string[] } }>;
     expect(models['claude-3-opus'].modalities.input).not.toContain('image');
     expect(models['claude-3-opus'].modalities.input).toContain('audio');
+  });
+
+  it('openrouter provider uses fixed key "openrouter" and default URL', () => {
+    const openrouterProvider: Provider = {
+      id: '00000000-0000-0000-0000-00000000000a',
+      name: 'My Custom OpenRouter',
+      type: 'openrouter',
+      apiKey: 'sk-or-v1-test',
+      models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-00000000000b',
+      name: 'OR Profile',
+      models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [openrouterProvider]);
+    expect(config.model).toBe('openrouter/anthropic/claude-sonnet-4.6');
+    const provider = config.provider as Record<string, unknown>;
+    expect('openrouter' in provider).toBe(true);
+    const or = provider.openrouter as Record<string, unknown>;
+    expect(or.npm).toBe('@ai-sdk/openai-compatible');
+    expect(or.name).toBe('My Custom OpenRouter');
+    const options = or.options as Record<string, string>;
+    expect(options.apiKey).toBe('sk-or-v1-test');
+    expect(options.baseURL).toBe('https://openrouter.ai/api/v1');
+  });
+
+  it('openrouter respects user baseUrl override', () => {
+    const openrouterProvider: Provider = {
+      id: '00000000-0000-0000-0000-00000000000c',
+      name: 'OpenRouter',
+      type: 'openrouter',
+      apiKey: 'sk-or-v1-test',
+      baseUrl: 'https://proxy.example.com/v1',
+      models: [{ name: 'openai/gpt-5', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-00000000000d',
+      name: 'OR Custom',
+      models: [{ providerId: openrouterProvider.id, model: 'openai/gpt-5', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [openrouterProvider]);
+    const provider = config.provider as Record<string, unknown>;
+    const or = provider.openrouter as Record<string, unknown>;
+    const options = or.options as Record<string, string>;
+    expect(options.baseURL).toBe('https://proxy.example.com/v1');
   });
 
   it('fireworks provider without baseUrl uses default Fireworks URL', () => {

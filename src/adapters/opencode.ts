@@ -4,14 +4,17 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
-import type { Profile, Provider } from '../config/schema.js';
+import type { Profile, Provider, ProviderType } from '../config/schema.js';
 
-const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1';
+const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
+  fireworks: 'https://api.fireworks.ai/inference/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+};
 
 export class OpenCodeAdapter implements AgentAdapter {
   readonly id = 'opencode';
   readonly displayName = 'OpenCode';
-  readonly supportedProviderTypes = ['anthropic', 'openai-compatible', 'fireworks'] as const;
+  readonly supportedProviderTypes = ['anthropic', 'openai-compatible', 'fireworks', 'openrouter'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -55,11 +58,29 @@ export class OpenCodeAdapter implements AgentAdapter {
     if (provider.type === 'fireworks') {
       const providerKey = provider.name.toLowerCase().replace(/\s+/g, '-');
       const options: Record<string, unknown> = { apiKey: provider.apiKey };
-      options['baseURL'] = provider.baseUrl ?? FIREWORKS_BASE_URL;
+      options['baseURL'] = provider.baseUrl ?? DEFAULT_BASE_URLS.fireworks;
       return {
         model: `${providerKey}/${base.model}`,
         provider: {
           [providerKey]: {
+            npm: '@ai-sdk/openai-compatible',
+            name: provider.name,
+            options,
+            models: { [base.model]: { name: base.model, modalities } },
+          },
+        },
+      };
+    }
+
+    if (provider.type === 'openrouter') {
+      const options: Record<string, unknown> = {
+        apiKey: provider.apiKey,
+        baseURL: provider.baseUrl ?? DEFAULT_BASE_URLS.openrouter,
+      };
+      return {
+        model: `openrouter/${base.model}`,
+        provider: {
+          openrouter: {
             npm: '@ai-sdk/openai-compatible',
             name: provider.name,
             options,

@@ -20,8 +20,8 @@ const testProfile: Profile = {
 };
 
 describe('QwenAdapter', () => {
-  it('supportedProviderTypes includes openai-compatible and fireworks', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['openai-compatible', 'fireworks']);
+  it('supportedProviderTypes includes openai-compatible, fireworks and openrouter', () => {
+    expect(adapter.supportedProviderTypes).toEqual(['openai-compatible', 'fireworks', 'openrouter']);
   });
 
   describe('configPaths', () => {
@@ -178,6 +178,44 @@ describe('QwenAdapter', () => {
       const modelProviders = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
       expect(modelProviders.openai).toBeDefined();
       expect(modelProviders.openai![0]!.baseUrl).toBe('https://api.fireworks.ai/inference/v1');
+    });
+
+    it('openrouter provider without baseUrl uses default OpenRouter URL', () => {
+      const openrouterProvider: Provider = {
+        id: '00000000-0000-0000-0000-0000000000a1',
+        name: 'OpenRouter',
+        type: 'openrouter',
+        apiKey: 'sk-or-v1-test',
+        models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-0000000000a2',
+        name: 'OR Profile',
+        models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+      };
+      const config = adapter.buildConfig(profile, [openrouterProvider]);
+      const modelProviders = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
+      expect(modelProviders.openai).toBeDefined();
+      expect(modelProviders.openai![0]!.baseUrl).toBe('https://openrouter.ai/api/v1');
+    });
+
+    it('openrouter envKey derives from resolved baseUrl', () => {
+      const openrouterProvider: Provider = {
+        id: '00000000-0000-0000-0000-0000000000a3',
+        name: 'OpenRouter',
+        type: 'openrouter',
+        apiKey: 'sk-or-v1-test',
+        models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-0000000000a4',
+        name: 'OR Profile',
+        models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+      };
+      const config = adapter.buildConfig(profile, [openrouterProvider]);
+      const env = config.env as Record<string, string>;
+      expect('QWEN_CUSTOM_API_KEY_OPENAI_HTTPS_OPENROUTER_AI_API_V1' in env).toBe(true);
+      expect(env['QWEN_CUSTOM_API_KEY_OPENAI_HTTPS_OPENROUTER_AI_API_V1']).toBe('sk-or-v1-test');
     });
   });
 });

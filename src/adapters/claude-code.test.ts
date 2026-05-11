@@ -112,8 +112,49 @@ describe('ClaudeCodeAdapter', () => {
     );
   });
 
-  it('supportedProviderTypes includes anthropic and fireworks', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['anthropic', 'fireworks']);
+  it('supportedProviderTypes includes anthropic, fireworks, and openrouter', () => {
+    expect(adapter.supportedProviderTypes).toEqual(['anthropic', 'fireworks', 'openrouter']);
+  });
+
+  it('openrouter uses ANTHROPIC_AUTH_TOKEN and empty ANTHROPIC_API_KEY, no apiKeyHelper', () => {
+    const openrouterProvider: Provider = {
+      id: '00000000-0000-0000-0000-00000000000a',
+      name: 'OpenRouter',
+      type: 'openrouter',
+      apiKey: 'sk-or-v1-test',
+      models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-00000000000b',
+      name: 'OR Profile',
+      models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [openrouterProvider]);
+    const env = config.env as Record<string, string>;
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://openrouter.ai/api');
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('sk-or-v1-test');
+    expect(env.ANTHROPIC_API_KEY).toBe('');
+    expect(config.apiKeyHelper).toBeUndefined();
+    expect(config.model).toBe('anthropic/claude-sonnet-4.6');
+  });
+
+  it('openrouter respects user baseUrl override', () => {
+    const openrouterProvider: Provider = {
+      id: '00000000-0000-0000-0000-00000000000c',
+      name: 'OpenRouter Custom',
+      type: 'openrouter',
+      apiKey: 'sk-or-v1-test',
+      baseUrl: 'https://proxy.example.com',
+      models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-00000000000d',
+      name: 'OR Custom',
+      models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [openrouterProvider]);
+    const env = config.env as Record<string, string>;
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com');
   });
 
   it('fireworks provider without baseUrl uses default Fireworks URL', () => {

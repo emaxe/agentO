@@ -5,9 +5,12 @@ import { join, dirname } from 'node:path';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
-import type { Profile, Provider } from '../config/schema.js';
+import type { Profile, Provider, ProviderType } from '../config/schema.js';
 
-const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1';
+const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
+  fireworks: 'https://api.fireworks.ai/inference/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+};
 
 /** Нормализует имя провайдера в ключ: "Fireworks AI" → "fireworks-ai" */
 function deriveProviderKey(name: string): string {
@@ -25,8 +28,7 @@ let codexGlobalBackup: { hadConfig: boolean; config: AgentConfig } | null = null
 export class CodexAdapter implements AgentAdapter {
   readonly id = 'codex';
   readonly displayName = 'Codex CLI';
-  readonly dev = true;
-  readonly supportedProviderTypes = ['fireworks'] as const;
+  readonly supportedProviderTypes = ['fireworks', 'openrouter'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -57,7 +59,7 @@ export class CodexAdapter implements AgentAdapter {
       model_providers: {
         [providerKey]: {
           name: provider.name,
-          base_url: provider.baseUrl ?? (provider.type === 'fireworks' ? FIREWORKS_BASE_URL : ''),
+          base_url: provider.baseUrl ?? DEFAULT_BASE_URLS[provider.type] ?? '',
           env_key: envKey,
           wire_api: 'responses',
         },

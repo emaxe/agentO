@@ -3,8 +3,8 @@ import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
 import TextInput from 'ink-text-input';
 import { listProviders, addProvider, updateProvider, removeProvider } from '../../providers/provider-manager.js';
-import type { Provider, ModelConfig } from '../../config/schema.js';
-import { capabilityMarker } from '../../config/schema.js';
+import type { Provider, ModelConfig, ProviderType } from '../../config/schema.js';
+import { capabilityMarker, PROVIDER_TYPES } from '../../config/schema.js';
 
 type Mode = 'list' | 'add' | 'edit' | 'confirm-delete';
 type FieldName = 'name' | 'type' | 'apiKey' | 'baseUrl' | 'models';
@@ -16,7 +16,7 @@ interface ProvidersProps {
 
 interface FormState {
   name: string;
-  type: 'openai-compatible' | 'anthropic' | 'fireworks';
+  type: ProviderType;
   apiKey: string;
   baseUrl: string;
   models: ModelConfig[];
@@ -209,10 +209,9 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
     // Type field toggle
     if (activeField === 'type') {
       if (key.return || input === ' ' || key.leftArrow || key.rightArrow) {
-        const types: Array<'openai-compatible' | 'anthropic' | 'fireworks'> = ['openai-compatible', 'anthropic', 'fireworks'];
-        const currentIndex = types.indexOf(form.type);
-        const nextIndex = (currentIndex + 1) % types.length;
-        setForm((f) => ({ ...f, type: types[nextIndex]! }));
+        const currentIndex = PROVIDER_TYPES.indexOf(form.type);
+        const nextIndex = (currentIndex + 1) % PROVIDER_TYPES.length;
+        setForm((f) => ({ ...f, type: PROVIDER_TYPES[nextIndex]! }));
         return;
       }
     }

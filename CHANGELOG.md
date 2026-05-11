@@ -16,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Better error handling and logging
 - Configuration templates and presets
 
+## [0.3.0] - 2026-05-11
+
+### Added
+
+- **New provider type `openrouter`** — full support for [OpenRouter](https://openrouter.ai) across all 4 agents:
+  - **Claude Code**: uses OpenRouter's Anthropic Skin with `ANTHROPIC_AUTH_TOKEN` (Bearer) + empty `ANTHROPIC_API_KEY`, no `apiKeyHelper`. Base URL: `https://openrouter.ai/api`
+  - **OpenCode**: uses `@ai-sdk/openai-compatible` with provider key `openrouter`. Base URL: `https://openrouter.ai/api/v1`
+  - **Qwen CLI**: routed through OpenAI-compatible interface with default URL `https://openrouter.ai/api/v1`
+  - **Codex CLI**: `wire_api: 'responses'` (Responses API beta). Base URL: `https://openrouter.ai/api/v1`
+- `PROVIDER_TYPES` constant exported from schema — removes literal type duplication in CLI and TUI
+
+### Changed
+
+- Adapter default base URLs refactored into `DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>>` map (was a chain of ternary operators) — scales to new provider types
+
 ## [0.2.0] - 2026-05-10
 
 ### Added
