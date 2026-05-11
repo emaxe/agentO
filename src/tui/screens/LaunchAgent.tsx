@@ -8,11 +8,13 @@ import { qwenAdapter } from '../../adapters/qwen.js';
 import { codexAdapter } from '../../adapters/codex.js';
 import { prepareChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
+import { getInstaller } from '../../installers/registry.js';
+import { AgentInstall } from './AgentInstall.js';
 import type { ExecRequest } from '../../launcher/independent.js';
-import type { Profile, Provider, ProviderType, Settings } from '../../config/schema.js';
+import type { AgentId, Profile, Provider, ProviderType, Settings } from '../../config/schema.js';
 import type { AgentAdapter } from '../../adapters/base.js';
 
-type Step = 'profile' | 'agent' | 'launching';
+type Step = 'profile' | 'agent' | 'install' | 'launching';
 
 interface LaunchAgentProps {
   dev?: boolean;
@@ -56,6 +58,10 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
   const [selectedAgent, setSelectedAgent] = useState(0);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [installStatuses, setInstallStatuses] = useState<Record<string, boolean>>({});
+  const [installAgentId, setInstallAgentId] = useState<AgentId | null>(null);
+  const [statusChecking, setStatusChecking] = useState(false);
+  const [spinnerFrame, setSpinnerFrame] = useState(0);
 
   useEffect(() => {
     readConfig()
@@ -67,8 +73,35 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
       .catch((err) => setError(String(err)));
   }, []);
 
+  useEffect(() => {
+    if (step !== 'agent') return;
+    setStatusChecking(true);
+    Promise.all(
+      ALL_AGENTS.map(async (a) => {
+        const installer = getInstaller(a.id as AgentId);
+        if (!installer) return [a.id, true] as const;
+        const result = await installer.checkInstalled();
+        return [a.id, result.installed] as const;
+      }),
+    ).then((results) => {
+      const statuses: Record<string, boolean> = {};
+      for (const [id, installed] of results) statuses[id] = installed;
+      setInstallStatuses(statuses);
+    }).catch(() => {/* assume installed on error */}).finally(() => {
+      setStatusChecking(false);
+    });
+  }, [step]);
+
+  useEffect(() => {
+    if (!statusChecking) return;
+    const id = setInterval(() => setSpinnerFrame((f) => (f + 1) % 10), 80);
+    return () => clearInterval(id);
+  }, [statusChecking]);
+
   useKeyInput((input, key) => {
     if (step === 'launching' && !error) return;
+    if (step === 'install') return;
+    if (step === 'agent' && statusChecking) return;
 
     if (key.escape || input === 'q') {
       if (step === 'profile') {
@@ -105,6 +138,12 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
 
         if (!profile || !agentEntry || !settings) {
           setError('Invalid selection');
+          return;
+        }
+
+        if (installStatuses[agentEntry.id] === false) {
+          setInstallAgentId(agentEntry.id as AgentId);
+          setStep('install');
           return;
         }
 
@@ -173,11 +212,60 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
   );
 
   if (step === 'profile') return renderList(profiles, selectedProfile, 'Select Profile');
+
   const profile = profiles[selectedProfile];
   const visibleAgents = profile
     ? getCompatibleAgents(getAgents(dev), profile, providers)
     : getAgents(dev);
-  if (step === 'agent') return renderList(visibleAgents, selectedAgent, 'Select Agent');
+
+  const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+  if (step === 'agent' && statusChecking) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text bold>Select Agent</Text>
+        <Text dimColor>{SPINNER_FRAMES[spinnerFrame]} Checking agents...</Text>
+      </Box>
+    );
+  }
+
+  if (step === 'agent') {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text bold>Select Agent</Text>
+        <Text dimColor>↑↓ navigate, Enter select, Esc back</Text>
+        <Box flexDirection="column" marginTop={1}>
+          {visibleAgents.map((item, i) => {
+            const installed = installStatuses[item.id] !== false;
+            return (
+              <Text key={i} color={i === selectedAgent ? 'green' : undefined}>
+                {i === selectedAgent ? '▶ ' : '  '}
+                {item.label}
+                {!installed && (
+                  <Text dimColor> (not installed)</Text>
+                )}
+              </Text>
+            );
+          })}
+          {visibleAgents.length === 0 && <Text dimColor>No items available</Text>}
+        </Box>
+      </Box>
+    );
+  }
+
+  if (step === 'install' && installAgentId) {
+    return (
+      <AgentInstall
+        agentId={installAgentId}
+        onBack={() => { setInstallAgentId(null); setStep('agent'); }}
+        onDone={() => {
+          setInstallStatuses((prev) => ({ ...prev, [installAgentId]: true }));
+          setInstallAgentId(null);
+          setStep('agent');
+        }}
+      />
+    );
+  }
 
   return (
     <Box flexDirection="column" padding={1}>
