@@ -141,7 +141,7 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 ### Main Menu
 
 ```
-┌────────── AgentO v0.2.0 ──────────┐
+┌────────── AgentO v0.4.0 ──────────┐
 │                                   │
 │ ▶  Launch Agent                   │
 │    Providers                      │
@@ -158,7 +158,7 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 
 | Screen | What You Can Do | Key Shortcuts |
 |--------|----------------|---------------|
-| **Launch Agent** | Select profile → select agent → choose mode/scope → launch | **Enter** select, **Esc** back |
+| **Launch Agent** | Select profile → select agent (with install hints) → launch; opens Install Wizard for uninstalled agents | **Enter** select, **Esc** back |
 | **Providers** | View, add, edit, delete API providers; toggle model capabilities | **Enter** details / add model, **a** add provider, **e** edit, **d** delete, **i/v/a** toggle capability, **Esc** back |
 | **Profiles** | View, add, delete profiles. In profile details: add/remove/edit models | **Enter** details, **a** add, **d** delete, **Esc** back |
 | **Agents** | Check config status (global/project), backup availability | **Enter** details, **Esc** back |
@@ -167,8 +167,12 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 ### Launch Agent Workflow
 
 1. **Select Profile** — Choose from your saved profiles
-2. **Select Agent** — Pick which agent to launch (claude-code, opencode, qwen, or codex)
-3. **Optional:** Adjust **Mode** (child/independent) and **Scope** (global/project)
+2. **Select Agent** — AgentO checks install status of all agents (spinner while checking). Uninstalled agents show a `(not installed)` hint.
+   - If the selected agent **is installed** → proceeds to launch
+   - If the selected agent **is not installed** → opens the **Install Wizard**
+3. **Install Wizard** (if needed):
+   - **Auto-install** — checks environment (requires npm), then installs via `npm install -g <package>`
+   - **Manual install** — shows the exact command and a docs URL
 4. **Launch** — AgentO patches the agent config and starts the agent
 
 ```

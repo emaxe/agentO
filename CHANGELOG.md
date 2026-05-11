@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Better error handling and logging
 - Configuration templates and presets
 
+## [0.4.0] - 2026-05-11
+
+### Added
+
+- **Agent Install Wizard** — selecting an uninstalled agent in the TUI now opens an install screen instead of failing silently:
+  - **Auto-install**: checks environment requirements (npm), then runs `npm install -g <package>` with a live spinner
+  - **Manual install**: shows exact commands to run and a documentation URL
+  - **Error recovery**: on env check failure shows missing deps with a manual install option; on install failure shows error with retry / manual options
+  - Installers implemented for all 4 agents: `claude-code` (`@anthropic-ai/claude-code`), `opencode` (`opencode`), `qwen` (`@qwen/qwen-code`), `codex` (`@openai/codex`)
+- **Install status preloader** in Launch Agent — on entering the agent selection step a spinner runs `checkInstalled()` for all agents in parallel; uninstalled agents display a `(not installed)` dim hint next to their name
+- After successful auto-install the agent is marked installed in-session and the list returns to normal selection
+
 ## [0.3.0] - 2026-05-11
 
 ### Added
