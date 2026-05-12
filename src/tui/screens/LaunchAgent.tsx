@@ -6,6 +6,7 @@ import { claudeCodeAdapter } from '../../adapters/claude-code.js';
 import { openCodeAdapter } from '../../adapters/opencode.js';
 import { qwenAdapter } from '../../adapters/qwen.js';
 import { codexAdapter } from '../../adapters/codex.js';
+import { copilotAdapter } from '../../adapters/copilot.js';
 import { prepareChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
 import { getInstaller } from '../../installers/registry.js';
@@ -29,6 +30,7 @@ const ALL_AGENTS: Array<{ id: string; label: string; adapter: AgentAdapter; comm
   { id: 'opencode', label: 'OpenCode', adapter: openCodeAdapter, command: 'opencode' },
   { id: 'qwen', label: 'Qwen CLI', adapter: qwenAdapter, command: 'qwen' },
   { id: 'codex', label: 'Codex CLI', adapter: codexAdapter, command: 'codex', args: ['-p', 'default'] },
+  { id: 'copilot', label: 'Copilot CLI', adapter: copilotAdapter, command: 'copilot' },
 ];
 
 /** Returns the agent list, filtering out `dev` agents unless `dev` is true. */
