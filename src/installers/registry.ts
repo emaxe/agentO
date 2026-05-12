@@ -10,6 +10,7 @@ import { claudeCodeInstaller } from './claude-code.js';
 import { openCodeInstaller } from './opencode.js';
 import { qwenInstaller } from './qwen.js';
 import { codexInstaller } from './codex.js';
+import { copilotInstaller } from './copilot.js';
 
 /** Internal map of agent ids to their installers. */
 const registry = new Map<AgentId, AgentInstaller>([
@@ -17,6 +18,7 @@ const registry = new Map<AgentId, AgentInstaller>([
   ['opencode', openCodeInstaller],
   ['qwen', qwenInstaller],
   ['codex', codexInstaller],
+  ['copilot', copilotInstaller],
 ]);
 
 /** Returns the installer for a given agent id, or `undefined` if unregistered. */
