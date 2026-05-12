@@ -39,7 +39,7 @@ export function createLaunchCommand(): Command {
   const cmd = new Command('launch')
     .description('Launch an agent with a profile')
     .requiredOption('-p, --profile <name>', 'Profile name to use')
-    .requiredOption('-a, --agent <id>', 'Agent to launch (claude-code, opencode, qwen, codex)')
+    .requiredOption('-a, --agent <id>', 'Agent to launch (claude-code, opencode, qwen, codex, copilot)')
     .option('-m, --mode <mode>', 'Launch mode: child or independent')
     .option('-s, --scope <scope>', 'Config scope: global or project')
     .option('-d, --dev', 'Show development agents (e.g. codex)')

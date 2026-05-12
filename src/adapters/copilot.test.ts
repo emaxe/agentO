@@ -71,12 +71,12 @@ describe('CopilotAdapter', () => {
   });
 
   describe('buildConfig', () => {
-    it('returns only model field', () => {
+    it('returns empty config (model is passed via env var)', () => {
       const config = adapter.buildConfig(testProfile, [anthropicProvider]);
-      expect(config).toEqual({ model: 'claude-sonnet-4-6' });
+      expect(config).toEqual({});
     });
 
-    it('selects base tier model when present', () => {
+    it('ignores base tier model (config is empty)', () => {
       const multi: Profile = {
         id: '00000000-0000-0000-0000-000000000011',
         name: 'Multi',
@@ -87,11 +87,11 @@ describe('CopilotAdapter', () => {
         ],
       };
       const config = adapter.buildConfig(multi, [anthropicProvider]);
-      expect(config.model).toBe('sonnet');
+      expect(config).toEqual({});
     });
 
-    it('throws when provider not found', () => {
-      expect(() => adapter.buildConfig(testProfile, [])).toThrow('Provider not found');
+    it('does not throw when provider not found (no-op)', () => {
+      expect(() => adapter.buildConfig(testProfile, [])).not.toThrow();
     });
   });
 
@@ -222,13 +222,17 @@ describe('CopilotAdapter', () => {
   });
 
   describe('writeConfig', () => {
-    it('merges config over existing file', async () => {
+    it('is a no-op and does not write a file', async () => {
       const writtenFiles: Record<string, string> = {};
+      const mkdirCalls: string[] = [];
       vi.doMock('node:fs/promises', async (importOriginal) => {
         const actual = await importOriginal<typeof import('node:fs/promises')>();
         return {
           ...actual,
-          mkdir: vi.fn().mockResolvedValue(undefined),
+          mkdir: vi.fn().mockImplementation((path: string) => {
+            mkdirCalls.push(path);
+            return Promise.resolve(undefined);
+          }),
           writeFile: vi.fn().mockImplementation((path: string, content: string) => {
             writtenFiles[path] = content;
             return Promise.resolve();
@@ -254,11 +258,8 @@ describe('CopilotAdapter', () => {
       const a = new CopilotAdapter();
       await a.writeConfig({ model: 'gpt-5.2' }, 'global');
 
-      const content = writtenFiles[Object.keys(writtenFiles)[0]];
-      const parsed = JSON.parse(content);
-      expect(parsed.model).toBe('gpt-5.2');
-      expect(parsed.colorMode).toBe('dim');
-      expect(parsed.trustedFolders).toEqual(['/foo']);
+      expect(Object.keys(writtenFiles)).toHaveLength(0);
+      expect(mkdirCalls.length).toBeGreaterThan(0);
     });
   });
 });

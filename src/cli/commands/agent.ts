@@ -10,9 +10,10 @@ import { claudeCodeAdapter } from '../../adapters/claude-code.js';
 import { openCodeAdapter } from '../../adapters/opencode.js';
 import { qwenAdapter } from '../../adapters/qwen.js';
 import { codexAdapter } from '../../adapters/codex.js';
+import { copilotAdapter } from '../../adapters/copilot.js';
 import type { AgentAdapter } from '../../adapters/base.js';
 
-const ALL_ADAPTERS: AgentAdapter[] = [claudeCodeAdapter, openCodeAdapter, qwenAdapter, codexAdapter];
+const ALL_ADAPTERS: AgentAdapter[] = [claudeCodeAdapter, openCodeAdapter, qwenAdapter, codexAdapter, copilotAdapter];
 
 /** Returns all adapters, filtering out `dev` ones unless `--dev` is passed. */
 function getAdapters(dev = false): AgentAdapter[] {

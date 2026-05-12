@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -39,12 +39,10 @@ export class CopilotAdapter implements AgentAdapter {
     return JSON.parse(raw) as AgentConfig;
   }
 
-  buildConfig(profile: Profile, providers: Provider[]): AgentConfig {
-    const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
-    if (!base) throw new Error(`Profile "${profile.name}" has no models`);
-    const provider = providers.find((p) => p.id === base.providerId);
-    if (!provider) throw new Error('Provider not found');
-    return { model: base.model };
+  buildConfig(_profile: Profile, _providers: Provider[]): AgentConfig {
+    // Copilot CLI accepts model via COPILOT_MODEL env var (handled by buildEnv),
+    // so we do not need to mutate the settings file.
+    return {};
   }
 
   buildEnv(profile: Profile, providers: Provider[]): Record<string, string> {
@@ -73,16 +71,12 @@ export class CopilotAdapter implements AgentAdapter {
     return env;
   }
 
-  async writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string): Promise<void> {
+  async writeConfig(_config: AgentConfig, scope: LaunchScope, cwd?: string): Promise<void> {
+    // No-op: we do not write to Copilot settings.json.
+    // Copilot CLI receives all runtime config via environment variables,
+    // so there's no need to mutate (and later restore) the settings file.
     const path = this.configPaths(cwd)[scope];
-    let existing: AgentConfig = {};
-    if (existsSync(path)) {
-      const raw = await readFile(path, 'utf-8');
-      existing = JSON.parse(raw) as AgentConfig;
-    }
-    const merged = { ...existing, ...config };
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, JSON.stringify(merged, null, 2), 'utf-8');
   }
 }
 
