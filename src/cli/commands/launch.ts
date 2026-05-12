@@ -11,6 +11,7 @@ import { claudeCodeAdapter } from '../../adapters/claude-code.js';
 import { openCodeAdapter } from '../../adapters/opencode.js';
 import { qwenAdapter } from '../../adapters/qwen.js';
 import { codexAdapter } from '../../adapters/codex.js';
+import { copilotAdapter } from '../../adapters/copilot.js';
 import { launchChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
 import type { AgentAdapter } from '../../adapters/base.js';
@@ -22,6 +23,7 @@ const ALL_AGENT_COMMANDS: Record<string, { adapter: AgentAdapter; command: strin
   'opencode': { adapter: openCodeAdapter, command: 'opencode' },
   'qwen': { adapter: qwenAdapter, command: 'qwen' },
   'codex': { adapter: codexAdapter, command: 'codex', args: ['-p', 'default'] },
+  'copilot': { adapter: copilotAdapter, command: 'copilot' },
 };
 
 /** Returns agent commands, filtering out `dev` agents unless `--dev` flag is set. */
