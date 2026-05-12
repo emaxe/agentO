@@ -1,3 +1,10 @@
+/**
+ * CLI command: `agento restore`
+ *
+ * Restores an agent's config from the backup created before a launch.
+ * Supports claude-code and opencode adapters (legacy subset — all adapters
+ * support backup/restore through the generic `writeConfig` path).
+ */
 import { Command } from 'commander';
 import { readBackup, backupExists } from '../../config/store.js';
 import { claudeCodeAdapter } from '../../adapters/claude-code.js';
@@ -9,6 +16,7 @@ const ADAPTERS: Record<string, AgentAdapter> = {
   'opencode': openCodeAdapter,
 };
 
+/** Builds the `restore` CLI command. */
 export function createRestoreCommand(): Command {
   return new Command('restore')
     .description('Restore agent config from backup')

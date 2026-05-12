@@ -2,6 +2,7 @@ import { spawnSync, spawn } from 'node:child_process';
 import type { AgentInstaller, InstallCheckResult, EnvCheckResult, InstallResult } from './base.js';
 import type { AgentId } from '../config/schema.js';
 
+/** Installer for the Qwen CLI agent. */
 class QwenInstaller implements AgentInstaller {
   readonly agentId: AgentId = 'qwen';
 
@@ -10,6 +11,7 @@ class QwenInstaller implements AgentInstaller {
     docsUrl: 'https://github.com/QwenLM/qwen-code',
   };
 
+  /** Checks whether `qwen --version` succeeds. */
   async checkInstalled(): Promise<InstallCheckResult> {
     const result = spawnSync('qwen', ['--version'], { encoding: 'utf8' });
     if (result.status !== 0) {
@@ -21,6 +23,7 @@ class QwenInstaller implements AgentInstaller {
     return { installed: true, ...(version !== undefined ? { version } : {}) };
   }
 
+  /** Verifies that `npm` is available on the system. */
   async checkEnvironment(): Promise<EnvCheckResult> {
     const result = spawnSync('npm', ['--version'], { encoding: 'utf8' });
     if (result.status !== 0) {
@@ -29,6 +32,7 @@ class QwenInstaller implements AgentInstaller {
     return { ok: true, missing: [] };
   }
 
+  /** Runs `npm install -g @qwen-code/qwen-code@latest` and reports the result. */
   async install(): Promise<InstallResult> {
     return new Promise<InstallResult>((resolve) => {
       const stderrChunks: Buffer[] = [];

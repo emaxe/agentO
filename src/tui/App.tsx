@@ -1,3 +1,6 @@
+/**
+ * Root TUI component. Manages screen routing between menu and sub-screens.
+ */
 import React, { useState } from 'react';
 import { useApp } from 'ink';
 import { MainMenu } from './screens/MainMenu.js';
@@ -8,6 +11,7 @@ import { Agents } from './screens/Agents.js';
 import { Settings } from './screens/Settings.js';
 import type { ExecRequest } from '../launcher/independent.js';
 
+/** Available screens in the TUI. */
 export type Screen = 'main' | 'launch' | 'providers' | 'profiles' | 'agents' | 'settings';
 
 interface AppProps {
@@ -15,6 +19,7 @@ interface AppProps {
   onExec?: (req: ExecRequest) => void;
 }
 
+/** Root Ink component that switches between TUI screens. */
 export function App({ dev, onExec }: AppProps): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>('main');
   const { exit } = useApp();

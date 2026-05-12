@@ -1,3 +1,9 @@
+/**
+ * CLI command: `agento launch`
+ *
+ * Validates profile / agent / provider compatibility and delegates to either
+ * child-mode (backup → patch → spawn → restore) or independent-mode launch.
+ */
 import { Command } from 'commander';
 import { spawnSync } from 'node:child_process';
 import { readConfig } from '../../config/store.js';
@@ -10,6 +16,7 @@ import { launchIndependent } from '../../launcher/independent.js';
 import type { AgentAdapter } from '../../adapters/base.js';
 import type { ProviderType } from '../../config/schema.js';
 
+/** Map of all supported agents with their CLI command and default args. */
 const ALL_AGENT_COMMANDS: Record<string, { adapter: AgentAdapter; command: string; args?: string[] }> = {
   'claude-code': { adapter: claudeCodeAdapter, command: 'claude' },
   'opencode': { adapter: openCodeAdapter, command: 'opencode' },
@@ -17,6 +24,7 @@ const ALL_AGENT_COMMANDS: Record<string, { adapter: AgentAdapter; command: strin
   'codex': { adapter: codexAdapter, command: 'codex', args: ['-p', 'default'] },
 };
 
+/** Returns agent commands, filtering out `dev` agents unless `--dev` flag is set. */
 function getAgentCommands(dev = false): Record<string, { adapter: AgentAdapter; command: string; args?: string[] }> {
   if (dev) return ALL_AGENT_COMMANDS;
   return Object.fromEntries(
@@ -24,6 +32,7 @@ function getAgentCommands(dev = false): Record<string, { adapter: AgentAdapter; 
   );
 }
 
+/** Builds the `launch` CLI command with all required options and validation. */
 export function createLaunchCommand(): Command {
   const cmd = new Command('launch')
     .description('Launch an agent with a profile')
@@ -37,7 +46,7 @@ export function createLaunchCommand(): Command {
       try {
         const config = await readConfig();
 
-        // Resolve profile
+        // Resolve profile by name or id
         const profile = config.profiles.find(
           (p) => p.name === opts.profile || p.id === opts.profile,
         );
@@ -46,20 +55,20 @@ export function createLaunchCommand(): Command {
           process.exit(1);
         }
 
-        // Resolve agent
+        // Resolve agent adapter and command
         const agentEntry = AGENT_COMMANDS[opts.agent];
         if (!agentEntry) {
           console.error(`Error: Unknown agent: ${opts.agent}. Supported: ${Object.keys(AGENT_COMMANDS).join(', ')}`);
           process.exit(1);
         }
 
-        // Resolve mode and scope (fallback to settings)
+        // Resolve mode and scope, falling back to user settings
         const mode = (opts.mode ?? config.settings.defaultLaunchMode) as 'child' | 'independent';
         const scope = (opts.scope ?? config.settings.defaultConfigScope) as 'global' | 'project';
 
         const { adapter, command, args } = agentEntry;
 
-        // Check provider compatibility
+        // Validate provider compatibility for every model in the profile
         const unsupported: ProviderType[] = [];
         for (const model of profile.models) {
           const provider = config.providers.find((p) => p.id === model.providerId);

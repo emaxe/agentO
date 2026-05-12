@@ -1,9 +1,15 @@
+/**
+ * CLI command: `agento profile`
+ *
+ * Subcommands: list, add, remove.
+ */
 import { Command } from 'commander';
 import { listProfiles, addProfile, removeProfile } from '../../profiles/profile-manager.js';
 import type { ModelTier, ProfileModel } from '../../config/schema.js';
 
 const VALID_TIERS: ModelTier[] = ['small', 'base', 'smart'];
 
+/** Builds the `profile` CLI command. */
 export function createProfileCommand(): Command {
   const cmd = new Command('profile').description('Manage profiles');
 

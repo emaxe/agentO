@@ -11,11 +11,13 @@ import type { AgentAdapter } from '../../adapters/base.js';
 const ALL_ADAPTERS: AgentAdapter[] = [claudeCodeAdapter, openCodeAdapter, qwenAdapter, codexAdapter];
 const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
 
+/** Returns all adapters, filtering out `dev` ones unless `--dev` is passed. */
 function getAdapters(dev = false): AgentAdapter[] {
   if (dev) return ALL_ADAPTERS;
   return ALL_ADAPTERS.filter((a) => !a.dev);
 }
 
+/** Snapshot of an agent's configuration state for display. */
 interface AgentStatus {
   adapterId: string;
   displayName: string;
@@ -29,6 +31,7 @@ interface AgentsProps {
   onBack: () => void;
 }
 
+/** Ink component that displays agent config status and allows restoring from backup. */
 export function Agents({ dev, onBack }: AgentsProps): React.JSX.Element {
   const [statuses, setStatuses] = useState<AgentStatus[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);

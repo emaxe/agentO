@@ -1,3 +1,9 @@
+/**
+ * Main menu screen of the TUI.
+ *
+ * Displays a bordered list of menu items. Navigation with arrow keys,
+ * selection with Enter, exit with `q` or Escape.
+ */
 import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
@@ -16,6 +22,7 @@ interface MainMenuProps {
   onExit: () => void;
 }
 
+/** Ink component for the main menu screen. */
 export function MainMenu({ onSelect, onExit }: MainMenuProps): React.JSX.Element {
   const [selectedIndex, setSelectedIndex] = useState(0);
 

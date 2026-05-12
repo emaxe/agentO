@@ -2,6 +2,7 @@ import { spawnSync, spawn } from 'node:child_process';
 import type { AgentInstaller, InstallCheckResult, EnvCheckResult, InstallResult } from './base.js';
 import type { AgentId } from '../config/schema.js';
 
+/** Installer for the OpenAI Codex CLI agent (development agent, hidden by default). */
 class CodexInstaller implements AgentInstaller {
   readonly agentId: AgentId = 'codex';
 
@@ -10,6 +11,7 @@ class CodexInstaller implements AgentInstaller {
     docsUrl: 'https://github.com/openai/codex',
   };
 
+  /** Checks whether `codex --version` succeeds. */
   async checkInstalled(): Promise<InstallCheckResult> {
     const result = spawnSync('codex', ['--version'], { encoding: 'utf8' });
     if (result.status !== 0) {
@@ -21,6 +23,7 @@ class CodexInstaller implements AgentInstaller {
     return { installed: true, ...(version !== undefined ? { version } : {}) };
   }
 
+  /** Verifies that `npm` is available on the system. */
   async checkEnvironment(): Promise<EnvCheckResult> {
     const result = spawnSync('npm', ['--version'], { encoding: 'utf8' });
     if (result.status !== 0) {
@@ -29,6 +32,7 @@ class CodexInstaller implements AgentInstaller {
     return { ok: true, missing: [] };
   }
 
+  /** Runs `npm install -g @openai/codex` and reports the result. */
   async install(): Promise<InstallResult> {
     return new Promise<InstallResult>((resolve) => {
       const stderrChunks: Buffer[] = [];

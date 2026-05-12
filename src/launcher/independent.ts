@@ -3,6 +3,10 @@ import type { Profile, Provider } from '../config/schema.js';
 import { writeBackup } from '../config/store.js';
 import { shellPathResolver } from './shell-path-resolver.js';
 
+/**
+ * Request object for executing an agent after config has been patched.
+ * Used by the TUI and CLI to hand off control to the external agent binary.
+ */
 export interface ExecRequest {
   command: string;
   args: string[];
@@ -22,9 +26,16 @@ export interface IndependentLaunchOptions {
 }
 
 /**
- * Готовит конфиг для независимого запуска агента.
- * Записывает backup текущего конфига, генерирует и сохраняет новый,
- * резолвит PATH и возвращает ExecRequest для запуска в терминале.
+ * Prepares the agent configuration for an independent launch.
+ *
+ * Workflow:
+ * 1. Backup the current agent config.
+ * 2. Generate and write the new agent config from the selected profile.
+ * 3. Resolve the full user PATH (via login shell) so the agent binary is discoverable.
+ * 4. Return an {@link ExecRequest} with the resolved environment.
+ *
+ * In this mode the user is responsible for restoring the original config
+ * (e.g. via `agento restore`).
  */
 export async function launchIndependent(options: IndependentLaunchOptions): Promise<ExecRequest> {
   const { adapter, profile, providers, scope, command, args = [], cwd } = options;

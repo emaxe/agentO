@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+/**
+ * Entry point for the `agento` CLI tool.
+ *
+ * Registers all subcommands (launch, provider, profile, restore, agent)
+ * and defaults to launching the interactive Terminal UI (TUI) when no
+ * subcommand is provided.
+ */
 import { program } from 'commander';
 import { createRequire } from 'module';
 import { spawnSync } from 'node:child_process';
@@ -17,13 +24,14 @@ program
   .version(pkg.version)
   .option('-d, --dev', 'Show development agents (e.g. codex)');
 
+// Register CLI subcommands
 program.addCommand(createLaunchCommand());
 program.addCommand(createProviderCommand());
 program.addCommand(createProfileCommand());
 program.addCommand(createRestoreCommand());
 program.addCommand(createAgentCommand());
 
-// Default action: launch TUI
+// Default action: launch interactive TUI
 program.action(() => {
   const opts = program.opts() as { dev?: boolean };
   import('../src/tui/start.js')

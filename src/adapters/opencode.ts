@@ -1,3 +1,11 @@
+/**
+ * Adapter for the OpenCode agent.
+ *
+ * Generates Vercel-AI-SDK-compatible configuration stored in JSON.
+ * Supports all provider types (anthropic, openai-compatible, fireworks, openrouter).
+ * Per-model modalities (image / video / audio) are emitted so the agent knows
+ * which inputs the model accepts.
+ */
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -6,11 +14,13 @@ import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
 
+/** Default API base URLs for provider types that need them. */
 const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
   fireworks: 'https://api.fireworks.ai/inference/v1',
   openrouter: 'https://openrouter.ai/api/v1',
 };
 
+/** Adapter for the OpenCode CLI agent. */
 export class OpenCodeAdapter implements AgentAdapter {
   readonly id = 'opencode';
   readonly displayName = 'OpenCode';

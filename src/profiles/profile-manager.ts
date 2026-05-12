@@ -4,13 +4,17 @@ import { ProfileSchema, type Profile, type ProfileModel } from '../config/schema
 
 export type CreateProfileInput = Omit<Profile, 'id'>;
 
-/** Возвращает список всех профилей. */
+/** Returns all configured profiles. */
 export async function listProfiles(): Promise<Profile[]> {
   const config = await readConfig();
   return config.profiles;
 }
 
-/** Добавляет новый профиль. Возвращает созданный профиль. */
+/**
+ * Adds a new profile after validating against {@link ProfileSchema}.
+ * Generates a UUID for the profile id.
+ * @returns The newly created profile.
+ */
 export async function addProfile(input: CreateProfileInput): Promise<Profile> {
   const config = await readConfig();
   const profile = ProfileSchema.parse({ ...input, id: randomUUID() });
@@ -19,7 +23,10 @@ export async function addProfile(input: CreateProfileInput): Promise<Profile> {
   return profile;
 }
 
-/** Обновляет профиль по id. Выбрасывает Error если не найден. */
+/**
+ * Updates an existing profile by id.
+ * @throws Error if the profile is not found.
+ */
 export async function updateProfile(
   id: string,
   updates: Partial<CreateProfileInput>,
@@ -33,7 +40,10 @@ export async function updateProfile(
   return updated;
 }
 
-/** Удаляет профиль по id или имени. Выбрасывает Error если не найден. */
+/**
+ * Removes a profile by id or name.
+ * @throws Error if no matching profile is found.
+ */
 export async function removeProfile(idOrName: string): Promise<void> {
   const config = await readConfig();
   const index = config.profiles.findIndex(
@@ -44,13 +54,19 @@ export async function removeProfile(idOrName: string): Promise<void> {
   await writeConfig(config);
 }
 
-/** Находит профиль по id или имени. Возвращает undefined если не найден. */
+/**
+ * Looks up a profile by id or name.
+ * @returns The matched profile, or `undefined` if none found.
+ */
 export async function findProfile(idOrName: string): Promise<Profile | undefined> {
   const config = await readConfig();
   return config.profiles.find((p) => p.id === idOrName || p.name === idOrName);
 }
 
-/** Перемещает модель в профиле вверх (уменьшает индекс). */
+/**
+ * Moves a model earlier in the profile's model list (decreases its index).
+ * @throws Error if the profile or index is invalid.
+ */
 export async function moveModelUp(profileId: string, modelIndex: number): Promise<Profile> {
   const config = await readConfig();
   const profile = config.profiles.find((p) => p.id === profileId);
@@ -65,7 +81,10 @@ export async function moveModelUp(profileId: string, modelIndex: number): Promis
   return updated;
 }
 
-/** Перемещает модель в профиле вниз (увеличивает индекс). */
+/**
+ * Moves a model later in the profile's model list (increases its index).
+ * @throws Error if the profile or index is invalid.
+ */
 export async function moveModelDown(profileId: string, modelIndex: number): Promise<Profile> {
   const config = await readConfig();
   const profile = config.profiles.find((p) => p.id === profileId);

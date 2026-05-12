@@ -14,6 +14,7 @@ import type { ExecRequest } from '../../launcher/independent.js';
 import type { AgentId, Profile, Provider, ProviderType, Settings } from '../../config/schema.js';
 import type { AgentAdapter } from '../../adapters/base.js';
 
+/** Workflow steps inside the LaunchAgent screen. */
 type Step = 'profile' | 'agent' | 'install' | 'launching';
 
 interface LaunchAgentProps {
@@ -22,6 +23,7 @@ interface LaunchAgentProps {
   onExec?: (req: ExecRequest) => void;
 }
 
+/** All agents available for launching. */
 const ALL_AGENTS: Array<{ id: string; label: string; adapter: AgentAdapter; command: string; args?: string[] }> = [
   { id: 'claude-code', label: 'Claude Code', adapter: claudeCodeAdapter, command: 'claude' },
   { id: 'opencode', label: 'OpenCode', adapter: openCodeAdapter, command: 'opencode' },
@@ -29,11 +31,13 @@ const ALL_AGENTS: Array<{ id: string; label: string; adapter: AgentAdapter; comm
   { id: 'codex', label: 'Codex CLI', adapter: codexAdapter, command: 'codex', args: ['-p', 'default'] },
 ];
 
+/** Returns the agent list, filtering out `dev` agents unless `dev` is true. */
 function getAgents(dev = false): typeof ALL_AGENTS {
   if (dev) return ALL_AGENTS;
   return ALL_AGENTS.filter((a) => !a.adapter.dev);
 }
 
+/** Filters agents to those whose `supportedProviderTypes` cover every provider in the selected profile. */
 function getCompatibleAgents(
   agents: typeof ALL_AGENTS,
   profile: Profile,
@@ -49,6 +53,13 @@ function getCompatibleAgents(
   );
 }
 
+/**
+ * LaunchAgent screen — multi-step wizard:
+ * 1. Select profile
+ * 2. Select compatible agent (with install-check)
+ * 3. (Optional) Install wizard if agent not installed
+ * 4. Launch agent (delegates to child or independent launcher)
+ */
 export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JSX.Element {
   const [step, setStep] = useState<Step>('profile');
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -61,6 +72,7 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
   const [installStatuses, setInstallStatuses] = useState<Record<string, boolean>>({});
   const [installAgentId, setInstallAgentId] = useState<AgentId | null>(null);
   const [statusChecking, setStatusChecking] = useState(false);
+  const [checkProgress, setCheckProgress] = useState<Record<string, 'pending' | 'checking' | 'done'>>({});
   const [spinnerFrame, setSpinnerFrame] = useState(0);
 
   useEffect(() => {
@@ -76,20 +88,35 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
   useEffect(() => {
     if (step !== 'agent') return;
     setStatusChecking(true);
-    Promise.all(
-      ALL_AGENTS.map(async (a) => {
+    const initialProgress: Record<string, 'pending' | 'checking' | 'done'> = {};
+    for (const a of ALL_AGENTS) initialProgress[a.id] = 'pending';
+    setCheckProgress(initialProgress);
+
+    setTimeout(() => {
+      const checks = ALL_AGENTS.map(async (a) => {
+        setCheckProgress((prev) => ({ ...prev, [a.id]: 'checking' }));
         const installer = getInstaller(a.id as AgentId);
-        if (!installer) return [a.id, true] as const;
+        if (!installer) {
+          setCheckProgress((prev) => ({ ...prev, [a.id]: 'done' }));
+          return [a.id, true] as const;
+        }
         const result = await installer.checkInstalled();
+        setCheckProgress((prev) => ({ ...prev, [a.id]: 'done' }));
         return [a.id, result.installed] as const;
-      }),
-    ).then((results) => {
-      const statuses: Record<string, boolean> = {};
-      for (const [id, installed] of results) statuses[id] = installed;
-      setInstallStatuses(statuses);
-    }).catch(() => {/* assume installed on error */}).finally(() => {
-      setStatusChecking(false);
-    });
+      });
+
+      Promise.all([...checks, new Promise<void>((r) => setTimeout(r, 200))])
+        .then((results) => {
+          const agentResults = results.slice(0, -1) as [string, boolean][];
+          const statuses: Record<string, boolean> = {};
+          for (const [id, installed] of agentResults) statuses[id] = installed;
+          setInstallStatuses(statuses);
+        })
+        .catch(() => {/* assume installed on error */ })
+        .finally(() => {
+          setStatusChecking(false);
+        });
+    }, 0);
   }, [step]);
 
   useEffect(() => {
@@ -224,7 +251,20 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>Select Agent</Text>
-        <Text dimColor>{SPINNER_FRAMES[spinnerFrame]} Checking agents...</Text>
+        <Text dimColor>↑↓ navigate, Enter select, Esc back</Text>
+        <Box flexDirection="column" marginTop={1}>
+          {visibleAgents.map((item, i) => {
+            const state = checkProgress[item.id] ?? 'pending';
+            const icon = state === 'done' ? '✓' : state === 'checking' ? SPINNER_FRAMES[spinnerFrame] : '○';
+            const color = state === 'done' ? 'green' : state === 'checking' ? 'yellow' : 'gray';
+            return (
+              <Text key={i} color={color} dimColor={state === 'pending'}>
+                {icon} {item.label}
+                {state === 'checking' && <Text dimColor> checking...</Text>}
+              </Text>
+            );
+          })}
+        </Box>
       </Box>
     );
   }

@@ -31,6 +31,7 @@ const INITIAL_FORM: FormState = {
   models: [],
 };
 
+/** Ink component for managing API providers (list, add, edit, delete). */
 export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
   const [mode, setMode] = useState<Mode>('list');
   const [providers, setProviders] = useState<Provider[]>([]);

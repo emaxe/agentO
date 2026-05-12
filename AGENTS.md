@@ -37,6 +37,13 @@ AgentO — CLI-инструмент для управления конфигур
 │   ├── config/                # Конфигурация AgentO
 │   │   ├── schema.ts          # Zod-схемы и типы
 │   │   └── store.ts           # Чтение/запись ~/.agento/config.json
+│   ├── installers/            # Установщики агентов (TUI Install Wizard)
+│   │   ├── base.ts            # Интерфейс AgentInstaller
+│   │   ├── registry.ts        # Реестр установщиков
+│   │   ├── claude-code.ts     # Установщик Claude Code
+│   │   ├── opencode.ts        # Установщик OpenCode
+│   │   ├── qwen.ts            # Установщик Qwen CLI
+│   │   └── codex.ts           # Установщик Codex CLI
 │   ├── launcher/              # Запуск агентов
 │   │   ├── child.ts           # Child mode (backup → patch → spawn → restore)
 │   │   ├── independent.ts     # Independent mode (backup → patch → exec)
@@ -52,6 +59,7 @@ AgentO — CLI-инструмент для управления конфигур
 │       └── screens/           # Экраны TUI
 │           ├── MainMenu.tsx
 │           ├── LaunchAgent.tsx
+│           ├── AgentInstall.tsx # Мастер установки агента
 │           ├── Providers.tsx
 │           ├── Profiles.tsx
 │           ├── Agents.tsx
@@ -147,6 +155,26 @@ AgentO — CLI-инструмент для управления конфигур
 // src/adapters/qwen.ts
 const providerKey = 'openai';  // Было: provider.name.toLowerCase().replace(/\s+/g, '-')
 ```
+
+## Install Wizard / Installers
+
+The TUI includes an install wizard (`AgentInstall.tsx`) that triggers when a user selects an agent that is not yet installed on the system.
+
+Each supported agent has a dedicated installer under `src/installers/` that implements the `AgentInstaller` interface from `src/installers/base.ts`:
+
+- **`checkInstalled()`** — runs the agent's `--version` command to detect presence and extract version.
+- **`checkEnvironment()`** — verifies prerequisites (e.g. `npm` is available for auto-install).
+- **`install()`** — performs a global `npm install -g <package>` and captures stderr for error reporting.
+- **`manualInstructions`** — provides the exact install command and docs URL shown in manual-install mode.
+
+**Registry:** `src/installers/registry.ts` maps `AgentId` → `AgentInstaller`. The TUI calls `getInstaller(agentId)` to retrieve the appropriate installer before showing the wizard.
+
+| Agent | Package | Docs URL |
+|-------|---------|----------|
+| Claude Code | `npm install -g @anthropic-ai/claude-code` | https://docs.anthropic.com/en/docs/claude-code/setup |
+| OpenCode | `npm install -g opencode` | https://opencode.ai/docs |
+| Qwen CLI | `npm install -g @qwen-code/qwen-code@latest` | https://github.com/QwenLM/qwen-code |
+| Codex CLI | `npm install -g @openai/codex` | https://github.com/openai/codex |
 
 ## CLI команды
 

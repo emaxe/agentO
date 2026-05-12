@@ -17,6 +17,7 @@ interface ProfilesProps {
   onBack: () => void;
 }
 
+/** Ink component for managing profiles (list, add, edit, delete). */
 export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
   const [mode, setMode] = useState<Mode>('list');
   const [profiles, setProfiles] = useState<Profile[]>([]);

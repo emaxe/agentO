@@ -1,7 +1,13 @@
+/**
+ * CLI command: `agento provider`
+ *
+ * Subcommands: list, add, remove.
+ */
 import { Command } from 'commander';
 import { listProviders, addProvider, removeProvider } from '../../providers/provider-manager.js';
 import { capabilityMarker, PROVIDER_TYPES, type ProviderType } from '../../config/schema.js';
 
+/** Builds the `provider` CLI command. */
 export function createProviderCommand(): Command {
   const cmd = new Command('provider').description('Manage API providers');
 
