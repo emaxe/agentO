@@ -11,6 +11,7 @@ import { openCodeInstaller } from './opencode.js';
 import { qwenInstaller } from './qwen.js';
 import { codexInstaller } from './codex.js';
 import { copilotInstaller } from './copilot.js';
+import { gooseInstaller } from './goose.js';
 
 /** Internal map of agent ids to their installers. */
 const registry = new Map<AgentId, AgentInstaller>([
@@ -19,6 +20,7 @@ const registry = new Map<AgentId, AgentInstaller>([
   ['qwen', qwenInstaller],
   ['codex', codexInstaller],
   ['copilot', copilotInstaller],
+  ['goose', gooseInstaller],
 ]);
 
 /** Returns the installer for a given agent id, or `undefined` if unregistered. */

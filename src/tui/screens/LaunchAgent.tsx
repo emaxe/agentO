@@ -7,6 +7,7 @@ import { openCodeAdapter } from '../../adapters/opencode.js';
 import { qwenAdapter } from '../../adapters/qwen.js';
 import { codexAdapter } from '../../adapters/codex.js';
 import { copilotAdapter } from '../../adapters/copilot.js';
+import { gooseAdapter } from '../../adapters/goose.js';
 import { prepareChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
 import { getInstaller } from '../../installers/registry.js';
@@ -33,6 +34,7 @@ const ALL_AGENTS: Array<{ id: string; label: string; adapter: AgentAdapter; comm
   { id: 'qwen', label: 'Qwen CLI', adapter: qwenAdapter, command: 'qwen' },
   { id: 'codex', label: 'Codex CLI', adapter: codexAdapter, command: 'codex', args: ['-p', 'default'] },
   { id: 'copilot', label: 'Copilot CLI', adapter: copilotAdapter, command: 'copilot' },
+  { id: 'goose', label: 'Goose', adapter: gooseAdapter, command: 'goose', args: ['session'] },
 ];
 
 /** Returns the agent list, filtering out `dev` agents unless `dev` is true. */

@@ -18,21 +18,22 @@ AgentO — это CLI-инструмент для централизованно
 | [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter` | Структура OpenAI-совместимого API; пробрасывает модальности |
 | [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `fireworks`, `openrouter` | Инжект переменных окружения. Скрыт по умолчанию (флаг `--dev`). |
 | [Copilot CLI](https://github.com/github/gh-copilot) | `gh copilot` | только env-переменные | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Весь конфиг передаётся через переменные окружения — файл настроек не изменяется. |
+| [Goose](https://goose-docs.ai) | `goose` | только env-переменные | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Весь конфиг через env vars (`GOOSE_PROVIDER`, `GOOSE_MODEL`). |
 
 ## Поддерживаемые типы провайдеров
 
 | Тип провайдера | Совместимые агенты | Примеры |
 |---|---|---|
-| `anthropic` | claude-code, opencode, copilot | Anthropic |
-| `openai-compatible` | opencode, qwen, copilot | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek и т. д. |
-| `fireworks` | claude-code, opencode, qwen, codex, copilot | Fireworks AI (поддерживает все 3 типа API) |
-| `openrouter` | claude-code, opencode, qwen, codex, copilot | [OpenRouter](https://openrouter.ai) — универсальный шлюз (Anthropic Skin / OpenAI / Responses API) |
+| `anthropic` | claude-code, opencode, copilot, goose | Anthropic |
+| `openai-compatible` | opencode, qwen, copilot, goose | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek и т. д. |
+| `fireworks` | claude-code, opencode, qwen, codex, copilot, goose | Fireworks AI (поддерживает все 3 типа API) |
+| `openrouter` | claude-code, opencode, qwen, codex, copilot, goose | [OpenRouter](https://openrouter.ai) — универсальный шлюз (Anthropic Skin / OpenAI / Responses API) |
 
 **Примечания:**
 - `claude-code` работает с `anthropic`, `fireworks` и `openrouter` (требование Anthropic SDK). Для `openrouter` использует **Anthropic Skin** — `ANTHROPIC_AUTH_TOKEN` (Bearer).
-- `copilot` работает со всеми 4 типами провайдеров; конфиг передаётся через переменные окружения, файл настроек не изменяется.
-- Для других OpenAI-совместимых провайдеров используйте `opencode`, `qwen` или `copilot`.
-- `openrouter` наиболее универсален — работает со всеми 5 агентами.
+- `copilot` и `goose` работают со всеми 4 типами провайдеров; конфиг передаётся через переменные окружения, файл настроек не изменяется.
+- Для других OpenAI-совместимых провайдеров используйте `opencode`, `qwen`, `copilot` или `goose`.
+- `openrouter` наиболее универсален — работает со всеми 6 агентами.
 
 ## Флаги возможностей моделей
 
@@ -126,7 +127,7 @@ agento launch -p default -a qwen -m child -s project
 ### Главное меню
 
 ```
-┌────────── AgentO v0.2.0 ──────────┐
+┌────────── AgentO v0.4.2 ──────────┐
 │                                   │
 │ ▶  Запустить агента               │
 │    Провайдеры                     │
@@ -356,6 +357,7 @@ AgentO хранит свою конфигурацию в `~/.agento/config.json`
 - **Qwen CLI** (`openai-compatible`, `fireworks`, `openrouter`): Генерирует `~/.qwen/settings.json` со структурой OpenAI-совместимого провайдера. Требует `baseUrl`. Пробрасывает флаги возможностей через `generationConfig.modalities`.
 - **Codex CLI** (`--dev` для отображения): Генерирует `~/.codex/config.toml` с `wire_api: responses`, профилями и ссылками на переменные окружения. При project-области разделяет конфиг между глобальным (`model_providers`) и проектным (`model`) конфигами. Флаги возможностей не пробрасываются.
 - **Copilot CLI** (все 4 типа провайдеров): Не записывает и не изменяет файл настроек. Весь конфиг передаётся через `COPILOT_MODEL`, `COPILOT_PROVIDER_TYPE`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_PROVIDER_BASE_URL`. Типы `fireworks` и `openrouter` отображаются как `COPILOT_PROVIDER_TYPE=openai`. Для моделей семейства gpt-5 автоматически добавляется `COPILOT_PROVIDER_WIRE_API=responses`.
+- **Goose** (все 4 типа провайдеров): Не изменяет файл настроек. Весь конфиг через `GOOSE_PROVIDER` + `GOOSE_MODEL` + ключи провайдера. `anthropic` → `ANTHROPIC_API_KEY`; `openrouter` → `OPENROUTER_API_KEY`; `fireworks`/`openai-compatible` → `OPENAI_API_KEY` + `OPENAI_HOST`. Суффикс `/v1` автоматически убирается из `OPENAI_HOST` (Goose сам дописывает `/v1/chat/completions`).
 
 ### Бэкап и восстановление
 

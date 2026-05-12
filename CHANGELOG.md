@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Plugin system for custom adapters
 - Configuration templates and presets
 
+## [0.4.2] - 2026-05-12
+
+### Added
+
+- **Goose agent** (`goose`) — full support for [Block's Goose](https://goose-docs.ai) CLI agent across all 4 provider types:
+  - All config delivered via environment variables (`GOOSE_PROVIDER`, `GOOSE_MODEL`, plus provider-specific keys) — no config file mutation
+  - Provider mapping: `anthropic` → `GOOSE_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` (+ `ANTHROPIC_HOST` for custom endpoints); `openrouter` → `GOOSE_PROVIDER=openrouter` + `OPENROUTER_API_KEY`; `fireworks` / `openai-compatible` → `GOOSE_PROVIDER=openai` + `OPENAI_API_KEY` + `OPENAI_HOST`
+  - Automatic `/v1` path stripping from `OPENAI_HOST` — Goose appends `/v1/chat/completions` itself; passing a URL with trailing `/v1` would produce a double-versioned path
+  - Config paths: `~/.config/goose/config.yaml` (global), `./.goose/config.yaml` (project)
+  - Installer: Homebrew (`brew install block-goose-cli`); `manualInstructions` point to official Goose docs
+  - Registered in TUI Launch Agent screen, `agento launch`, and `agento agent status`
+
 ## [0.4.1] - 2026-05-12
 
 ### Added

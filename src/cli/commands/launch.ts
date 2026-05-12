@@ -12,6 +12,7 @@ import { openCodeAdapter } from '../../adapters/opencode.js';
 import { qwenAdapter } from '../../adapters/qwen.js';
 import { codexAdapter } from '../../adapters/codex.js';
 import { copilotAdapter } from '../../adapters/copilot.js';
+import { gooseAdapter } from '../../adapters/goose.js';
 import { launchChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
 import type { AgentAdapter } from '../../adapters/base.js';
@@ -24,6 +25,7 @@ const ALL_AGENT_COMMANDS: Record<string, { adapter: AgentAdapter; command: strin
   'qwen': { adapter: qwenAdapter, command: 'qwen' },
   'codex': { adapter: codexAdapter, command: 'codex', args: ['-p', 'default'] },
   'copilot': { adapter: copilotAdapter, command: 'copilot' },
+  'goose': { adapter: gooseAdapter, command: 'goose', args: ['session'] },
 };
 
 /** Returns agent commands, filtering out `dev` agents unless `--dev` flag is set. */
@@ -39,7 +41,7 @@ export function createLaunchCommand(): Command {
   const cmd = new Command('launch')
     .description('Launch an agent with a profile')
     .requiredOption('-p, --profile <name>', 'Profile name to use')
-    .requiredOption('-a, --agent <id>', 'Agent to launch (claude-code, opencode, qwen, codex, copilot)')
+    .requiredOption('-a, --agent <id>', 'Agent to launch (claude-code, opencode, qwen, codex, copilot, goose)')
     .option('-m, --mode <mode>', 'Launch mode: child or independent')
     .option('-s, --scope <scope>', 'Config scope: global or project')
     .option('-d, --dev', 'Show development agents (e.g. codex)')

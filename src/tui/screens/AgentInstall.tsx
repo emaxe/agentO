@@ -19,6 +19,7 @@ const AGENT_LABELS: Record<AgentId, string> = {
   qwen: 'Qwen CLI',
   codex: 'Codex CLI',
   copilot: 'Copilot CLI',
+  goose: 'Goose',
 };
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
