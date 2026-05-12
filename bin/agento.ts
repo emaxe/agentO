@@ -31,6 +31,11 @@ program.addCommand(createProfileCommand());
 program.addCommand(createRestoreCommand());
 program.addCommand(createAgentCommand());
 
+/** Returns true if error looks like ENOENT from spawnSync. */
+function isEnoent(err: unknown): boolean {
+  return err instanceof Error && 'code' in err && (err as { code: unknown }).code === 'ENOENT';
+}
+
 // Default action: launch interactive TUI
 program.action(() => {
   const opts = program.opts() as { dev?: boolean };
@@ -40,10 +45,26 @@ program.action(() => {
       while (execReq) {
         // Ink may leave stdin in "flowing" state — pause before handing fd to child
         process.stdin.pause();
-        spawnSync(execReq.command, execReq.args, {
-          stdio: 'inherit',
-          env: execReq.env,
-        });
+        try {
+          spawnSync(execReq.command, execReq.args, {
+            stdio: 'inherit',
+            env: execReq.env,
+          });
+        } catch (err) {
+          if (isEnoent(err)) {
+            await execReq.cleanup?.();
+            execReq = await startTui({
+              dev: opts.dev,
+              launchError: {
+                agentId: execReq.agentId ?? execReq.command,
+                profileId: execReq.profileId,
+                error: `Command "${execReq.command}" not found`,
+              },
+            });
+            continue;
+          }
+          throw err;
+        }
         await execReq.cleanup?.();
         if (!execReq.relaunch) break;
         execReq = await startTui({ dev: opts.dev });

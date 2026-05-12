@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
-import { readConfig } from '../../config/store.js';
+import { readConfig, readAgentStatusCache, writeAgentStatusCache } from '../../config/store.js';
 import { claudeCodeAdapter } from '../../adapters/claude-code.js';
 import { openCodeAdapter } from '../../adapters/opencode.js';
 import { qwenAdapter } from '../../adapters/qwen.js';
@@ -22,6 +22,8 @@ interface LaunchAgentProps {
   dev?: boolean;
   onBack: () => void;
   onExec?: (req: ExecRequest) => void;
+  launchError?: { agentId: string; profileId?: string; error?: string };
+  agentStatusCache?: Record<string, boolean>;
 }
 
 /** All agents available for launching. */
@@ -62,7 +64,7 @@ function getCompatibleAgents(
  * 3. (Optional) Install wizard if agent not installed
  * 4. Launch agent (delegates to child or independent launcher)
  */
-export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JSX.Element {
+export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache }: LaunchAgentProps): React.JSX.Element {
   const [step, setStep] = useState<Step>('profile');
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -71,7 +73,11 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
   const [selectedAgent, setSelectedAgent] = useState(0);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const [installStatuses, setInstallStatuses] = useState<Record<string, boolean>>({});
+  const [installStatuses, setInstallStatuses] = useState<Record<string, boolean>>(() => ({ ...agentStatusCache }));
+  // Ref so the install-check effect always reads current statuses without adding
+  // installStatuses to its dependency array (which would cause an infinite loop).
+  const installStatusesRef = useRef(installStatuses);
+  installStatusesRef.current = installStatuses;
   const [installAgentId, setInstallAgentId] = useState<AgentId | null>(null);
   const [statusChecking, setStatusChecking] = useState(false);
   const [checkProgress, setCheckProgress] = useState<Record<string, 'pending' | 'checking' | 'done'>>({});
@@ -85,17 +91,47 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
         setSettings(config.settings);
       })
       .catch((err) => setError(String(err)));
+    readAgentStatusCache()
+      .then((cache) => {
+        if (Object.keys(cache).length > 0) {
+          setInstallStatuses((prev) => ({ ...prev, ...cache }));
+        }
+      })
+      .catch(() => { /* ignore cache read errors */ });
   }, []);
+
+  const launchErrorHandled = useRef(false);
+
+  useEffect(() => {
+    if (!launchError || launchErrorHandled.current || profiles.length === 0) return;
+    launchErrorHandled.current = true;
+    const idx = profiles.findIndex((p) => p.id === launchError.profileId);
+    if (idx >= 0) setSelectedProfile(idx);
+    setInstallStatuses((prev) => ({ ...prev, [launchError.agentId]: false }));
+    setError(launchError.error || `Agent ${launchError.agentId} not installed`);
+    setStep('agent');
+  }, [profiles, launchError]);
 
   useEffect(() => {
     if (step !== 'agent') return;
-    setStatusChecking(true);
+
+    const currentStatuses = installStatusesRef.current;
+    const agentsToCheck = ALL_AGENTS.filter((a) => currentStatuses[a.id] !== true);
     const initialProgress: Record<string, 'pending' | 'checking' | 'done'> = {};
-    for (const a of ALL_AGENTS) initialProgress[a.id] = 'pending';
+    for (const a of ALL_AGENTS) {
+      initialProgress[a.id] = currentStatuses[a.id] === true ? 'done' : agentsToCheck.some((x) => x.id === a.id) ? 'pending' : 'done';
+    }
     setCheckProgress(initialProgress);
 
+    if (agentsToCheck.length === 0) {
+      setStatusChecking(true);
+      setTimeout(() => setStatusChecking(false), 200);
+      return;
+    }
+
+    setStatusChecking(true);
     setTimeout(() => {
-      const checks = ALL_AGENTS.map(async (a) => {
+      const checks = agentsToCheck.map(async (a) => {
         setCheckProgress((prev) => ({ ...prev, [a.id]: 'checking' }));
         const installer = getInstaller(a.id as AgentId);
         if (!installer) {
@@ -110,9 +146,11 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
       Promise.all([...checks, new Promise<void>((r) => setTimeout(r, 200))])
         .then((results) => {
           const agentResults = results.slice(0, -1) as [string, boolean][];
-          const statuses: Record<string, boolean> = {};
-          for (const [id, installed] of agentResults) statuses[id] = installed;
-          setInstallStatuses(statuses);
+          setInstallStatuses((prev) => {
+            const next = { ...prev };
+            for (const [id, installed] of agentResults) next[id] = installed;
+            return next;
+          });
         })
         .catch(() => {/* assume installed on error */ })
         .finally(() => {
@@ -120,6 +158,18 @@ export function LaunchAgent({ dev, onBack, onExec }: LaunchAgentProps): React.JS
         });
     }, 0);
   }, [step]);
+
+  useEffect(() => {
+    // Intentional shared-reference mutation: propagates install statuses back to the
+    // module-level cache in start.ts for cross-relaunch persistence within the same process.
+    if (agentStatusCache) {
+      Object.assign(agentStatusCache, installStatuses);
+    }
+    // Guard: skip disk write when state is still empty (initial mount before any checks run)
+    // to avoid overwriting a valid on-disk cache with a blank object.
+    if (Object.keys(installStatuses).length === 0) return;
+    writeAgentStatusCache(installStatuses).catch(() => { /* ignore write errors */ });
+  }, [installStatuses]);
 
   useEffect(() => {
     if (!statusChecking) return;

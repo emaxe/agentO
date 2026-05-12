@@ -17,6 +17,7 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 | [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Full function calling support via Vercel AI SDK |
 | [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter` | OpenAI-compatible API structure |
 | [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `fireworks`, `openrouter` | Environment variable injection. `wire_api: responses`. |
+| [Copilot CLI](https://github.com/github/gh-copilot) | `gh copilot` | env vars only | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Config delivered entirely via env vars — no settings file patched. |
 
 ## Installation
 
@@ -42,15 +43,16 @@ npx @emaxe/agento
 
 | Provider Type | Compatible Agents | Examples |
 |---|---|---|
-| `anthropic` | claude-code, opencode | Anthropic |
-| `openai-compatible` | opencode, qwen | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek, etc. |
-| `fireworks` | claude-code, opencode, qwen, codex | Fireworks AI (supports all 3 API types) |
-| `openrouter` | claude-code, opencode, qwen, codex | [OpenRouter](https://openrouter.ai) — universal LLM gateway (Anthropic Skin / OpenAI / Responses API) |
+| `anthropic` | claude-code, opencode, copilot | Anthropic |
+| `openai-compatible` | opencode, qwen, copilot | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek, etc. |
+| `fireworks` | claude-code, opencode, qwen, codex, copilot | Fireworks AI (supports all 3 API types) |
+| `openrouter` | claude-code, opencode, qwen, codex, copilot | [OpenRouter](https://openrouter.ai) — universal LLM gateway (Anthropic Skin / OpenAI / Responses API) |
 
 **Notes:**
 - `claude-code` works with `anthropic`, `fireworks`, and `openrouter` types. For `openrouter` it uses OpenRouter's **Anthropic Skin** with `ANTHROPIC_AUTH_TOKEN` (Bearer auth).
+- `copilot` works with all 4 provider types; config is delivered entirely via environment variables (no settings file is patched).
 - Use `opencode` or `qwen` for general OpenAI-compatible providers.
-- `openrouter` is the most flexible — works with all 4 agents.
+- `openrouter` is the most flexible — works with all 5 agents.
 
 ## Model Capability Flags
 
@@ -141,7 +143,7 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 ### Main Menu
 
 ```
-┌────────── AgentO v0.4.0 ──────────┐
+┌────────── AgentO v0.4.1 ──────────┐
 │                                   │
 │ ▶  Launch Agent                   │
 │    Providers                      │
@@ -158,18 +160,19 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 
 | Screen | What You Can Do | Key Shortcuts |
 |--------|----------------|---------------|
-| **Launch Agent** | Select profile → select agent (with install hints) → launch; opens Install Wizard for uninstalled agents | **Enter** select, **Esc** back |
+| **Launch Agent** | Select profile → select agent (with install hints) → launch; opens Install Wizard for uninstalled agents; install statuses cached on disk | **Enter** select, **Esc** back |
 | **Providers** | View, add, edit, delete API providers; toggle model capabilities | **Enter** details / add model, **a** add provider, **e** edit, **d** delete, **i/v/a** toggle capability, **Esc** back |
 | **Profiles** | View, add, delete profiles. In profile details: add/remove/edit models | **Enter** details, **a** add, **d** delete, **Esc** back |
 | **Agents** | Check config status (global/project), backup availability | **Enter** details, **Esc** back |
-| **Settings** | Change default launch mode, default config scope, independent mode | **↑↓** change, **Enter** toggle, **Esc** save & back |
+| **Settings** | Change default launch mode, default config scope; selected setting shows inline description of the current value | **↑↓** navigate, **Enter/Space** toggle, **Esc** save & back |
 
 ### Launch Agent Workflow
 
 1. **Select Profile** — Choose from your saved profiles
-2. **Select Agent** — AgentO checks install status of all agents (spinner while checking). Uninstalled agents show a `(not installed)` hint.
+2. **Select Agent** — AgentO checks install status of all agents (spinner while checking). Uninstalled agents show a `(not installed)` hint. Statuses are cached to `~/.agento/agent-status.json` so already-known-installed agents are skipped on the next launch.
    - If the selected agent **is installed** → proceeds to launch
    - If the selected agent **is not installed** → opens the **Install Wizard**
+   - If the command is not found at launch time (ENOENT) → TUI relaunches with the error shown and the agent marked as not installed
 3. **Install Wizard** (if needed):
    - **Auto-install** — checks environment (requires npm), then installs via `npm install -g <package>`
    - **Manual install** — shows the exact command and a docs URL
@@ -240,18 +243,19 @@ Use **TUI** for exploration and interactive workflows. Use **CLI** for scripting
 
 ## Provider & Agent Compatibility Matrix
 
-| Provider Type | claude-code | opencode | qwen | codex |
-|---|---|---|---|---|
-| **anthropic** | ✅ Full support | ✅ (via SDK) | ❌ Not supported | ❌ Not supported |
-| **openai-compatible** | ❌ Not supported | ✅ Full support | ✅ Full support | ❌ Not supported |
-| **fireworks** | ✅ (Anthropic API) | ✅ (OpenAI API) | ✅ (OpenAI API) | ✅ (Responses API) |
-| **openrouter** | ✅ (Anthropic Skin) | ✅ (OpenAI API) | ✅ (OpenAI API) | ✅ (Responses API) |
+| Provider Type | claude-code | opencode | qwen | codex | copilot |
+|---|---|---|---|---|---|
+| **anthropic** | ✅ Full support | ✅ (via SDK) | ❌ Not supported | ❌ Not supported | ✅ (env vars) |
+| **openai-compatible** | ❌ Not supported | ✅ Full support | ✅ Full support | ❌ Not supported | ✅ (env vars) |
+| **fireworks** | ✅ (Anthropic API) | ✅ (OpenAI API) | ✅ (OpenAI API) | ✅ (Responses API) | ✅ (env vars, OpenAI type) |
+| **openrouter** | ✅ (Anthropic Skin) | ✅ (OpenAI API) | ✅ (OpenAI API) | ✅ (Responses API) | ✅ (env vars, OpenAI type) |
 
 **Key Constraints:**
 - `claude-code` uses Anthropic-compatible APIs and works with `anthropic`, `fireworks`, `openrouter` types
 - For `openrouter` Claude Code uses `ANTHROPIC_AUTH_TOKEN` (Bearer) — not `apiKeyHelper`
-- Other OpenAI-compatible providers must use `opencode` or `qwen` agents
-- `fireworks` and `openrouter` are the most flexible — work with all 4 agents
+- Other OpenAI-compatible providers must use `opencode`, `qwen`, or `copilot` agents
+- `copilot` delivers all config via env vars — no settings file is ever patched or restored
+- `fireworks` and `openrouter` are the most flexible — work with all 5 agents
 
 ## CLI Reference
 
@@ -411,6 +415,8 @@ Each supported agent has a dedicated adapter that translates AgentO's generic co
 - **Qwen CLI** (supports `openai-compatible`, `fireworks`): Generates `~/.qwen/settings.json` with OpenAI-compatible provider structure. Requires `baseUrl` for all providers. Auto-defaults for `fireworks` type. Passes capability flags via `generationConfig.modalities`.
   
 - **Codex CLI** (`--dev` to show): Generates `~/.codex/config.toml` with `wire_api: responses`, profiles, and environment variable references. In project scope, splits config between global (`model_providers`) and project (`model`) configs. Supports all provider types. Capability flags are not propagated (Codex `responses` API has no modality config).
+
+- **Copilot CLI** (supports all 4 provider types): No settings file is written. All config is delivered at launch via `COPILOT_MODEL`, `COPILOT_PROVIDER_TYPE`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_PROVIDER_BASE_URL`. Provider types `fireworks` and `openrouter` map to `COPILOT_PROVIDER_TYPE=openai`. Auto-enables `COPILOT_PROVIDER_WIRE_API=responses` for gpt-5 family models.
 
 ### Backup & Restore
 

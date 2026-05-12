@@ -7,6 +7,7 @@ import { AgentOConfigSchema, type AgentOConfig } from './schema.js';
 const CONFIG_DIR = join(homedir(), '.agento');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
 const BACKUPS_DIR = join(CONFIG_DIR, 'backups');
+const AGENT_STATUS_PATH = join(CONFIG_DIR, 'agent-status.json');
 
 /** Мигрирует старый формат models: string[] → ModelConfig[]. */
 function migrateConfig(raw: unknown): unknown {
@@ -90,4 +91,21 @@ export async function deleteBackup(agentId: string, scope: string): Promise<void
 /** Возвращает путь к бэкапу. */
 export function getBackupPath(agentId: string, scope: string): string {
   return join(BACKUPS_DIR, agentId, `${scope}.bak.json`);
+}
+
+/** Reads cached agent install statuses from disk. */
+export async function readAgentStatusCache(): Promise<Record<string, boolean>> {
+  if (!existsSync(AGENT_STATUS_PATH)) return {};
+  const raw = await readFile(AGENT_STATUS_PATH, 'utf-8');
+  try {
+    return JSON.parse(raw) as Record<string, boolean>;
+  } catch {
+    return {};
+  }
+}
+
+/** Writes agent install statuses cache to disk. */
+export async function writeAgentStatusCache(statuses: Record<string, boolean>): Promise<void> {
+  await mkdir(CONFIG_DIR, { recursive: true });
+  await writeFile(AGENT_STATUS_PATH, JSON.stringify(statuses, null, 2), 'utf-8');
 }

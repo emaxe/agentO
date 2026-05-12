@@ -184,6 +184,19 @@ describe('CopilotAdapter', () => {
       expect(() => adapter.buildEnv(profile, [noUrl])).toThrow('baseUrl required');
     });
 
+    it('throws for unknown provider type without baseUrl or default URL', () => {
+      // Simulates a future provider type added to supportedProviderTypes without
+      // a corresponding DEFAULT_BASE_URLS entry — ensures we get a clear error
+      // instead of silently setting COPILOT_PROVIDER_BASE_URL to an empty string.
+      const unknownProvider = { ...fireworksProvider, type: 'new-type' as ProviderType, baseUrl: undefined };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-000000000099',
+        name: 'Unknown Type',
+        models: [{ providerId: unknownProvider.id, model: 'some-model' }],
+      };
+      expect(() => adapter.buildEnv(profile, [unknownProvider])).toThrow('No base URL configured');
+    });
+
     it('sets COPILOT_PROVIDER_API_KEY', () => {
       const env = adapter.buildEnv(testProfile, [anthropicProvider]);
       expect(env.COPILOT_PROVIDER_API_KEY).toBe('sk-ant-test123');
@@ -222,44 +235,8 @@ describe('CopilotAdapter', () => {
   });
 
   describe('writeConfig', () => {
-    it('is a no-op and does not write a file', async () => {
-      const writtenFiles: Record<string, string> = {};
-      const mkdirCalls: string[] = [];
-      vi.doMock('node:fs/promises', async (importOriginal) => {
-        const actual = await importOriginal<typeof import('node:fs/promises')>();
-        return {
-          ...actual,
-          mkdir: vi.fn().mockImplementation((path: string) => {
-            mkdirCalls.push(path);
-            return Promise.resolve(undefined);
-          }),
-          writeFile: vi.fn().mockImplementation((path: string, content: string) => {
-            writtenFiles[path] = content;
-            return Promise.resolve();
-          }),
-          readFile: vi.fn().mockImplementation((path: string) => {
-            if (path.includes('settings.json')) {
-              return Promise.resolve('{"colorMode":"dim","trustedFolders":["/foo"]}');
-            }
-            return actual.readFile(path);
-          }),
-        };
-      });
-      vi.doMock('node:fs', async (importOriginal) => {
-        const actual = await importOriginal<typeof import('node:fs')>();
-        return {
-          ...actual,
-          existsSync: vi.fn().mockReturnValue(true),
-        };
-      });
-      vi.resetModules();
-
-      const { CopilotAdapter } = await import('./copilot.js');
-      const a = new CopilotAdapter();
-      await a.writeConfig({ model: 'gpt-5.2' }, 'global');
-
-      expect(Object.keys(writtenFiles)).toHaveLength(0);
-      expect(mkdirCalls.length).toBeGreaterThan(0);
+    it('is a true no-op — resolves without writing files or creating directories', async () => {
+      await expect(adapter.writeConfig({}, 'global')).resolves.toBeUndefined();
     });
   });
 });

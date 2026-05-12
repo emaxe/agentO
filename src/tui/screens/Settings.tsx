@@ -4,8 +4,24 @@ import { useKeyInput } from '../use-key-input.js';
 import { readConfig, writeConfig } from '../../config/store.js';
 
 const SETTINGS = [
-  { key: 'defaultLaunchMode' as const, label: 'Default Launch Mode', options: ['child', 'independent'] },
-  { key: 'defaultConfigScope' as const, label: 'Default Config Scope', options: ['global', 'project'] },
+  {
+    key: 'defaultLaunchMode' as const,
+    label: 'Default Launch Mode',
+    options: ['child', 'independent'],
+    descriptions: {
+      child: 'Agent runs as a child process — output streams to this terminal, stops when Agento exits.',
+      independent: 'Agent runs as a detached process — survives Agento exit, output goes to a log file.',
+    },
+  },
+  {
+    key: 'defaultConfigScope' as const,
+    label: 'Default Config Scope',
+    options: ['global', 'project'],
+    descriptions: {
+      global: 'Config changes apply to all projects (stored in ~/.agento/config.json).',
+      project: 'Config changes apply only to the current project (stored in .agento/config.json).',
+    },
+  },
 ];
 
 interface SettingsProps {
@@ -55,9 +71,14 @@ export function Settings({ onBack }: SettingsProps): React.JSX.Element {
       {status && <Text color="green">{status}</Text>}
       <Box flexDirection="column" marginTop={1}>
         {SETTINGS.map((s, i) => (
-          <Text key={s.key} color={i === selectedIndex ? 'green' : undefined}>
-            {i === selectedIndex ? '▶ ' : '  '}{s.label}: <Text bold>{values[s.key]}</Text>
-          </Text>
+          <Box key={s.key} flexDirection="column">
+            <Text color={i === selectedIndex ? 'green' : undefined}>
+              {i === selectedIndex ? '▶ ' : '  '}{s.label}: <Text bold>{values[s.key]}</Text>
+            </Text>
+            {i === selectedIndex && (
+              <Text dimColor>{'    '}{s.descriptions[values[s.key] as keyof typeof s.descriptions]}</Text>
+            )}
+          </Box>
         ))}
       </Box>
     </Box>

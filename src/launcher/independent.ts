@@ -13,6 +13,8 @@ export interface ExecRequest {
   env: Record<string, string>;
   relaunch?: boolean;
   cleanup?: () => Promise<void>;
+  agentId?: string;
+  profileId?: string;
 }
 
 export interface IndependentLaunchOptions {
@@ -61,5 +63,7 @@ export async function launchIndependent(options: IndependentLaunchOptions): Prom
     command,
     args,
     env: { ...cleanEnv, PATH: resolvedPath, ...adapterEnv },
+    agentId: adapter.id,
+    profileId: profile.id,
   };
 }

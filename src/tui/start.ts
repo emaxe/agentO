@@ -10,8 +10,12 @@ import { render } from 'ink';
 import { App } from './App.js';
 import type { ExecRequest } from '../launcher/independent.js';
 
+/** Cache of agent install statuses shared across TUI relaunches within a single process. */
+const agentStatusCache: Record<string, boolean> = {};
+
 export interface StartTuiOptions {
   dev?: boolean;
+  launchError?: { agentId: string; profileId?: string; error?: string };
 }
 
 /**
@@ -24,6 +28,8 @@ export async function startTui(options: StartTuiOptions = {}): Promise<ExecReque
   const { waitUntilExit } = render(
     React.createElement(App, {
       dev: options.dev,
+      launchError: options.launchError,
+      agentStatusCache,
       onExec: (req: ExecRequest) => {
         execRequest = req;
       },

@@ -62,7 +62,7 @@ export async function prepareChild(options: ChildLaunchOptions): Promise<ChildPr
   };
 
   return {
-    execReq: { command, args, env: { ...cleanEnv, PATH: resolvedPath, ...adapterEnv } },
+    execReq: { command, args, env: { ...cleanEnv, PATH: resolvedPath, ...adapterEnv }, agentId: adapter.id, profileId: profile.id },
     cleanup,
   };
 }

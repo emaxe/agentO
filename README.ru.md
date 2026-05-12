@@ -13,20 +13,26 @@ AgentO — это CLI-инструмент для централизованно
 
 | Агент | Команда | Формат конфига | Поддерживаемые провайдеры | Особенности |
 |-------|---------|----------------|---|-------------|
-| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic`, `fireworks` | Поддержка уровней (small/base/smart) |
-| [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks` | Полная поддержка function calling через Vercel AI SDK; пробрасывает модальности |
-| [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks` | Структура OpenAI-совместимого API; пробрасывает модальности |
-| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | Все типы | Инжект переменных окружения. Скрыт по умолчанию (флаг `--dev`). |
+| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic`, `fireworks`, `openrouter` | Поддержка уровней (small/base/smart) |
+| [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Полная поддержка function calling через Vercel AI SDK; пробрасывает модальности |
+| [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter` | Структура OpenAI-совместимого API; пробрасывает модальности |
+| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `fireworks`, `openrouter` | Инжект переменных окружения. Скрыт по умолчанию (флаг `--dev`). |
+| [Copilot CLI](https://github.com/github/gh-copilot) | `gh copilot` | только env-переменные | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Весь конфиг передаётся через переменные окружения — файл настроек не изменяется. |
 
 ## Поддерживаемые типы провайдеров
 
 | Тип провайдера | Совместимые агенты | Примеры |
 |---|---|---|
-| `anthropic` | claude-code | Anthropic |
-| `openai-compatible` | opencode, qwen | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek и т. д. |
-| `fireworks` | claude-code, opencode, qwen, codex | Fireworks AI (поддерживает все 3 типа API) |
+| `anthropic` | claude-code, opencode, copilot | Anthropic |
+| `openai-compatible` | opencode, qwen, copilot | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek и т. д. |
+| `fireworks` | claude-code, opencode, qwen, codex, copilot | Fireworks AI (поддерживает все 3 типа API) |
+| `openrouter` | claude-code, opencode, qwen, codex, copilot | [OpenRouter](https://openrouter.ai) — универсальный шлюз (Anthropic Skin / OpenAI / Responses API) |
 
-**Примечание:** `claude-code` работает только с типами `anthropic` и `fireworks` (требование Anthropic SDK). Для других OpenAI-совместимых провайдеров используйте `opencode` или `qwen`.
+**Примечания:**
+- `claude-code` работает с `anthropic`, `fireworks` и `openrouter` (требование Anthropic SDK). Для `openrouter` использует **Anthropic Skin** — `ANTHROPIC_AUTH_TOKEN` (Bearer).
+- `copilot` работает со всеми 4 типами провайдеров; конфиг передаётся через переменные окружения, файл настроек не изменяется.
+- Для других OpenAI-совместимых провайдеров используйте `opencode`, `qwen` или `copilot`.
+- `openrouter` наиболее универсален — работает со всеми 5 агентами.
 
 ## Флаги возможностей моделей
 
@@ -137,18 +143,20 @@ agento launch -p default -a qwen -m child -s project
 
 | Экран | Возможности | Горячие клавиши |
 |-------|-------------|-----------------|
-| **Запуск агента** | Выбор профиля → агента → режима/области → запуск | **Enter** выбор, **Esc** назад |
+| **Запуск агента** | Выбор профиля → агента → запуск; статус установки кешируется на диск; при ENOENT — перезапуск TUI с ошибкой | **Enter** выбор, **Esc** назад |
 | **Провайдеры** | Просмотр, добавление, редактирование, удаление провайдеров; переключение возможностей моделей | **Enter** детали / добавить модель, **a** добавить провайдер, **e** редактировать, **d** удалить, **i/v/a** переключить флаг, **Esc** назад |
 | **Профили** | Просмотр, добавление, удаление профилей. В деталях: добавление/удаление/редактирование моделей | **Enter** детали, **a** добавить, **d** удалить, **Esc** назад |
 | **Агенты** | Проверка статуса конфигов (global/project), наличие бэкапов | **Enter** детали, **Esc** назад |
-| **Настройки** | Изменение режима запуска, области конфига, режима independent | **↑↓** изменение, **Enter** переключение, **Esc** сохранить и назад |
+| **Настройки** | Изменение режима запуска и области конфига; выделенная настройка показывает описание текущего значения | **↑↓** навигация, **Enter/Space** переключение, **Esc** сохранить и назад |
 
 ### Сценарий запуска агента
 
 1. **Выбор профиля** — выберите один из сохранённых профилей
-2. **Выбор агента** — выберите агента для запуска (claude-code, opencode, qwen или codex с `--dev`)
-3. **Опционально:** настройте **Режим** (child/independent) и **Область** (global/project)
-4. **Запуск** — AgentO заменяет конфиг агента и запускает его
+2. **Выбор агента** — AgentO проверяет статус установки всех агентов (спиннер). Незаконченные агенты отмечены `(not installed)`. Статусы кешируются в `~/.agento/agent-status.json` — при следующем открытии уже известные агенты не перепроверяются.
+   - Агент **установлен** → переходим к запуску
+   - Агент **не установлен** → открывается **Мастер установки**
+   - Команда не найдена при запуске (ENOENT) → TUI перезапускается с ошибкой, агент помечается как не установленный
+3. **Запуск** — AgentO применяет конфиг агента и запускает его
 
 ```
 Profile: default
@@ -197,7 +205,8 @@ Profile: default
 |-----------|----------|----------|
 | **Режим запуска по умолчанию** | `child` / `independent` | Как запускать агентов по умолчанию |
 | **Область конфига по умолчанию** | `global` / `project` | Куда записывать конфиги агентов |
-| **Режим independent** | `spawn-detached` / `pty` | Как запускать агентов в режиме independent |
+
+При навигации выделенная настройка показывает пояснение к текущему значению прямо под строкой.
 
 **Управление:** **↑↓** навигация, **Enter** или **Space** переключение значений, **Esc** сохранить и вернуться.
 
@@ -342,10 +351,11 @@ AgentO хранит свою конфигурацию в `~/.agento/config.json`
 
 Каждый поддерживаемый агент имеет адаптер, который переводит универсальный формат AgentO в специфичный конфиг агента:
 
-- **Claude Code** (`anthropic`, `fireworks`): Генерирует `~/.claude/settings.json` с выбором модели по уровням и переменными окружения `ANTHROPIC_*`. Использует Anthropic SDK. Флаги возможностей не пробрасываются (Anthropic SDK не имеет поля для модальностей).
-- **OpenCode** (`anthropic`, `openai-compatible`, `fireworks`): Генерирует `~/.config/opencode/config.json` через Vercel AI SDK с префиксом провайдера. Полная поддержка function calling через `@ai-sdk/openai-compatible`. Для каждой модели генерируется `modalities: { input: [...], output: ["text"] }` из флагов возможностей.
-- **Qwen CLI** (`openai-compatible`, `fireworks`): Генерирует `~/.qwen/settings.json` со структурой OpenAI-совместимого провайдера. Требует `baseUrl`. Пробрасывает флаги возможностей через `generationConfig.modalities`.
-- **Codex CLI** (`--dev` для отображения): Генерирует `~/.codex/config.toml` с `wire_api: responses`, профилями и ссылками на переменные окружения. При project-области разделяет конфиг между глобальным (`model_providers`) и проектным (`model`) конфигами. Поддерживает все типы провайдеров. Флаги возможностей не пробрасываются (Codex `responses` API не имеет поля для модальностей).
+- **Claude Code** (`anthropic`, `fireworks`, `openrouter`): Генерирует `~/.claude/settings.json` с выбором модели по уровням и переменными окружения `ANTHROPIC_*`. Использует Anthropic SDK. Для `openrouter` использует **Anthropic Skin** — `ANTHROPIC_AUTH_TOKEN` (Bearer). Флаги возможностей не пробрасываются.
+- **OpenCode** (`anthropic`, `openai-compatible`, `fireworks`, `openrouter`): Генерирует `~/.config/opencode/config.json` через Vercel AI SDK. Полная поддержка function calling через `@ai-sdk/openai-compatible`. Для каждой модели генерируется `modalities: { input: [...], output: ["text"] }` из флагов возможностей.
+- **Qwen CLI** (`openai-compatible`, `fireworks`, `openrouter`): Генерирует `~/.qwen/settings.json` со структурой OpenAI-совместимого провайдера. Требует `baseUrl`. Пробрасывает флаги возможностей через `generationConfig.modalities`.
+- **Codex CLI** (`--dev` для отображения): Генерирует `~/.codex/config.toml` с `wire_api: responses`, профилями и ссылками на переменные окружения. При project-области разделяет конфиг между глобальным (`model_providers`) и проектным (`model`) конфигами. Флаги возможностей не пробрасываются.
+- **Copilot CLI** (все 4 типа провайдеров): Не записывает и не изменяет файл настроек. Весь конфиг передаётся через `COPILOT_MODEL`, `COPILOT_PROVIDER_TYPE`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_PROVIDER_BASE_URL`. Типы `fireworks` и `openrouter` отображаются как `COPILOT_PROVIDER_TYPE=openai`. Для моделей семейства gpt-5 автоматически добавляется `COPILOT_PROVIDER_WIRE_API=responses`.
 
 ### Бэкап и восстановление
 

@@ -1,7 +1,7 @@
-import { readFile, mkdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
@@ -62,7 +62,11 @@ export class CopilotAdapter implements AgentAdapter {
     if (!provider.baseUrl && provider.type === 'openai-compatible') {
       throw new Error('baseUrl required for openai-compatible provider in Copilot CLI');
     }
-    env.COPILOT_PROVIDER_BASE_URL = provider.baseUrl ?? defaultUrl ?? '';
+    const resolvedUrl = provider.baseUrl ?? defaultUrl;
+    if (!resolvedUrl) {
+      throw new Error(`No base URL configured for provider type "${provider.type}" in Copilot CLI`);
+    }
+    env.COPILOT_PROVIDER_BASE_URL = resolvedUrl;
 
     if (base.model.startsWith('gpt-5')) {
       env.COPILOT_PROVIDER_WIRE_API = 'responses';
@@ -71,12 +75,9 @@ export class CopilotAdapter implements AgentAdapter {
     return env;
   }
 
-  async writeConfig(_config: AgentConfig, scope: LaunchScope, cwd?: string): Promise<void> {
-    // No-op: we do not write to Copilot settings.json.
-    // Copilot CLI receives all runtime config via environment variables,
-    // so there's no need to mutate (and later restore) the settings file.
-    const path = this.configPaths(cwd)[scope];
-    await mkdir(dirname(path), { recursive: true });
+  async writeConfig(_config: AgentConfig, _scope: LaunchScope, _cwd?: string): Promise<void> {
+    // No-op: Copilot CLI receives all config via environment variables (see buildEnv).
+    // There is nothing to write to settings.json.
   }
 }
 

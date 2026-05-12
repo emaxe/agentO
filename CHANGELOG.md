@@ -13,8 +13,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile import/export
 - CLI flags for setting non-default capabilities at `provider add` time
 - Plugin system for custom adapters
-- Better error handling and logging
 - Configuration templates and presets
+
+## [0.4.1] - 2026-05-12
+
+### Added
+
+- **Copilot CLI agent** (`copilot`) — full support for GitHub Copilot CLI across all 4 provider types:
+  - All config delivered via environment variables (`COPILOT_MODEL`, `COPILOT_PROVIDER_TYPE`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_PROVIDER_BASE_URL`) — no settings file mutation
+  - Provider type mapping: `anthropic` → `anthropic`, `openai-compatible` / `fireworks` / `openrouter` → `openai`
+  - Default base URLs: Anthropic `https://api.anthropic.com`, Fireworks `https://api.fireworks.ai/inference/v1`, OpenRouter `https://openrouter.ai/api/v1`
+  - Auto-enables `COPILOT_PROVIDER_WIRE_API=responses` for gpt-5 family models
+  - Registered in TUI Launch Agent screen and CLI `agento launch` command
+  - Installer: Homebrew Cask (`gh` extension via `brew install --cask github-copilot-for-xcode` / `gh extension install github/gh-copilot`)
+- **Install status disk cache** — agent install statuses persisted to `~/.agento/agent-status.json`; already-known-installed agents are skipped on next launch (no redundant `checkInstalled()` calls)
+- **ENOENT recovery loop** — when `spawnSync` throws `ENOENT` (command not found), the TUI relaunches with a `launchError` context: profile is pre-selected, affected agent is marked not-installed, and the error message is shown on the agent selection step
+- **Settings value descriptions** — the Settings screen now shows an inline description of the current value for the highlighted setting (e.g. explains what `child` vs `independent` mode means)
+- `agentId` / `profileId` fields added to `ExecRequest` interface — allows the relaunch loop to identify which agent failed without re-parsing the command string
+
+### Fixed
+
+- Copilot adapter `writeConfig` no longer creates a stale empty directory — it is a true no-op since Copilot CLI needs no settings file
+- Copilot adapter now throws a descriptive error when no base URL can be resolved for a provider type (previously silently set an empty string)
 
 ## [0.4.0] - 2026-05-11
 
