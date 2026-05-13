@@ -35,6 +35,7 @@ describe('config store', () => {
     expect(config.profiles).toEqual([]);
     expect(config.settings.defaultLaunchMode).toBe('child');
     expect(config.settings.defaultConfigScope).toBe('global');
+    expect(config.settings.mergeAgentConfigs).toBe(true);
   });
 
   it('writeConfig then readConfig returns same value', async () => {
@@ -148,6 +149,55 @@ describe('config store', () => {
     await expect(writeBackup('qwen', 'project', {
       files: [{ path: '/project/.qwen/settings.json', hadFile: true, content: { overwritten: true } }],
     })).rejects.toThrow('agento restore -a qwen -s project');
+  });
+
+  it('writeBackup creates per-cwd nested backup for project scope', async () => {
+    const { writeBackup, readBackup, backupExists, deleteBackup } = await getStore();
+    const cwd = '/some/project';
+    const content = { model: 'test-model' };
+    await writeBackup('qwen', 'project', {
+      cwd,
+      files: [{ path: '/some/project/.qwen/settings.json', hadFile: true, content }],
+    });
+
+    expect(backupExists('qwen', 'project', cwd)).toBe(true);
+    expect(backupExists('qwen', 'project', '/other/project')).toBe(false);
+
+    const backup = await readBackup('qwen', 'project', cwd);
+    expect(backup).toMatchObject({ agentId: 'qwen', scope: 'project', cwd });
+
+    await deleteBackup('qwen', 'project', cwd);
+    expect(backupExists('qwen', 'project', cwd)).toBe(false);
+  });
+
+  it('per-cwd project backups do not conflict across directories', async () => {
+    const { writeBackup } = await getStore();
+    const cwdA = '/project-a';
+    const cwdB = '/project-b';
+    await writeBackup('qwen', 'project', {
+      cwd: cwdA,
+      files: [{ path: '/project-a/.qwen/settings.json', hadFile: true, content: { a: true } }],
+    });
+    await writeBackup('qwen', 'project', {
+      cwd: cwdB,
+      files: [{ path: '/project-b/.qwen/settings.json', hadFile: true, content: { b: true } }],
+    });
+
+    // Should not throw because backups are in separate directories
+    expect(true).toBe(true);
+  });
+
+  it('readBackup and backupExists fall back to legacy path for project scope', async () => {
+    const { readBackup, backupExists } = await getStore();
+    const { writeFile, mkdir } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const legacyPath = join(testDir, '.agento', 'backups', 'qwen', 'project.bak.json');
+    await mkdir(join(testDir, '.agento', 'backups', 'qwen'), { recursive: true });
+    await writeFile(legacyPath, JSON.stringify({ version: 2, sessionId: 'legacy', agentId: 'qwen', scope: 'project', createdAt: '2026-05-13T00:00:00.000Z', files: [] }), 'utf-8');
+
+    expect(backupExists('qwen', 'project', '/any/cwd')).toBe(true);
+    const backup = await readBackup('qwen', 'project', '/any/cwd');
+    expect(backup).not.toBeNull();
+    expect(backup!.sessionId).toBe('legacy');
   });
 
   it('writeConfig creates file with valid JSON content', async () => {

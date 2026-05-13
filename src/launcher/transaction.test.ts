@@ -8,6 +8,7 @@ vi.mock('../config/store.js', () => ({
   readBackup: vi.fn(),
   deleteBackup: vi.fn().mockResolvedValue(undefined),
   inferBackupFileFormat: vi.fn((path: string) => path.endsWith('.toml') ? 'toml' : 'json'),
+  readConfig: vi.fn().mockResolvedValue({ settings: { mergeAgentConfigs: true } }),
 }));
 
 vi.mock('./shell-path-resolver.js', () => ({
@@ -104,7 +105,7 @@ describe('prepareLaunchTransaction', () => {
     });
 
     expect(adapter.buildConfig).toHaveBeenCalledWith(testProfile, [testProvider]);
-    expect(adapter.writeConfig).toHaveBeenCalledWith({ env: { TEST: 'value' } }, 'global', undefined);
+    expect(adapter.writeConfig).toHaveBeenCalledWith({ env: { TEST: 'value' } }, 'global', undefined, true);
   });
 
   it('does not write config when an active backup already exists', async () => {
@@ -175,7 +176,7 @@ describe('prepareLaunchTransaction', () => {
 
     expect(adapter.writeConfig).toHaveBeenCalledTimes(setupWriteCount + 1);
     expect(adapter.writeConfig).toHaveBeenLastCalledWith(existingConfig, 'global', undefined);
-    expect(mockDeleteBackup).toHaveBeenCalledWith('test-agent', 'global');
+    expect(mockDeleteBackup).toHaveBeenCalledWith('test-agent', 'global', undefined);
   });
 
   it('cleanup removes the config path when the backup had no file', async () => {
@@ -207,7 +208,7 @@ describe('prepareLaunchTransaction', () => {
 
     expect(mockUnlink).toHaveBeenCalledWith('/home/user/.config/test.json');
     expect(adapter.writeConfig).toHaveBeenCalledTimes(setupWriteCount);
-    expect(mockDeleteBackup).toHaveBeenCalledWith('test-agent', 'global');
+    expect(mockDeleteBackup).toHaveBeenCalledWith('test-agent', 'global', undefined);
   });
 
   it('cleanup tolerates a missing config file when the backup had no file', async () => {

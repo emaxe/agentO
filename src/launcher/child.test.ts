@@ -14,6 +14,7 @@ vi.mock('../config/store.js', () => ({
   readBackup: vi.fn(),
   deleteBackup: vi.fn().mockResolvedValue(undefined),
   inferBackupFileFormat: vi.fn((path: string) => path.endsWith('.toml') ? 'toml' : 'json'),
+  readConfig: vi.fn().mockResolvedValue({ settings: { mergeAgentConfigs: true } }),
 }));
 
 vi.mock('./shell-path-resolver.js', () => ({
@@ -160,7 +161,7 @@ describe('prepareChild', () => {
     const { cleanup } = await prepareChild({ adapter, profile: testProfile, providers: [testProvider], scope: 'global', command: 'claude' });
     await cleanup();
 
-    expect(mockReadBackup).toHaveBeenCalledWith('test-agent', 'global');
+    expect(mockReadBackup).toHaveBeenCalledWith('test-agent', 'global', undefined);
     expect(adapter.writeConfig).toHaveBeenCalledWith(existingConfig, 'global', undefined);
   });
 
@@ -241,7 +242,7 @@ describe('prepareChild', () => {
     child.emit('exit', 7);
 
     await expect(launch).resolves.toBe(7);
-    expect(mockReadBackup).toHaveBeenCalledWith('test-agent', 'global');
+    expect(mockReadBackup).toHaveBeenCalledWith('test-agent', 'global', '/project');
   });
 
   it('launchChild cleans up on spawn error and returns failure', async () => {
@@ -262,7 +263,7 @@ describe('prepareChild', () => {
     child.emit('error', new Error('boom'));
 
     await expect(launch).resolves.toBe(1);
-    expect(mockReadBackup).toHaveBeenCalledWith('test-agent', 'global');
+    expect(mockReadBackup).toHaveBeenCalledWith('test-agent', 'global', undefined);
     expect(consoleError).toHaveBeenCalledWith('Failed to launch claude:', 'boom');
 
     consoleError.mockRestore();

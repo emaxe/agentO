@@ -72,6 +72,7 @@ export type LaunchMode = z.infer<typeof LaunchModeSchema>;
 export const SettingsSchema = z.object({
   defaultLaunchMode: LaunchModeSchema.default('child'),
   defaultConfigScope: LaunchScopeSchema.default('global'),
+  mergeAgentConfigs: z.boolean().default(true),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

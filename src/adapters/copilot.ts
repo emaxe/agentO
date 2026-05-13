@@ -75,7 +75,7 @@ export class CopilotAdapter implements AgentAdapter {
     return env;
   }
 
-  async writeConfig(_config: AgentConfig, _scope: LaunchScope, _cwd?: string): Promise<void> {
+  async writeConfig(_config: AgentConfig, _scope: LaunchScope, _cwd?: string, _mergeEnabled?: boolean): Promise<void> {
     // No-op: Copilot CLI receives all config via environment variables (see buildEnv).
     // There is nothing to write to settings.json.
   }

@@ -14,6 +14,7 @@ import { writeJsonAtomic } from '../config/atomic-write.js';
 import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
+import { mergeAgentConfig } from './merge-config.js';
 
 /** Default API base URLs for provider types that need them. */
 const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
@@ -118,10 +119,16 @@ export class OpenCodeAdapter implements AgentAdapter {
     };
   }
 
-  async writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string): Promise<void> {
+  async writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
     const path = this.configPaths(cwd)[scope];
     const dir = join(path, '..');
     await mkdir(dir, { recursive: true });
+    if (mergeEnabled) {
+      const existing = await this.readConfig(scope, cwd);
+      if (existing) {
+        config = mergeAgentConfig(existing, config, []);
+      }
+    }
     await writeJsonAtomic(path, config);
   }
 }

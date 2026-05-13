@@ -192,4 +192,45 @@ describe('ClaudeCodeAdapter', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  describe('writeConfig merge', () => {
+    it('preserves unknown top-level keys when mergeEnabled=true', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'agento-cc-merge-'));
+      try {
+        await adapter.writeConfig({ customKey: 'value', env: { OLD: '1' } }, 'project', dir);
+        await adapter.writeConfig({ env: { NEW: '2' }, model: 'claude-3-sonnet' }, 'project', dir, true);
+        const result = await adapter.readConfig('project', dir);
+        expect(result).toEqual({
+          customKey: 'value',
+          env: { OLD: '1', NEW: '2' },
+          model: 'claude-3-sonnet',
+        });
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('replaces entire config when mergeEnabled=false', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'agento-cc-replace-'));
+      try {
+        await adapter.writeConfig({ customKey: 'value', env: { OLD: '1' } }, 'project', dir);
+        await adapter.writeConfig({ model: 'claude-3-sonnet' }, 'project', dir, false);
+        const result = await adapter.readConfig('project', dir);
+        expect(result).toEqual({ model: 'claude-3-sonnet' });
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('writes generated config when file does not exist', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'agento-cc-new-'));
+      try {
+        await adapter.writeConfig({ model: 'claude-3-sonnet' }, 'project', dir, true);
+        const result = await adapter.readConfig('project', dir);
+        expect(result).toEqual({ model: 'claude-3-sonnet' });
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+  });
 });

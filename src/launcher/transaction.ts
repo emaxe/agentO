@@ -1,7 +1,7 @@
 import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
 import { restoreBackupManifest } from '../config/backup-restore.js';
 import type { Profile, Provider } from '../config/schema.js';
-import { deleteBackup, inferBackupFileFormat, readBackup, writeBackup } from '../config/store.js';
+import { deleteBackup, inferBackupFileFormat, readBackup, readConfig, writeBackup } from '../config/store.js';
 import { shellPathResolver } from './shell-path-resolver.js';
 
 /**
@@ -89,11 +89,11 @@ async function snapshotPrimaryConfigFile(
 
 function createLaunchCleanup(adapter: AgentAdapter, scope: LaunchScope, cwd?: string): () => Promise<void> {
   return async (): Promise<void> => {
-    const backup = await readBackup(adapter.id, scope);
+    const backup = await readBackup(adapter.id, scope, cwd);
     if (backup !== null) {
       await restoreBackupManifest(adapter, backup, scope, cwd);
     }
-    await deleteBackup(adapter.id, scope);
+    await deleteBackup(adapter.id, scope, cwd);
   };
 }
 
@@ -111,7 +111,8 @@ export async function prepareLaunchTransaction(options: LaunchTransactionOptions
   await backupCurrentConfig(adapter, scope, cwd);
 
   const newConfig = adapter.buildConfig(profile, providers);
-  await adapter.writeConfig(newConfig, scope, cwd);
+  const agentoConfig = await readConfig();
+  await adapter.writeConfig(newConfig, scope, cwd, agentoConfig.settings.mergeAgentConfigs);
 
   return {
     execReq: await buildExecRequest({ ...options, args }),

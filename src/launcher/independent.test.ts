@@ -7,6 +7,7 @@ vi.mock('../config/store.js', () => ({
   readBackup: vi.fn(),
   deleteBackup: vi.fn(),
   inferBackupFileFormat: vi.fn((path: string) => path.endsWith('.toml') ? 'toml' : 'json'),
+  readConfig: vi.fn().mockResolvedValue({ settings: { mergeAgentConfigs: true } }),
 }));
 
 vi.mock('./shell-path-resolver.js', () => ({

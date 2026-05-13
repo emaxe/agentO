@@ -46,7 +46,7 @@ export interface AgentAdapter {
   buildConfig(profile: Profile, providers: Provider[]): AgentConfig;
 
   /** Записывает конфиг агента для указанного scope */
-  writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string): Promise<void>;
+  writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void>;
 
   /**
    * Опционально: восстанавливает конкретный файл из backup manifest.

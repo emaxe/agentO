@@ -191,4 +191,45 @@ describe('OpenCodeAdapter', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  describe('writeConfig merge', () => {
+    it('preserves unknown top-level keys when mergeEnabled=true', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'agento-oc-merge-'));
+      try {
+        await adapter.writeConfig({ customKey: 'value', env: { OLD: '1' } }, 'project', dir);
+        await adapter.writeConfig({ env: { NEW: '2' }, model: 'new-model' }, 'project', dir, true);
+        const result = await adapter.readConfig('project', dir);
+        expect(result).toEqual({
+          customKey: 'value',
+          env: { NEW: '2' },
+          model: 'new-model',
+        });
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('replaces entire config when mergeEnabled=false', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'agento-oc-replace-'));
+      try {
+        await adapter.writeConfig({ customKey: 'value', env: { OLD: '1' } }, 'project', dir);
+        await adapter.writeConfig({ model: 'new-model' }, 'project', dir, false);
+        const result = await adapter.readConfig('project', dir);
+        expect(result).toEqual({ model: 'new-model' });
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it('writes generated config when file does not exist', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'agento-oc-new-'));
+      try {
+        await adapter.writeConfig({ model: 'new-model' }, 'project', dir, true);
+        const result = await adapter.readConfig('project', dir);
+        expect(result).toEqual({ model: 'new-model' });
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+  });
 });
