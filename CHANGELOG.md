@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Launch no longer silently overwrites an active backup for the same agent/scope; restore now removes generated config files when the original file did not exist.
 - Codex `project` scope now uses a multi-file backup/restore transaction for both global and project TOML configs, so cleanup and crash-like `agento restore -a codex -s project` restore or remove both files without process-local backup state.
 
+### Documentation
+
+- `AGENTS.md`: removed `node-pty` from stack, removed `independentMode` from settings schema, added `validation.ts` and `atomic-write.ts` to project structure, added Copilot and Goose rows to adapter table, added `--version` smoke check to pre-publish checklist.
+- `README.md`: removed stale `independentMode` from Settings table and config JSON example.
+
 ### Planned
 
 - Additional agent support (continue.dev, aider, etc.)

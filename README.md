@@ -226,7 +226,6 @@ Configure defaults for AgentO behavior:
 |---------|---------|-------------|
 | **Default Launch Mode** | `child` / `independent` | How agents are launched by default |
 | **Default Config Scope** | `global` / `project` | Where agent configs are written |
-| **Independent Mode** | `spawn-detached` / `pty` | How independent mode spawns agents |
 
 **Controls:** **↑↓** navigate between settings, **Enter** or **Space** toggle values, **Esc** save and return.
 
@@ -392,8 +391,7 @@ AgentO stores its configuration in `~/.agento/config.json`:
   ],
   "settings": {
     "defaultLaunchMode": "child",
-    "defaultConfigScope": "global",
-    "independentMode": "pty"
+    "defaultConfigScope": "global"
   }
 }
 ```

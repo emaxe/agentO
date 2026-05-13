@@ -14,7 +14,6 @@ AgentO — CLI-инструмент для управления конфигур
 - **Ink + React** для TUI (Terminal User Interface)
 - **Zod** для валидации схем
 - **smol-toml** для работы с TOML (Codex adapter)
-- **node-pty** (optional) для PTY-режима запуска
 
 ## Структура проекта
 
@@ -40,7 +39,9 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   └── agent.ts           # agento agent
 │   ├── config/                # Конфигурация AgentO
 │   │   ├── schema.ts          # Zod-схемы и типы
-│   │   └── store.ts           # Чтение/запись ~/.agento/config.json
+│   │   ├── store.ts           # Чтение/запись ~/.agento/config.json
+│   │   ├── validation.ts      # Доменная валидация providers/profiles (008)
+│   │   └── atomic-write.ts    # Атомарная запись файлов с mode 0o600 (009/010)
 │   ├── installers/            # Установщики агентов (TUI Install Wizard)
 │   │   ├── base.ts            # Интерфейс AgentInstaller
 │   │   ├── registry.ts        # Реестр установщиков
@@ -86,7 +87,6 @@ AgentO — CLI-инструмент для управления конфигур
   settings: {
     defaultLaunchMode: 'child' | 'independent';
     defaultConfigScope: 'global' | 'project';
-    independentMode: 'spawn-detached' | 'pty';
   }
 }
 ```
@@ -155,6 +155,8 @@ AgentO — CLI-инструмент для управления конфигур
 | OpenCode | `opencode` | `opencode` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | JSON (`~/.config/opencode/config.json` или `./opencode.json`) | Пробрасывает в `models[<name>].modalities` | Префикс модели: `providerKey/model`. Для `openrouter` ключ провайдера всегда `openrouter`. |
 | Qwen CLI | `qwen` | `qwen` | `openai-compatible`, `fireworks`, `openrouter` | JSON (`~/.qwen/settings.json`) | Пробрасывает в `generationConfig.modalities` | **modelProviders ключ всегда `"openai"`** для openai-compatible провайдеров. Группирует модели по baseUrl. |
 | Codex CLI | `codex` | `codex` | `fireworks`, `openrouter` | TOML (`~/.codex/config.toml`) | Игнорирует | `dev: true` (скрыт по умолчанию). `wire_api: responses`. При `project` scope `model_providers`, `default_profile`, `profiles` пишет в global config, а `model` — в project config; backup/restore manifest содержит оба файла. Использует `buildEnv` для инжекта API ключа. |
+| Copilot CLI | `copilot` | `gh copilot` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | — (env-only) | Игнорирует | Конфиг через env vars, `writeConfig` — no-op |
+| Goose | `goose` | `goose` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | — (env-only) | Игнорирует | `GOOSE_PROVIDER`/`GOOSE_MODEL`/`OPENAI_HOST`; `writeConfig` — no-op |
 
 ### Важная деталь: Qwen Adapter
 
@@ -316,6 +318,9 @@ npm run build
 ### Проверка после сборки
 
 ```bash
+# Smoke check (входит в npm run prepublishOnly):
+node dist/bin/agento.js --version
+
 grep -n "providerKey" dist/src/adapters/qwen.js
 # должно показать: const providerKey = 'openai';
 ```
@@ -387,6 +392,7 @@ grep "const providerKey" dist/src/adapters/qwen.js
 1. Обновить **`AGENTS.md`** — если изменился интерфейс адаптеров, структура конфига, CLI команды или TUI
 2. Обновить **`README.md`** — если новая фича видна пользователю (новые флаги, агенты, команды, поведение)
 3. Обновить **`CHANGELOG.md`** — добавить запись в секцию `[Unreleased]` с типом изменения (Added / Changed / Fixed / Removed)
+4. Запустить **smoke check**: `npm run build && node dist/bin/agento.js --version` (входит в `npm run prepublishOnly`)
 
 > Порядок: сначала обновляешь код, потом документацию, потом коммитишь всё вместе.
 
