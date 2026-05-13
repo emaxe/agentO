@@ -8,8 +8,10 @@
 import { randomUUID } from 'node:crypto';
 import { readConfig, writeConfig } from '../config/store.js';
 import { ProviderSchema, type Provider } from '../config/schema.js';
+import { validateProvider } from '../config/validation.js';
 
-export type CreateProviderInput = Omit<Provider, 'id'>;
+/** Input for creating a new provider. `type` is widened to `string` so CLI opts don't need a cast. */
+export type CreateProviderInput = Omit<Provider, 'id' | 'type'> & { type: string };
 
 /** Returns all configured providers. */
 export async function listProviders(): Promise<Provider[]> {
@@ -18,12 +20,13 @@ export async function listProviders(): Promise<Provider[]> {
 }
 
 /**
- * Adds a new provider after validating the input against {@link ProviderSchema}.
+ * Adds a new provider after running domain validation and Zod schema parsing.
  * Generates a UUID for the provider id.
  * @returns The newly created provider.
  */
 export async function addProvider(input: CreateProviderInput): Promise<Provider> {
   const config = await readConfig();
+  validateProvider(input, config.providers);
   const provider = ProviderSchema.parse({ ...input, id: randomUUID() });
   config.providers.push(provider);
   await writeConfig(config);
@@ -31,7 +34,7 @@ export async function addProvider(input: CreateProviderInput): Promise<Provider>
 }
 
 /**
- * Updates an existing provider by id.
+ * Updates an existing provider by id, running domain validation before persisting.
  * @throws Error if the provider is not found.
  */
 export async function updateProvider(
@@ -41,6 +44,7 @@ export async function updateProvider(
   const config = await readConfig();
   const index = config.providers.findIndex((p) => p.id === id);
   if (index === -1) throw new Error(`Provider not found: ${id}`);
+  validateProvider({ ...config.providers[index], ...updates }, config.providers, id);
   const updated = ProviderSchema.parse({ ...config.providers[index], ...updates });
   config.providers[index] = updated;
   await writeConfig(config);

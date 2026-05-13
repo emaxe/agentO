@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { readConfig, writeConfig } from '../config/store.js';
 import { ProfileSchema, type Profile } from '../config/schema.js';
+import { validateProfile } from '../config/validation.js';
 
 export type CreateProfileInput = Omit<Profile, 'id'>;
 
@@ -11,12 +12,13 @@ export async function listProfiles(): Promise<Profile[]> {
 }
 
 /**
- * Adds a new profile after validating against {@link ProfileSchema}.
+ * Adds a new profile after running domain validation and Zod schema parsing.
  * Generates a UUID for the profile id.
  * @returns The newly created profile.
  */
 export async function addProfile(input: CreateProfileInput): Promise<Profile> {
   const config = await readConfig();
+  validateProfile(input, config.profiles, config.providers);
   const profile = ProfileSchema.parse({ ...input, id: randomUUID() });
   config.profiles.push(profile);
   await writeConfig(config);
@@ -24,7 +26,7 @@ export async function addProfile(input: CreateProfileInput): Promise<Profile> {
 }
 
 /**
- * Updates an existing profile by id.
+ * Updates an existing profile by id, running domain validation before persisting.
  * @throws Error if the profile is not found.
  */
 export async function updateProfile(
@@ -34,6 +36,7 @@ export async function updateProfile(
   const config = await readConfig();
   const index = config.profiles.findIndex((p) => p.id === id);
   if (index === -1) throw new Error(`Profile not found: ${id}`);
+  validateProfile({ ...config.profiles[index], ...updates }, config.profiles, config.providers, id);
   const updated = ProfileSchema.parse({ ...config.profiles[index], ...updates });
   config.profiles[index] = updated;
   await writeConfig(config);

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- New `src/config/validation.ts` module with `validateProvider` and `validateProfile` domain-level validation functions; called in `addProvider`, `updateProvider`, `addProfile`, `updateProfile` before any config writes. Enforces: valid provider type, `baseUrl` required for `openai-compatible`, unique names, unknown `providerId` references, multi-model tier completeness, no duplicate tiers, and at least one `base` tier in multi-model profiles.
+
 ### Changed
 
 - Added a unified agent registry for CLI launch/status, TUI launch/status and install wizard metadata, keeping agent order, `--dev` filtering, commands, default args and installers in one source of truth.
@@ -16,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - CLI `launch --mode <invalid>` and `--scope <invalid>` now exit with a clear error listing allowed values before writing any configs; unsafe TypeScript casts replaced with `LaunchModeSchema.safeParse` / `LaunchScopeSchema.safeParse`.
+- Removed unsafe `opts.type as ProviderType` cast from `provider add` CLI; `CreateProviderInput.type` now accepts `string` and validation enforced via `validateProvider` inside the manager.
 - CLI `--dev` handling now works consistently for subcommands even when Commander stores the duplicated flag on the root command.
 - `agento restore` now uses the unified agent registry, supports all registered agents including `qwen`, `codex`, `copilot`, and `goose`, validates scope through `LaunchScopeSchema`, and deletes the backup after a successful restore.
 - Launch no longer silently overwrites an active backup for the same agent/scope; restore now removes generated config files when the original file did not exist.

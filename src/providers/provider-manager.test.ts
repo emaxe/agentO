@@ -37,7 +37,7 @@ describe('provider manager', () => {
 
   it('remove then list does not contain the provider', async () => {
     const { addProvider, listProviders, removeProvider } = await getManager();
-    const p = await addProvider({ name: 'ToDelete', type: 'openai-compatible', apiKey: 'k', models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }] });
+    const p = await addProvider({ name: 'ToDelete', type: 'openai-compatible', apiKey: 'k', baseUrl: 'https://api.example.com', models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }] });
     await removeProvider(p.id);
     const providers = await listProviders();
     expect(providers).toHaveLength(0);
@@ -53,5 +53,38 @@ describe('provider manager', () => {
   it('remove non-existent throws', async () => {
     const { removeProvider } = await getManager();
     await expect(removeProvider('nonexistent')).rejects.toThrow('Provider not found');
+  });
+
+  describe('domain validation', () => {
+    it('addProvider with invalid type throws before writing', async () => {
+      const { addProvider, listProviders } = await getManager();
+      await expect(
+        addProvider({ name: 'Bad', type: 'invalid-type', apiKey: 'k', models: [{ name: 'm', capabilities: { image: true, video: false, audio: false } }] }),
+      ).rejects.toThrow('Invalid provider type: "invalid-type"');
+      expect(await listProviders()).toHaveLength(0);
+    });
+
+    it('addProvider openai-compatible without baseUrl throws', async () => {
+      const { addProvider, listProviders } = await getManager();
+      await expect(
+        addProvider({ name: 'Compat', type: 'openai-compatible', apiKey: 'k', models: [{ name: 'm', capabilities: { image: true, video: false, audio: false } }] }),
+      ).rejects.toThrow('requires a baseUrl');
+      expect(await listProviders()).toHaveLength(0);
+    });
+
+    it('addProvider with duplicate name throws', async () => {
+      const { addProvider, listProviders } = await getManager();
+      await addProvider({ name: 'Dup', type: 'anthropic', apiKey: 'k', models: [{ name: 'm', capabilities: { image: true, video: false, audio: false } }] });
+      await expect(
+        addProvider({ name: 'Dup', type: 'anthropic', apiKey: 'k2', models: [{ name: 'm2', capabilities: { image: true, video: false, audio: false } }] }),
+      ).rejects.toThrow('already in use');
+      expect(await listProviders()).toHaveLength(1);
+    });
+
+    it('addProvider valid openai-compatible with baseUrl succeeds', async () => {
+      const { addProvider, listProviders } = await getManager();
+      await addProvider({ name: 'Valid', type: 'openai-compatible', apiKey: 'k', baseUrl: 'https://api.example.com', models: [{ name: 'm', capabilities: { image: true, video: false, audio: false } }] });
+      expect(await listProviders()).toHaveLength(1);
+    });
   });
 });

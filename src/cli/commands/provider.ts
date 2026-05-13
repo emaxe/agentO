@@ -5,7 +5,7 @@
  */
 import { Command } from 'commander';
 import { listProviders, addProvider, removeProvider } from '../../providers/provider-manager.js';
-import { capabilityMarker, PROVIDER_TYPES, type ProviderType } from '../../config/schema.js';
+import { capabilityMarker, PROVIDER_TYPES } from '../../config/schema.js';
 
 /** Builds the `provider` CLI command. */
 export function createProviderCommand(): Command {
@@ -49,7 +49,7 @@ export function createProviderCommand(): Command {
         }));
         const provider = await addProvider({
           name: opts.name,
-          type: opts.type as ProviderType,
+          type: opts.type,
           apiKey: opts.apiKey,
           baseUrl: opts.baseUrl,
           models,

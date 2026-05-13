@@ -21,7 +21,7 @@
 | 005 | Вынести launch prepare/cleanup в общий transaction layer | P1 | Done | [005-launch-transaction-refactor.md](./005-launch-transaction-refactor.md) |
 | 006 | Починить Codex project scope как multi-file transaction | P0 | Done | [006-codex-project-multifile-transaction.md](./006-codex-project-multifile-transaction.md) |
 | 007 | Валидировать CLI `mode` и `scope` без unsafe casts | P1 | Done | [007-cli-mode-scope-validation.md](./007-cli-mode-scope-validation.md) |
-| 008 | Добавить доменную валидацию providers/profiles | P1 | Backlog | [008-domain-validation.md](./008-domain-validation.md) |
+| 008 | Добавить доменную валидацию providers/profiles | P1 | Done | [008-domain-validation.md](./008-domain-validation.md) |
 | 009 | Добавить atomic writes и file permissions для конфигов | P1 | Backlog | [009-atomic-writes-permissions.md](./009-atomic-writes-permissions.md) |
 | 010 | Снизить риск хранения API keys в конфигах и backups | P1 | Backlog | [010-secret-handling.md](./010-secret-handling.md) |
 | 011 | Реализовать или убрать `independentMode` | P1 | Backlog | [011-independent-mode-semantics.md](./011-independent-mode-semantics.md) |
@@ -89,11 +89,11 @@
 
 ### 008 - Добавить доменную валидацию providers/profiles
 
-- [ ] Started
-- [ ] Implementation
-- [ ] Tests
-- [ ] Docs
-- [ ] Done
+- [x] Started
+- [x] Implementation
+- [x] Tests
+- [x] Docs
+- [x] Done
 
 ### 009 - Добавить atomic writes и file permissions для конфигов
 
