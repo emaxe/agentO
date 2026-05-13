@@ -42,7 +42,6 @@
     "node": ">=18"
   },
   "scripts": {
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-x64/spawn-helper node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper 2>/dev/null || true",
     "prepublishOnly": "npm run lint && npm run build && node dist/bin/agento.js --version && npm test",
     "build": "tsc",
     "dev": "tsc --watch",
@@ -70,8 +69,5 @@
     "prettier": "^3.3.2",
     "typescript": "^5.5.2",
     "vitest": "^1.6.0"
-  },
-  "optionalDependencies": {
-    "node-pty": "^1.1.0"
   }
 }

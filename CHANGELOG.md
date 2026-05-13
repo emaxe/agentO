@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Removed `"main"` and `"exports"` fields from `package.json`; package is CLI-only with no programmatic API surface.
+- Removed `IndependentModeSchema`, `IndependentMode` type and `independentMode` field from `SettingsSchema`; the setting was never read by any launcher or TUI code. Removed `node-pty` optional dependency and `postinstall` chmod script. Existing `config.json` files with `independentMode` are accepted silently via Zod `.strip()`.
 - Added a unified agent registry for CLI launch/status, TUI launch/status and install wizard metadata, keeping agent order, `--dev` filtering, commands, default args and installers in one source of truth.
 - Backups now use a v2 manifest with `sessionId`, `createdAt`, `cwd`, touched file metadata and `hadFile` state instead of storing only the raw config object.
 - Launch preparation now uses a shared transaction layer for backup creation, config writes, `ExecRequest` env/PATH assembly and cleanup across child and independent modes.

@@ -68,15 +68,10 @@ export type LaunchScope = z.infer<typeof LaunchScopeSchema>;
 export const LaunchModeSchema = z.enum(['child', 'independent']);
 export type LaunchMode = z.infer<typeof LaunchModeSchema>;
 
-// Вариант independent-запуска
-export const IndependentModeSchema = z.enum(['spawn-detached', 'pty']);
-export type IndependentMode = z.infer<typeof IndependentModeSchema>;
-
 // Настройки AgentO (REQ-3, REQ-11)
 export const SettingsSchema = z.object({
   defaultLaunchMode: LaunchModeSchema.default('child'),
   defaultConfigScope: LaunchScopeSchema.default('global'),
-  independentMode: IndependentModeSchema.default('pty'),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

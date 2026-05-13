@@ -89,7 +89,6 @@ const baseConfig = {
   settings: {
     defaultLaunchMode: 'child',
     defaultConfigScope: 'global',
-    independentMode: 'pty',
   },
 };
 
