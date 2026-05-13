@@ -1,7 +1,8 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { writeJsonAtomic } from '../config/atomic-write.js';
 import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { ModelTier, Profile, ProfileModel, Provider, ProviderType } from '../config/schema.js';
@@ -104,7 +105,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     const path = this.configPaths(cwd)[scope];
     const dir = join(path, '..');
     await mkdir(dir, { recursive: true });
-    await writeFile(path, JSON.stringify(config, null, 2), 'utf-8');
+    await writeJsonAtomic(path, config);
   }
 }
 

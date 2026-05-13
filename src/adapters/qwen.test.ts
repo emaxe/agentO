@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { QwenAdapter } from './qwen.js';
 import type { Profile, Provider } from '../config/schema.js';
 
@@ -217,5 +220,20 @@ describe('QwenAdapter', () => {
       expect('QWEN_CUSTOM_API_KEY_OPENAI_HTTPS_OPENROUTER_AI_API_V1' in env).toBe(true);
       expect(env['QWEN_CUSTOM_API_KEY_OPENAI_HTTPS_OPENROUTER_AI_API_V1']).toBe('sk-or-v1-test');
     });
+  });
+
+  it('writeConfig sets 0o600 file mode on POSIX', async () => {
+    if (process.platform === 'win32') return;
+    const dir = await mkdtemp(join(tmpdir(), 'agento-qwen-test-'));
+    try {
+      const config = adapter.buildConfig(testProfile, [testProvider]);
+      await adapter.writeConfig(config, 'project', dir);
+      const filePath = join(dir, '.qwen', 'settings.json');
+      const info = await stat(filePath);
+      // eslint-disable-next-line no-bitwise
+      expect(info.mode & 0o777).toBe(0o600);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

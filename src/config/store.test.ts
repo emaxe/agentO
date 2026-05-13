@@ -204,6 +204,22 @@ describe('config store', () => {
     expect(info.mode & 0o777).toBe(0o600);
   });
 
+  it('writeBackup sets 0o600 mode on backup file and 0o700 on backup dir (POSIX only)', async () => {
+    if (process.platform === 'win32') return;
+    const { writeBackup, getBackupPath } = await getStore();
+    await writeBackup('claude-code', 'global', {
+      files: [{ path: '/home/user/.claude/settings.json', hadFile: true, content: { key: 'val' } }],
+    });
+    const backupPath = getBackupPath('claude-code', 'global');
+    const { stat: fsStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const fileInfo = await fsStat(backupPath);
+    const dirInfo = await fsStat(join(testDir, '.agento', 'backups', 'claude-code'));
+    // eslint-disable-next-line no-bitwise
+    expect(fileInfo.mode & 0o777).toBe(0o600);
+    // eslint-disable-next-line no-bitwise
+    expect(dirInfo.mode & 0o777).toBe(0o700);
+  });
+
   it('migrates old string[] models to ModelConfig[] on read', async () => {
     const { readConfig } = await getStore();
     // Write a config with old string[] format manually

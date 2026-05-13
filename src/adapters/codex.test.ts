@@ -209,4 +209,5 @@ describe('CodexAdapter', () => {
       expect(env['CODEX_OPENROUTER_API_KEY']).toBe('sk-or-v1-test');
     });
   });
+
 });

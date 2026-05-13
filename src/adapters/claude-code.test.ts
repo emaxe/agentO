@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { ClaudeCodeAdapter } from './claude-code.js';
 import type { Profile, Provider } from '../config/schema.js';
 
@@ -173,5 +176,20 @@ describe('ClaudeCodeAdapter', () => {
     const config = adapter.buildConfig(profile, [fireworksProvider]);
     const env = config.env as Record<string, string>;
     expect(env.ANTHROPIC_BASE_URL).toBe('https://api.fireworks.ai/inference');
+  });
+
+  it('writeConfig sets 0o600 file mode on POSIX', async () => {
+    if (process.platform === 'win32') return;
+    const dir = await mkdtemp(join(tmpdir(), 'agento-cc-test-'));
+    try {
+      const config = adapter.buildConfig(singleModelProfile, [testProvider]);
+      await adapter.writeConfig(config, 'project', dir);
+      const filePath = join(dir, '.claude', 'settings.json');
+      const info = await stat(filePath);
+      // eslint-disable-next-line no-bitwise
+      expect(info.mode & 0o777).toBe(0o600);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

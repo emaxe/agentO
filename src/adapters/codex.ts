@@ -1,8 +1,9 @@
-import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
+import { readFile, mkdir, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
+import { writeFileAtomic } from '../config/atomic-write.js';
 import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
@@ -43,7 +44,7 @@ async function readTomlFile(path: string): Promise<AgentConfig | null> {
 
 async function writeTomlFile(path: string, config: AgentConfig): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, stringifyToml(config as Parameters<typeof stringifyToml>[0]), 'utf-8');
+  await writeFileAtomic(path, stringifyToml(config as Parameters<typeof stringifyToml>[0]));
 }
 
 export class CodexAdapter implements AgentAdapter {

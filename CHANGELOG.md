@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `prepublishOnly` script now includes `node dist/bin/agento.js --version` smoke check after build.
 - `writeJsonAtomic` helper in `src/config/store.ts`: writes JSON to a temp file (`.tmp-<uuid>`) with mode `0o600`, then atomically renames into place; cleans up temp on error. Used by `writeConfig`, `writeBackup`, and `writeAgentStatusCache`. `~/.agento` directory created with mode `0o700`.
+- New `src/config/atomic-write.ts` module with `writeFileAtomic` and `writeJsonAtomic` extracted from `store.ts`. All adapter config writes (`claude-code`, `opencode`, `qwen`, `codex`) now use atomic writes with mode `0o600`. Backup directories (`backups/<agentId>/`) created with mode `0o700`. POSIX file mode tests added for each adapter and for the store backup path.
 - New `src/config/validation.ts` module with `validateProvider` and `validateProfile` domain-level validation functions; called in `addProvider`, `updateProvider`, `addProfile`, `updateProfile` before any config writes. Enforces: valid provider type, `baseUrl` required for `openai-compatible`, unique names, unknown `providerId` references, multi-model tier completeness, no duplicate tiers, and at least one `base` tier in multi-model profiles.
 
 ### Changed

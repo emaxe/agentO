@@ -1,9 +1,10 @@
-import { readFile, writeFile, mkdir, unlink, rename } from 'node:fs/promises';
+import { readFile, mkdir, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { AgentOConfigSchema, type AgentOConfig, type LaunchScope } from './schema.js';
+import { writeJsonAtomic } from './atomic-write.js';
 
 const CONFIG_DIR = join(homedir(), '.agento');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
@@ -41,21 +42,6 @@ export interface WriteBackupOptions {
   files: WriteBackupFile[];
   sessionId?: string;
   createdAt?: string;
-}
-
-/**
- * Writes JSON atomically: serializes to a temp file in the same directory,
- * sets the given file mode, then renames into place. Cleans up temp on error.
- */
-async function writeJsonAtomic(filePath: string, data: unknown, mode = 0o600): Promise<void> {
-  const tmp = `${filePath}.tmp-${randomUUID()}`;
-  try {
-    await writeFile(tmp, JSON.stringify(data, null, 2), { encoding: 'utf-8', mode });
-    await rename(tmp, filePath);
-  } catch (err) {
-    await unlink(tmp).catch(() => undefined);
-    throw err;
-  }
 }
 
 const LEGACY_BACKUP_CREATED_AT = new Date(0).toISOString();
@@ -182,7 +168,7 @@ export async function writeBackup(
     })),
   };
 
-  await mkdir(dir, { recursive: true });
+  await mkdir(dir, { recursive: true, mode: 0o700 });
   await writeJsonAtomic(backupPath, manifest);
 }
 
