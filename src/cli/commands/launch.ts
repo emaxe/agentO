@@ -10,7 +10,7 @@ import { readConfig } from '../../config/store.js';
 import { getAgentCommand, listAgents } from '../../agents/registry.js';
 import { launchChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
-import type { ProviderType } from '../../config/schema.js';
+import { type ProviderType, LaunchModeSchema, LaunchScopeSchema } from '../../config/schema.js';
 
 const SUPPORTED_AGENT_IDS = listAgents({ dev: true }).map((agent) => agent.id).join(', ');
 
@@ -57,9 +57,22 @@ export function createLaunchCommand(): Command {
           process.exit(1);
         }
 
-        // Resolve mode and scope, falling back to user settings
-        const mode = (opts.mode ?? config.settings.defaultLaunchMode) as 'child' | 'independent';
-        const scope = (opts.scope ?? config.settings.defaultConfigScope) as 'global' | 'project';
+        // Resolve mode and scope, falling back to user settings; validate at runtime
+        const rawMode = opts.mode ?? config.settings.defaultLaunchMode;
+        const modeResult = LaunchModeSchema.safeParse(rawMode);
+        if (!modeResult.success) {
+          console.error(`Error: Invalid mode: ${rawMode}. Supported: ${LaunchModeSchema.options.join(', ')}`);
+          return process.exit(1);
+        }
+        const mode = modeResult.data;
+
+        const rawScope = opts.scope ?? config.settings.defaultConfigScope;
+        const scopeResult = LaunchScopeSchema.safeParse(rawScope);
+        if (!scopeResult.success) {
+          console.error(`Error: Invalid scope: ${rawScope}. Supported: ${LaunchScopeSchema.options.join(', ')}`);
+          return process.exit(1);
+        }
+        const scope = scopeResult.data;
 
         const { adapter, command, args } = agentEntry;
 

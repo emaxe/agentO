@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CLI `launch --mode <invalid>` and `--scope <invalid>` now exit with a clear error listing allowed values before writing any configs; unsafe TypeScript casts replaced with `LaunchModeSchema.safeParse` / `LaunchScopeSchema.safeParse`.
 - CLI `--dev` handling now works consistently for subcommands even when Commander stores the duplicated flag on the root command.
 - `agento restore` now uses the unified agent registry, supports all registered agents including `qwen`, `codex`, `copilot`, and `goose`, validates scope through `LaunchScopeSchema`, and deletes the backup after a successful restore.
 - Launch no longer silently overwrites an active backup for the same agent/scope; restore now removes generated config files when the original file did not exist.
