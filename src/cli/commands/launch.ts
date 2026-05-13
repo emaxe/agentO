@@ -7,33 +7,23 @@
 import { Command } from 'commander';
 import { spawnSync } from 'node:child_process';
 import { readConfig } from '../../config/store.js';
-import { claudeCodeAdapter } from '../../adapters/claude-code.js';
-import { openCodeAdapter } from '../../adapters/opencode.js';
-import { qwenAdapter } from '../../adapters/qwen.js';
-import { codexAdapter } from '../../adapters/codex.js';
-import { copilotAdapter } from '../../adapters/copilot.js';
-import { gooseAdapter } from '../../adapters/goose.js';
+import { getAgentCommand, listAgents } from '../../agents/registry.js';
 import { launchChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
-import type { AgentAdapter } from '../../adapters/base.js';
 import type { ProviderType } from '../../config/schema.js';
 
-/** Map of all supported agents with their CLI command and default args. */
-const ALL_AGENT_COMMANDS: Record<string, { adapter: AgentAdapter; command: string; args?: string[] }> = {
-  'claude-code': { adapter: claudeCodeAdapter, command: 'claude' },
-  'opencode': { adapter: openCodeAdapter, command: 'opencode' },
-  'qwen': { adapter: qwenAdapter, command: 'qwen' },
-  'codex': { adapter: codexAdapter, command: 'codex', args: ['-p', 'default'] },
-  'copilot': { adapter: copilotAdapter, command: 'copilot' },
-  'goose': { adapter: gooseAdapter, command: 'goose', args: ['session'] },
-};
+const SUPPORTED_AGENT_IDS = listAgents({ dev: true }).map((agent) => agent.id).join(', ');
 
-/** Returns agent commands, filtering out `dev` agents unless `--dev` flag is set. */
-function getAgentCommands(dev = false): Record<string, { adapter: AgentAdapter; command: string; args?: string[] }> {
-  if (dev) return ALL_AGENT_COMMANDS;
-  return Object.fromEntries(
-    Object.entries(ALL_AGENT_COMMANDS).filter(([, entry]) => !entry.adapter.dev),
-  );
+function resolveDevOption(command: Command, optionValue?: boolean): boolean {
+  if (optionValue) return true;
+
+  let current: Command | null = command;
+  while (current) {
+    if ((current.opts<{ dev?: boolean }>().dev) === true) return true;
+    current = current.parent;
+  }
+
+  return false;
 }
 
 /** Builds the `launch` CLI command with all required options and validation. */
@@ -41,12 +31,12 @@ export function createLaunchCommand(): Command {
   const cmd = new Command('launch')
     .description('Launch an agent with a profile')
     .requiredOption('-p, --profile <name>', 'Profile name to use')
-    .requiredOption('-a, --agent <id>', 'Agent to launch (claude-code, opencode, qwen, codex, copilot, goose)')
+    .requiredOption('-a, --agent <id>', `Agent to launch (${SUPPORTED_AGENT_IDS})`)
     .option('-m, --mode <mode>', 'Launch mode: child or independent')
     .option('-s, --scope <scope>', 'Config scope: global or project')
     .option('-d, --dev', 'Show development agents (e.g. codex)')
-    .action(async (opts: { profile: string; agent: string; mode?: string; scope?: string; dev?: boolean }) => {
-      const AGENT_COMMANDS = getAgentCommands(opts.dev);
+    .action(async (opts: { profile: string; agent: string; mode?: string; scope?: string; dev?: boolean }, command: Command) => {
+      const dev = resolveDevOption(command, opts.dev);
       try {
         const config = await readConfig();
 
@@ -60,9 +50,10 @@ export function createLaunchCommand(): Command {
         }
 
         // Resolve agent adapter and command
-        const agentEntry = AGENT_COMMANDS[opts.agent];
+        const agentEntry = getAgentCommand(opts.agent, { dev });
         if (!agentEntry) {
-          console.error(`Error: Unknown agent: ${opts.agent}. Supported: ${Object.keys(AGENT_COMMANDS).join(', ')}`);
+          const supported = listAgents({ dev }).map((agent) => agent.id).join(', ');
+          console.error(`Error: Unknown agent: ${opts.agent}. Supported: ${supported}`);
           process.exit(1);
         }
 

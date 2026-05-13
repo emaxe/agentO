@@ -6,20 +6,18 @@
  */
 import { Command } from 'commander';
 import { backupExists } from '../../config/store.js';
-import { claudeCodeAdapter } from '../../adapters/claude-code.js';
-import { openCodeAdapter } from '../../adapters/opencode.js';
-import { qwenAdapter } from '../../adapters/qwen.js';
-import { codexAdapter } from '../../adapters/codex.js';
-import { copilotAdapter } from '../../adapters/copilot.js';
-import { gooseAdapter } from '../../adapters/goose.js';
-import type { AgentAdapter } from '../../adapters/base.js';
+import { listAdapters } from '../../agents/registry.js';
 
-const ALL_ADAPTERS: AgentAdapter[] = [claudeCodeAdapter, openCodeAdapter, qwenAdapter, codexAdapter, copilotAdapter, gooseAdapter];
+function resolveDevOption(command: Command, optionValue?: boolean): boolean {
+  if (optionValue) return true;
 
-/** Returns all adapters, filtering out `dev` ones unless `--dev` is passed. */
-function getAdapters(dev = false): AgentAdapter[] {
-  if (dev) return ALL_ADAPTERS;
-  return ALL_ADAPTERS.filter((a) => !a.dev);
+  let current: Command | null = command;
+  while (current) {
+    if ((current.opts<{ dev?: boolean }>().dev) === true) return true;
+    current = current.parent;
+  }
+
+  return false;
 }
 
 /** Builds the `agent` CLI command. */
@@ -30,9 +28,10 @@ export function createAgentCommand(): Command {
     .command('status')
     .description('Show status of agent configs')
     .option('-d, --dev', 'Show development agents (e.g. codex)')
-    .action(async (opts: { dev?: boolean }) => {
+    .action(async (opts: { dev?: boolean }, command: Command) => {
+      const dev = resolveDevOption(command, opts.dev);
       try {
-        const adapters = getAdapters(opts.dev);
+        const adapters = listAdapters({ dev });
         for (const adapter of adapters) {
           const scopes: Array<'global' | 'project'> = ['global', 'project'];
           for (const scope of scopes) {

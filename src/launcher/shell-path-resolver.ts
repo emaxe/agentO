@@ -66,6 +66,7 @@ export class ShellPathResolver {
       const stdout = await execShell(SHELL, ['-l', '-i', '-c', script], TIMEOUT_MS);
 
       // Remove OSC escape sequences that macOS zsh may emit
+      // eslint-disable-next-line no-control-regex -- intentionally strips OSC ANSI sequences from interactive zsh output.
       const raw = (stdout || '').replace(/\x1b\][0-9]*;[^\x07]*\x07/g, '');
       const start = raw.indexOf(delimiter);
       const end = raw.indexOf(delimiter, start + delimiter.length);

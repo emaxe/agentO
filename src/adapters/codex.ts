@@ -28,6 +28,7 @@ let codexGlobalBackup: { hadConfig: boolean; config: AgentConfig } | null = null
 export class CodexAdapter implements AgentAdapter {
   readonly id = 'codex';
   readonly displayName = 'Codex CLI';
+  readonly dev = true;
   readonly supportedProviderTypes = ['fireworks', 'openrouter'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {

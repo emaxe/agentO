@@ -27,7 +27,11 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── claude-code.ts     # Адаптер Claude Code
 │   │   ├── opencode.ts        # Адаптер OpenCode
 │   │   ├── qwen.ts            # Адаптер Qwen CLI
-│   │   └── codex.ts           # Адаптер Codex CLI
+│   │   ├── codex.ts           # Адаптер Codex CLI
+│   │   ├── copilot.ts         # Адаптер Copilot CLI
+│   │   └── goose.ts           # Адаптер Goose
+│   ├── agents/
+│   │   └── registry.ts        # Единый registry агентов: adapter, command, args, installer, label
 │   ├── cli/commands/          # CLI команды (Commander)
 │   │   ├── launch.ts          # agento launch
 │   │   ├── provider.ts        # agento provider
@@ -43,7 +47,9 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── claude-code.ts     # Установщик Claude Code
 │   │   ├── opencode.ts        # Установщик OpenCode
 │   │   ├── qwen.ts            # Установщик Qwen CLI
-│   │   └── codex.ts           # Установщик Codex CLI
+│   │   ├── codex.ts           # Установщик Codex CLI
+│   │   ├── copilot.ts         # Установщик Copilot CLI
+│   │   └── goose.ts           # Установщик Goose
 │   ├── launcher/              # Запуск агентов
 │   │   ├── child.ts           # Child mode (backup → patch → spawn → restore)
 │   │   ├── independent.ts     # Independent mode (backup → patch → exec)
@@ -167,7 +173,7 @@ Each supported agent has a dedicated installer under `src/installers/` that impl
 - **`install()`** — performs a global `npm install -g <package>` and captures stderr for error reporting.
 - **`manualInstructions`** — provides the exact install command and docs URL shown in manual-install mode.
 
-**Registry:** `src/installers/registry.ts` maps `AgentId` → `AgentInstaller`. The TUI calls `getInstaller(agentId)` to retrieve the appropriate installer before showing the wizard.
+**Registry:** единый source of truth находится в `src/agents/registry.ts`. Он хранит `id`, `label`, `adapter`, `command`, optional `args` и optional `installer` для каждого агента. `src/installers/registry.ts` оставлен thin wrapper для совместимости и не должен содержать отдельный полный список агентов.
 
 | Agent | Package | Docs URL |
 |-------|---------|----------|
@@ -266,6 +272,7 @@ npm run test:watch  # Watch mode
 | `src/adapters/*.test.ts` | Генерацию конфигов для каждого агента |
 | `src/config/store.test.ts` | Чтение/запись `~/.agento/config.json` и бэкапов |
 | `src/launcher/child.test.ts` | Child launch flow (backup/restore) |
+| `src/agents/registry.test.ts` | Единый registry агентов, порядок, `dev`-фильтр, default args |
 | `src/launcher/shell-path-resolver.test.ts` | Резолвинг PATH |
 | `src/profiles/profile-manager.test.ts` | CRUD профилей |
 | `src/providers/provider-manager.test.ts` | CRUD провайдеров |
@@ -363,7 +370,7 @@ grep "const providerKey" dist/src/adapters/qwen.js
 ## Дополнительные инструкции
 
 - Все адаптеры должны поддерживать `readConfig` → `buildConfig` → `writeConfig` pipeline
-- При добавлении нового агента нужно: создать адаптер, добавить в `AGENT_COMMANDS` (launch.ts), добавить в TUI (`LaunchAgent.tsx`), добавить тесты
+- При добавлении нового агента нужно: создать адаптер, при необходимости создать installer, добавить одну запись в `src/agents/registry.ts`, расширить `AgentIdSchema` в `src/config/schema.ts` и добавить focused tests. CLI launch/status, TUI launch/status и install wizard должны брать список из registry, без локальных полных списков агентов.
 - Провайдеры типа `anthropic` не поддерживаются Qwen (проверяется в адаптерах)
 - BaseUrl обязателен для openai-compatible провайдеров (кроме Claude Code, который использует официальный API по умолчанию). Для `fireworks` и `openrouter` есть дефолтные URL: `https://api.fireworks.ai/inference/v1` и `https://openrouter.ai/api/v1`
 - Тип `openrouter` поддерживается всеми 4 агентами. OpenRouter предоставляет три API-формата (OpenAI Chat Completions, Anthropic Skin, Responses API), что позволяет использовать его с Claude Code (Anthropic Skin), OpenCode/Qwen (OpenAI-compatible) и Codex (Responses API)

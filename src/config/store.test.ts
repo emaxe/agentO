@@ -81,7 +81,7 @@ describe('config store', () => {
   });
 
   it('migrates old string[] models to ModelConfig[] on read', async () => {
-    const { readConfig, writeConfig } = await getStore();
+    const { readConfig } = await getStore();
     // Write a config with old string[] format manually
     const { writeFile, mkdir } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
     await mkdir(join(testDir, '.agento'), { recursive: true });

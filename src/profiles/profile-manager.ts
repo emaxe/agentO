@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readConfig, writeConfig } from '../config/store.js';
-import { ProfileSchema, type Profile, type ProfileModel } from '../config/schema.js';
+import { ProfileSchema, type Profile } from '../config/schema.js';
 
 export type CreateProfileInput = Omit<Profile, 'id'>;
 

@@ -2,19 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
 import { readConfig, readAgentStatusCache, writeAgentStatusCache } from '../../config/store.js';
-import { claudeCodeAdapter } from '../../adapters/claude-code.js';
-import { openCodeAdapter } from '../../adapters/opencode.js';
-import { qwenAdapter } from '../../adapters/qwen.js';
-import { codexAdapter } from '../../adapters/codex.js';
-import { copilotAdapter } from '../../adapters/copilot.js';
-import { gooseAdapter } from '../../adapters/goose.js';
+import { listAgents } from '../../agents/registry.js';
 import { prepareChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
-import { getInstaller } from '../../installers/registry.js';
 import { AgentInstall } from './AgentInstall.js';
 import type { ExecRequest } from '../../launcher/independent.js';
 import type { AgentId, Profile, Provider, ProviderType, Settings } from '../../config/schema.js';
-import type { AgentAdapter } from '../../adapters/base.js';
+import type { AgentRegistryEntry } from '../../agents/registry.js';
 
 /** Workflow steps inside the LaunchAgent screen. */
 type Step = 'profile' | 'agent' | 'install' | 'launching';
@@ -27,28 +21,12 @@ interface LaunchAgentProps {
   agentStatusCache?: Record<string, boolean>;
 }
 
-/** All agents available for launching. */
-const ALL_AGENTS: Array<{ id: string; label: string; adapter: AgentAdapter; command: string; args?: string[] }> = [
-  { id: 'claude-code', label: 'Claude Code', adapter: claudeCodeAdapter, command: 'claude' },
-  { id: 'opencode', label: 'OpenCode', adapter: openCodeAdapter, command: 'opencode' },
-  { id: 'qwen', label: 'Qwen CLI', adapter: qwenAdapter, command: 'qwen' },
-  { id: 'codex', label: 'Codex CLI', adapter: codexAdapter, command: 'codex', args: ['-p', 'default'] },
-  { id: 'copilot', label: 'Copilot CLI', adapter: copilotAdapter, command: 'copilot' },
-  { id: 'goose', label: 'Goose', adapter: gooseAdapter, command: 'goose', args: ['session'] },
-];
-
-/** Returns the agent list, filtering out `dev` agents unless `dev` is true. */
-function getAgents(dev = false): typeof ALL_AGENTS {
-  if (dev) return ALL_AGENTS;
-  return ALL_AGENTS.filter((a) => !a.adapter.dev);
-}
-
 /** Filters agents to those whose `supportedProviderTypes` cover every provider in the selected profile. */
 function getCompatibleAgents(
-  agents: typeof ALL_AGENTS,
+  agents: readonly AgentRegistryEntry[],
   profile: Profile,
   providers: Provider[],
-): typeof ALL_AGENTS {
+): AgentRegistryEntry[] {
   const providerTypes = new Set<ProviderType>();
   for (const model of profile.models) {
     const provider = providers.find((p) => p.id === model.providerId);
@@ -118,9 +96,10 @@ export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache
     if (step !== 'agent') return;
 
     const currentStatuses = installStatusesRef.current;
-    const agentsToCheck = ALL_AGENTS.filter((a) => currentStatuses[a.id] !== true);
+    const agents = listAgents({ dev });
+    const agentsToCheck = agents.filter((a) => currentStatuses[a.id] !== true);
     const initialProgress: Record<string, 'pending' | 'checking' | 'done'> = {};
-    for (const a of ALL_AGENTS) {
+    for (const a of agents) {
       initialProgress[a.id] = currentStatuses[a.id] === true ? 'done' : agentsToCheck.some((x) => x.id === a.id) ? 'pending' : 'done';
     }
     setCheckProgress(initialProgress);
@@ -135,7 +114,7 @@ export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache
     setTimeout(() => {
       const checks = agentsToCheck.map(async (a) => {
         setCheckProgress((prev) => ({ ...prev, [a.id]: 'checking' }));
-        const installer = getInstaller(a.id as AgentId);
+        const installer = a.installer;
         if (!installer) {
           setCheckProgress((prev) => ({ ...prev, [a.id]: 'done' }));
           return [a.id, true] as const;
@@ -159,7 +138,7 @@ export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache
           setStatusChecking(false);
         });
     }, 0);
-  }, [step]);
+  }, [step, dev]);
 
   useEffect(() => {
     // Intentional shared-reference mutation: propagates install statuses back to the
@@ -195,7 +174,7 @@ export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache
       return;
     }
 
-    const agents = getAgents(dev);
+    const agents = listAgents({ dev });
     const profile = profiles[selectedProfile];
     const compatibleAgents = profile
       ? getCompatibleAgents(agents, profile, providers)
@@ -223,7 +202,7 @@ export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache
         }
 
         if (installStatuses[agentEntry.id] === false) {
-          setInstallAgentId(agentEntry.id as AgentId);
+          setInstallAgentId(agentEntry.id);
           setStep('install');
           return;
         }
@@ -296,8 +275,8 @@ export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache
 
   const profile = profiles[selectedProfile];
   const visibleAgents = profile
-    ? getCompatibleAgents(getAgents(dev), profile, providers)
-    : getAgents(dev);
+    ? getCompatibleAgents(listAgents({ dev }), profile, providers)
+    : listAgents({ dev });
 
   const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 

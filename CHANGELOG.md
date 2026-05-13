@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Added a unified agent registry for CLI launch/status, TUI launch/status and install wizard metadata, keeping agent order, `--dev` filtering, commands, default args and installers in one source of truth.
+
+### Fixed
+
+- CLI `--dev` handling now works consistently for subcommands even when Commander stores the duplicated flag on the root command.
+
 ### Planned
 
 - Additional agent support (continue.dev, aider, etc.)

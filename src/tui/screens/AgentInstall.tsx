@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
-import { getInstaller } from '../../installers/registry.js';
+import { getAgent } from '../../agents/registry.js';
 import type { AgentId } from '../../config/schema.js';
 
 type SubScreen =
@@ -12,15 +12,6 @@ type SubScreen =
   | 'error-env'
   | 'error-install'
   | 'manual';
-
-const AGENT_LABELS: Record<AgentId, string> = {
-  'claude-code': 'Claude Code',
-  opencode: 'OpenCode',
-  qwen: 'Qwen CLI',
-  codex: 'Codex CLI',
-  copilot: 'Copilot CLI',
-  goose: 'Goose',
-};
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -37,8 +28,9 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
   const [missingDeps, setMissingDeps] = useState<string[]>([]);
   const [installError, setInstallError] = useState('');
 
-  const agentLabel = AGENT_LABELS[agentId];
-  const installer = getInstaller(agentId);
+  const agent = getAgent(agentId, { dev: true });
+  const agentLabel = agent?.label ?? agentId;
+  const installer = agent?.installer;
 
   useEffect(() => {
     if (subScreen === 'auto-checking' || subScreen === 'installing') {

@@ -2,22 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
 import { backupExists, readBackup, deleteBackup } from '../../config/store.js';
-import { claudeCodeAdapter } from '../../adapters/claude-code.js';
-import { openCodeAdapter } from '../../adapters/opencode.js';
-import { qwenAdapter } from '../../adapters/qwen.js';
-import { codexAdapter } from '../../adapters/codex.js';
-import { copilotAdapter } from '../../adapters/copilot.js';
-import { gooseAdapter } from '../../adapters/goose.js';
-import type { AgentAdapter } from '../../adapters/base.js';
+import { listAdapters } from '../../agents/registry.js';
 
-const ALL_ADAPTERS: AgentAdapter[] = [claudeCodeAdapter, openCodeAdapter, qwenAdapter, codexAdapter, copilotAdapter, gooseAdapter];
 const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
-
-/** Returns all adapters, filtering out `dev` ones unless `--dev` is passed. */
-function getAdapters(dev = false): AgentAdapter[] {
-  if (dev) return ALL_ADAPTERS;
-  return ALL_ADAPTERS.filter((a) => !a.dev);
-}
 
 /** Snapshot of an agent's configuration state for display. */
 interface AgentStatus {
@@ -40,7 +27,7 @@ export function Agents({ dev, onBack }: AgentsProps): React.JSX.Element {
   const [status, setStatus] = useState('');
 
   const loadStatuses = useCallback(() => {
-    const adapters = getAdapters(dev);
+    const adapters = listAdapters({ dev });
     const result: AgentStatus[] = [];
     for (const adapter of adapters) {
       const paths = adapter.configPaths();
@@ -66,7 +53,7 @@ export function Agents({ dev, onBack }: AgentsProps): React.JSX.Element {
     else if (input === 'r' && statuses[selectedIndex]?.modified) {
       const s = statuses[selectedIndex];
       if (!s) return;
-      const adapter = getAdapters(dev).find((a) => a.id === s.adapterId);
+      const adapter = listAdapters({ dev }).find((a) => a.id === s.adapterId);
       if (!adapter) return;
       readBackup(s.adapterId, s.scope)
         .then(async (backup) => {
