@@ -103,6 +103,9 @@ function createLaunchCleanup(adapter: AgentAdapter, scope: LaunchScope, cwd?: st
  * The active backup is written before the new config. If backup creation fails
  * (for example because an active backup already exists), the agent config is
  * left untouched.
+ *
+ * The `mergeAgentConfigs` setting from AgentO config is passed to the adapter
+ * so JSON-based configs can be merged conservatively rather than overwritten.
  */
 export async function prepareLaunchTransaction(options: LaunchTransactionOptions): Promise<LaunchTransactionResult> {
   const { adapter, profile, providers, scope, cwd } = options;

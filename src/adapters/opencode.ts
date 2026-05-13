@@ -119,6 +119,14 @@ export class OpenCodeAdapter implements AgentAdapter {
     };
   }
 
+  /**
+   * Writes the agent config to disk.
+   *
+   * When `mergeEnabled` is true, reads the existing config and performs a
+   * conservative shallow merge: unknown top-level keys are preserved, generated
+   * keys overwrite, and nested objects are replaced whole. OpenCode has no
+   * env-only flat-merge keys (`envKeys` is empty).
+   */
   async writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
     const path = this.configPaths(cwd)[scope];
     const dir = join(path, '..');

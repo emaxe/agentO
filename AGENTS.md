@@ -27,8 +27,9 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── opencode.ts        # Адаптер OpenCode
 │   │   ├── qwen.ts            # Адаптер Qwen CLI
 │   │   ├── codex.ts           # Адаптер Codex CLI
-│   │   ├── copilot.ts         # Адаптер Copilot CLI
-│   │   └── goose.ts           # Адаптер Goose
+│   │   ├── copilot.ts         # Адаптер Copilot
+│   │   ├── goose.ts           # Адаптер Goose
+│   │   └── merge-config.ts    # Хелпер conservative merge для адаптеров
 │   ├── agents/
 │   │   └── registry.ts        # Единый registry агентов: adapter, command, args, installer, label
 │   ├── cli/commands/          # CLI команды (Commander)
@@ -49,7 +50,7 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── opencode.ts        # Установщик OpenCode
 │   │   ├── qwen.ts            # Установщик Qwen CLI
 │   │   ├── codex.ts           # Установщик Codex CLI
-│   │   ├── copilot.ts         # Установщик Copilot CLI
+│   │   ├── copilot.ts         # Установщик Copilot
 │   │   └── goose.ts           # Установщик Goose
 │   ├── launcher/              # Запуск агентов
 │   │   ├── child.ts           # Child mode (backup → patch → spawn → restore)
@@ -87,6 +88,7 @@ AgentO — CLI-инструмент для управления конфигур
   settings: {
     defaultLaunchMode: 'child' | 'independent';
     defaultConfigScope: 'global' | 'project';
+    mergeAgentConfigs: boolean; // default: true — conservative merge при записи конфигов агентов
   }
 }
 ```
@@ -143,7 +145,7 @@ AgentO — CLI-инструмент для управления конфигур
 - `readConfig(scope, cwd?)` — читает текущий конфиг агента
 - `snapshotConfigFiles?(scope, cwd?)` — опционально: описывает все физические файлы для backup manifest, если один logical scope затрагивает несколько файлов
 - `buildConfig(profile, providers)` — генерирует конфиг агента из профиля
-- `writeConfig(config, scope, cwd?)` — записывает конфиг
+- `writeConfig(config, scope, cwd?, mergeEnabled?)` — записывает конфиг. При mergeEnabled=true сохраняет неизвестные ключи из существующего конфига (shallow merge, nested — replace целиком, env — flat merge через mergeAgentConfig)
 - `restoreConfigFile?(file, scope, cwd?)` — опционально: восстанавливает/удаляет конкретный файл из backup manifest для multi-file restore
 - `buildEnv?(profile, providers)` — опционально: env-переменные для запуска
 
@@ -155,7 +157,7 @@ AgentO — CLI-инструмент для управления конфигур
 | OpenCode | `opencode` | `opencode` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | JSON (`~/.config/opencode/config.json` или `./opencode.json`) | Пробрасывает в `models[<name>].modalities` | Префикс модели: `providerKey/model`. Для `openrouter` ключ провайдера всегда `openrouter`. |
 | Qwen CLI | `qwen` | `qwen` | `openai-compatible`, `fireworks`, `openrouter` | JSON (`~/.qwen/settings.json`) | Пробрасывает в `generationConfig.modalities` | **modelProviders ключ всегда `"openai"`** для openai-compatible провайдеров. Группирует модели по baseUrl. |
 | Codex CLI | `codex` | `codex` | `fireworks`, `openrouter` | TOML (`~/.codex/config.toml`) | Игнорирует | `dev: true` (скрыт по умолчанию). `wire_api: responses`. При `project` scope `model_providers`, `default_profile`, `profiles` пишет в global config, а `model` — в project config; backup/restore manifest содержит оба файла. Использует `buildEnv` для инжекта API ключа. |
-| Copilot CLI | `copilot` | `gh copilot` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | — (env-only) | Игнорирует | Конфиг через env vars, `writeConfig` — no-op |
+| Copilot | `copilot` | `copilot` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | — (env-only) | Игнорирует | Конфиг через env vars, `writeConfig` — no-op |
 | Goose | `goose` | `goose` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | — (env-only) | Игнорирует | `GOOSE_PROVIDER`/`GOOSE_MODEL`/`OPENAI_HOST`; `writeConfig` — no-op |
 
 ### Важная деталь: Qwen Adapter
@@ -341,6 +343,13 @@ npm run format     # Prettier
 - Каждый адаптер изолирован и знает формат конфига своего агента
 - `buildConfig` — чистая функция (не читает/не пишет файлы)
 - `writeConfig` — единственное место записи конфига агента
+
+### Conservative Config Merge
+
+- `mergeAgentConfig(existing, generated, envKeys)` — shallow merge top-level ключей. Ключи из `existing`, которых нет в `generated`, сохраняются. Ключи из `generated` перезаписывают `existing`. Nested-объекты заменяются целиком. Ключи из `envKeys` (например `['env']`) мержатся flat: `{ ...existing.env, ...generated.env }`.
+- Используется в `writeConfig` адаптеров Claude Code, Qwen, OpenCode при `mergeEnabled=true` (читается из `settings.mergeAgentConfigs`, default `true`).
+- Copilot и Goose не используют (env-only, `writeConfig` — no-op). Codex использует собственную split-file merge-логику.
+- Restore (backup-restore.ts) всегда вызывает `writeConfig` без `mergeEnabled` — exact replacement.
 
 ### Backup / Restore
 

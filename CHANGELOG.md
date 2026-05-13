@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Conservative config merge** (`mergeAgentConfigs`, default `true`) for JSON-based agent adapters:
+  - New `mergeAgentConfig(existing, generated, envKeys)` helper in `src/adapters/merge-config.ts` performs shallow top-level merge: unknown keys preserved, generated keys overwrite, nested objects replaced whole, env keys merged flat.
+  - Claude Code, Qwen, and OpenCode adapters now read existing config and merge before writing when `mergeEnabled=true`. `env` keys are merged flat; all other nested objects are replaced entirely.
+  - New `mergeAgentConfigs: boolean` setting added to `AgentOConfigSchema` with default `true`.
+  - `AgentAdapter.writeConfig` signature extended with optional 4th parameter `mergeEnabled?: boolean`.
+  - `transaction.ts` reads `settings.mergeAgentConfigs` from AgentO config and passes the flag to `adapter.writeConfig`.
+  - `backup-restore.ts` continues to call `writeConfig` without `mergeEnabled`, ensuring restore performs exact replacement of the original backup.
+  - Copilot and Goose adapters unaffected (env-only, `writeConfig` no-op). Codex retains its existing split-file merge logic.
+  - Unit tests added for `mergeAgentConfig` helper and for merge behavior in each of the three updated adapters.
+
 - `prepublishOnly` script now includes `node dist/bin/agento.js --version` smoke check after build.
 - `writeJsonAtomic` helper in `src/config/store.ts`: writes JSON to a temp file (`.tmp-<uuid>`) with mode `0o600`, then atomically renames into place; cleans up temp on error. Used by `writeConfig`, `writeBackup`, and `writeAgentStatusCache`. `~/.agento` directory created with mode `0o700`.
 - New `src/config/atomic-write.ts` module with `writeFileAtomic` and `writeJsonAtomic` extracted from `store.ts`. All adapter config writes (`claude-code`, `opencode`, `qwen`, `codex`) now use atomic writes with mode `0o600`. Backup directories (`backups/<agentId>/`) created with mode `0o700`. POSIX file mode tests added for each adapter and for the store backup path.

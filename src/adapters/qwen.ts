@@ -104,6 +104,13 @@ export class QwenAdapter implements AgentAdapter {
     };
   }
 
+  /**
+   * Writes the agent config to disk.
+   *
+   * When `mergeEnabled` is true, reads the existing config and performs a
+   * conservative shallow merge: unknown top-level keys are preserved, generated
+   * keys overwrite, nested objects are replaced whole, and `env` is merged flat.
+   */
   async writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
     const path = this.configPaths(cwd)[scope];
     const dir = join(path, '..');
