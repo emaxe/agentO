@@ -1,21 +1,8 @@
 import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
 import type { Profile, Provider } from '../config/schema.js';
-import { inferBackupFileFormat, writeBackup } from '../config/store.js';
-import { shellPathResolver } from './shell-path-resolver.js';
+import { prepareLaunchTransaction, type ExecRequest } from './transaction.js';
 
-/**
- * Request object for executing an agent after config has been patched.
- * Used by the TUI and CLI to hand off control to the external agent binary.
- */
-export interface ExecRequest {
-  command: string;
-  args: string[];
-  env: Record<string, string>;
-  relaunch?: boolean;
-  cleanup?: () => Promise<void>;
-  agentId?: string;
-  profileId?: string;
-}
+export type { ExecRequest } from './transaction.js';
 
 export interface IndependentLaunchOptions {
   adapter: AgentAdapter;
@@ -40,39 +27,6 @@ export interface IndependentLaunchOptions {
  * (e.g. via `agento restore`).
  */
 export async function launchIndependent(options: IndependentLaunchOptions): Promise<ExecRequest> {
-  const { adapter, profile, providers, scope, command, args = [], cwd } = options;
-
-  // 1. Backup текущего конфига агента
-  const currentConfig = await adapter.readConfig(scope, cwd);
-  const configPath = adapter.configPaths(cwd)[scope];
-  await writeBackup(adapter.id, scope, {
-    cwd,
-    files: [{
-      path: configPath,
-      format: inferBackupFileFormat(configPath),
-      hadFile: currentConfig !== null,
-      content: currentConfig,
-    }],
-  });
-
-  // 2. Генерируем и записываем новый конфиг
-  const newConfig = adapter.buildConfig(profile, providers);
-  await adapter.writeConfig(newConfig, scope, cwd);
-
-  // 3. Резолвим PATH чтобы найти исполняемый файл агента
-  const resolvedPath = await shellPathResolver.resolve();
-
-  const cleanEnv = Object.fromEntries(
-    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
-  );
-
-  const adapterEnv = adapter.buildEnv?.(profile, providers) ?? {};
-
-  return {
-    command,
-    args,
-    env: { ...cleanEnv, PATH: resolvedPath, ...adapterEnv },
-    agentId: adapter.id,
-    profileId: profile.id,
-  };
+  const { execReq } = await prepareLaunchTransaction(options);
+  return execReq;
 }

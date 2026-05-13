@@ -6,7 +6,7 @@
  */
 import { Command } from 'commander';
 import { readBackup, backupExists, deleteBackup } from '../../config/store.js';
-import { restorePrimaryBackupFile } from '../../config/backup-restore.js';
+import { restoreBackupManifest } from '../../config/backup-restore.js';
 import { getAgent, listAgents } from '../../agents/registry.js';
 import { LaunchScopeSchema } from '../../config/schema.js';
 
@@ -45,7 +45,7 @@ export function createRestoreCommand(): Command {
           return process.exit(1);
         }
 
-        await restorePrimaryBackupFile(agent.adapter, backup, scope);
+        await restoreBackupManifest(agent.adapter, backup, scope);
         await deleteBackup(opts.agent, scope);
         console.log(`Restored ${opts.agent} config (${scope})`);
         return process.exit(0);

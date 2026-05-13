@@ -1,5 +1,6 @@
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
 import type { LaunchScope } from '../config/schema.js';
+import type { BackupManifestFile, WriteBackupFile } from '../config/store.js';
 
 /** Режим области действия конфига агента */
 export type { LaunchScope };
@@ -33,6 +34,12 @@ export interface AgentAdapter {
   /** Читает текущий конфиг агента для указанного scope */
   readConfig(scope: LaunchScope, cwd?: string): Promise<AgentConfig | null>;
 
+  /**
+   * Опционально: возвращает все физические файлы, которые будут изменены launch transaction.
+   * Если hook отсутствует, transaction использует readConfig/configPaths для single-file backup.
+   */
+  snapshotConfigFiles?(scope: LaunchScope, cwd?: string): Promise<WriteBackupFile[]>;
+
   /** Генерирует конфиг агента из профиля AgentO и списка провайдеров.
    * Использует первую пару (провайдер, модель) из профиля.
    */
@@ -40,6 +47,12 @@ export interface AgentAdapter {
 
   /** Записывает конфиг агента для указанного scope */
   writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string): Promise<void>;
+
+  /**
+   * Опционально: восстанавливает конкретный файл из backup manifest.
+   * Нужен адаптерам, у которых один logical scope затрагивает несколько физических файлов.
+   */
+  restoreConfigFile?(file: BackupManifestFile, scope: LaunchScope, cwd?: string): Promise<void>;
 
   /**
    * Опционально: возвращает env-переменные, которые нужно инжектировать при запуске агента.

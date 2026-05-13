@@ -2,7 +2,7 @@
 
 ## Статус
 
-Backlog
+Done
 
 ## Приоритет
 
@@ -19,6 +19,13 @@ P1
 ## Цель
 
 Создать единый transaction layer для подготовки agent config и cleanup.
+
+## Реализация
+
+- `src/launcher/transaction.ts` содержит общий `prepareLaunchTransaction(...)`.
+- Transaction выполняет single-file backup в v2 manifest, пишет новый config, собирает `ExecRequest` с очищенным `process.env`, resolved `PATH` и `adapter.buildEnv?.(...)`, а также возвращает cleanup-функцию.
+- `prepareChild(...)` и `launchIndependent(...)` стали thin wrappers над transaction.
+- `launchChild(...)` использует тот же prepared `ExecRequest`/cleanup result, что и TUI child mode.
 
 ## Scope
 
@@ -59,4 +66,3 @@ npm run build
 
 - Нужно не сломать signal handling в child mode.
 - Нужно гарантировать cleanup при spawn error.
-

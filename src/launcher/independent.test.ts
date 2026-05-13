@@ -4,6 +4,8 @@ import type { Profile, Provider } from '../config/schema.js';
 
 vi.mock('../config/store.js', () => ({
   writeBackup: vi.fn(),
+  readBackup: vi.fn(),
+  deleteBackup: vi.fn(),
   inferBackupFileFormat: vi.fn((path: string) => path.endsWith('.toml') ? 'toml' : 'json'),
 }));
 
@@ -89,5 +91,28 @@ describe('launchIndependent', () => {
     })).rejects.toThrow('Active backup already exists');
 
     expect(adapter.writeConfig).not.toHaveBeenCalled();
+  });
+
+  it('returns an ExecRequest from the shared transaction path', async () => {
+    const adapter = makeAdapter(null);
+
+    const execReq = await launchIndependent({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+      args: ['--verbose'],
+    });
+
+    expect(execReq).toMatchObject({
+      command: 'claude',
+      args: ['--verbose'],
+      agentId: 'test-agent',
+      profileId: 'prof1',
+    });
+    expect(execReq.env.PATH).toBe('/usr/local/bin:/usr/bin:/bin');
+    expect(execReq.cleanup).toBeUndefined();
+    expect(adapter.writeConfig).toHaveBeenCalledTimes(1);
   });
 });

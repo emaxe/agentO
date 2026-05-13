@@ -53,6 +53,7 @@ AgentO — CLI-инструмент для управления конфигур
 │   ├── launcher/              # Запуск агентов
 │   │   ├── child.ts           # Child mode (backup → patch → spawn → restore)
 │   │   ├── independent.ts     # Independent mode (backup → patch → exec)
+│   │   ├── transaction.ts     # Общий transaction layer: backup/write/env/cleanup
 │   │   └── shell-path-resolver.ts  # Резолвинг PATH через login shell
 │   ├── profiles/              # Управление профилями
 │   │   └── profile-manager.ts
@@ -140,8 +141,10 @@ AgentO — CLI-инструмент для управления конфигур
 - `dev?` — флаг разработки: скрывает агента из UI/CLI по умолчанию
 - `configPaths(cwd?)` → `{ global, project }` — пути к конфигам агента
 - `readConfig(scope, cwd?)` — читает текущий конфиг агента
+- `snapshotConfigFiles?(scope, cwd?)` — опционально: описывает все физические файлы для backup manifest, если один logical scope затрагивает несколько файлов
 - `buildConfig(profile, providers)` — генерирует конфиг агента из профиля
 - `writeConfig(config, scope, cwd?)` — записывает конфиг
+- `restoreConfigFile?(file, scope, cwd?)` — опционально: восстанавливает/удаляет конкретный файл из backup manifest для multi-file restore
 - `buildEnv?(profile, providers)` — опционально: env-переменные для запуска
 
 ### Поддерживаемые агенты
@@ -151,7 +154,7 @@ AgentO — CLI-инструмент для управления конфигур
 | Claude Code | `claude-code` | `claude` | `anthropic`, `fireworks`, `openrouter` | JSON (`~/.claude/settings.json`) | Игнорирует | Поддерживает tiers (small/base/smart). Только один провайдер на профиль. Для `openrouter` использует Anthropic Skin: `ANTHROPIC_AUTH_TOKEN` (Bearer) + пустой `ANTHROPIC_API_KEY`, БЕЗ `apiKeyHelper`. |
 | OpenCode | `opencode` | `opencode` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | JSON (`~/.config/opencode/config.json` или `./opencode.json`) | Пробрасывает в `models[<name>].modalities` | Префикс модели: `providerKey/model`. Для `openrouter` ключ провайдера всегда `openrouter`. |
 | Qwen CLI | `qwen` | `qwen` | `openai-compatible`, `fireworks`, `openrouter` | JSON (`~/.qwen/settings.json`) | Пробрасывает в `generationConfig.modalities` | **modelProviders ключ всегда `"openai"`** для openai-compatible провайдеров. Группирует модели по baseUrl. |
-| Codex CLI | `codex` | `codex` | `fireworks`, `openrouter` | TOML (`~/.codex/config.toml`) | Игнорирует | `dev: true` (скрыт по умолчанию). `wire_api: responses`. При `project` scope `model_providers` пишет в global config, а `model` — в project config. Использует `buildEnv` для инжекта API ключа. |
+| Codex CLI | `codex` | `codex` | `fireworks`, `openrouter` | TOML (`~/.codex/config.toml`) | Игнорирует | `dev: true` (скрыт по умолчанию). `wire_api: responses`. При `project` scope `model_providers`, `default_profile`, `profiles` пишет в global config, а `model` — в project config; backup/restore manifest содержит оба файла. Использует `buildEnv` для инжекта API ключа. |
 
 ### Важная деталь: Qwen Adapter
 
@@ -236,6 +239,8 @@ agento restore -a <agent> -s <scope>  # Восстановить конфиг л
 4. После завершения: восстановить оригинальный конфиг или удалить файл, если до launch его не было
 5. SIGTERM/SIGINT: пробрасываются дочернему процессу, затем cleanup
 
+Шаги подготовки (backup → write config → env/PATH → cleanup factory) выполняет `src/launcher/transaction.ts`. `prepareChild` — тонкая обертка для TUI, а `launchChild` использует тот же prepared `ExecRequest`, что и TUI.
+
 Если active backup для этого agent/scope уже существует, запуск останавливается до записи нового конфига. Сначала нужно выполнить `agento restore -a <agent> -s <scope>`.
 
 ### Independent Mode
@@ -244,6 +249,8 @@ agento restore -a <agent> -s <scope>  # Восстановить конфиг л
 2. Записать новый конфиг
 3. Вернуть `ExecRequest` для запуска внешним процессом
 4. Восстановление конфига — ответственность пользователя (или через `agento restore`)
+
+Independent mode использует тот же `src/launcher/transaction.ts` для backup/write/env, но не вызывает cleanup автоматически.
 
 Повторный independent launch с тем же agent/scope не перезаписывает active backup; пользователь должен восстановить предыдущий backup перед новым launch.
 
@@ -277,8 +284,11 @@ npm run test:watch  # Watch mode
 | `src/config/store.test.ts` | Чтение/запись `~/.agento/config.json` и бэкапов |
 | `src/launcher/child.test.ts` | Child launch flow (backup/restore) |
 | `src/launcher/independent.test.ts` | Independent launch backup flow |
+| `src/launcher/transaction.test.ts` | Общий launch transaction: backup/write/env/cleanup |
+| `src/launcher/transaction.codex.test.ts` | Codex project multi-file transaction, cleanup и no-overwrite policy |
 | `src/agents/registry.test.ts` | Единый registry агентов, порядок, `dev`-фильтр, default args |
 | `src/cli/commands/restore.test.ts` | CLI restore через registry, валидация scope, удаление backup |
+| `src/cli/commands/restore.codex.test.ts` | Crash-like CLI restore для Codex project multi-file backup |
 | `src/launcher/shell-path-resolver.test.ts` | Резолвинг PATH |
 | `src/profiles/profile-manager.test.ts` | CRUD профилей |
 | `src/providers/provider-manager.test.ts` | CRUD провайдеров |
@@ -330,10 +340,12 @@ npm run format     # Prettier
 ### Backup / Restore
 
 - Перед любым изменением конфига агента делается active backup в `~/.agento/backups/<agent>/<scope>.bak.json`
+- Launch backup/write/env/cleanup logic находится в `src/launcher/transaction.ts`; `child.ts` и `independent.ts` не должны дублировать `adapter.readConfig`/`adapter.snapshotConfigFiles` → `writeBackup`, `adapter.buildConfig` → `adapter.writeConfig` и merge env/PATH.
 - Backup-файл хранится как v2 manifest: `version`, `sessionId`, `agentId`, `scope`, optional `cwd`, `createdAt`, `files[]` с `path`, `format`, `hadFile`, `content`
 - `writeBackup` не перезаписывает существующий active backup для того же `agentId/scope`; новый launch должен упасть до `adapter.writeConfig` с инструкцией выполнить `agento restore -a <agent> -s <scope>`
 - `readBackup` поддерживает legacy raw backup-файлы и нормализует их в v2-like manifest с одним файлом и `hadFile: true`
-- Restore/cleanup использует `hadFile`: при `true` вызывает `adapter.writeConfig(content, scope, cwd?)`, при `false` удаляет config path вместо записи `{}`
+- Restore/cleanup использует `restoreBackupManifest(...)` и `hadFile`: single-file backups при `true` вызывают `adapter.writeConfig(content, scope, cwd?)`, при `false` удаляют config path вместо записи `{}`; multi-file backups должны восстанавливаться через `adapter.restoreConfigFile(...)`.
+- Codex `project` scope — multi-file transaction: backup manifest содержит global `~/.codex/config.toml` и project `<cwd>/.codex/config.toml`; cleanup/CLI restore восстанавливает или удаляет оба файла без process-local state.
 - Child mode гарантирует восстановление при любом исходе (exit, SIGTERM, SIGINT) и удаляет backup после успешного cleanup
 - Independent mode оставляет конфиг изменённым — восстановление через `agento restore`
 - CLI restore использует `src/agents/registry.ts` с `{ dev: true }`, поэтому поддерживает все зарегистрированные агенты (`claude-code`, `opencode`, `qwen`, `codex`, `copilot`, `goose`) без отдельного `--dev` флага и удаляет backup после успешного restore

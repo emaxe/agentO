@@ -18,8 +18,8 @@
 | 002 | Ввести единый реестр агентов | P0 | Done | [002-agent-registry.md](./002-agent-registry.md) |
 | 003 | Расширить `agento restore` на все адаптеры | P0 | Done | [003-restore-all-adapters.md](./003-restore-all-adapters.md) |
 | 004 | Сделать безопасный backup format с session tracking | P0 | Done | [004-backup-session-format.md](./004-backup-session-format.md) |
-| 005 | Вынести launch prepare/cleanup в общий transaction layer | P1 | Backlog | [005-launch-transaction-refactor.md](./005-launch-transaction-refactor.md) |
-| 006 | Починить Codex project scope как multi-file transaction | P0 | Backlog | [006-codex-project-multifile-transaction.md](./006-codex-project-multifile-transaction.md) |
+| 005 | Вынести launch prepare/cleanup в общий transaction layer | P1 | Done | [005-launch-transaction-refactor.md](./005-launch-transaction-refactor.md) |
+| 006 | Починить Codex project scope как multi-file transaction | P0 | Done | [006-codex-project-multifile-transaction.md](./006-codex-project-multifile-transaction.md) |
 | 007 | Валидировать CLI `mode` и `scope` без unsafe casts | P1 | Backlog | [007-cli-mode-scope-validation.md](./007-cli-mode-scope-validation.md) |
 | 008 | Добавить доменную валидацию providers/profiles | P1 | Backlog | [008-domain-validation.md](./008-domain-validation.md) |
 | 009 | Добавить atomic writes и file permissions для конфигов | P1 | Backlog | [009-atomic-writes-permissions.md](./009-atomic-writes-permissions.md) |
@@ -65,19 +65,19 @@
 
 ### 005 - Вынести launch prepare/cleanup в общий transaction layer
 
-- [ ] Started
-- [ ] Implementation
-- [ ] Tests
-- [ ] Docs
-- [ ] Done
+- [x] Started
+- [x] Implementation
+- [x] Tests
+- [x] Docs
+- [x] Done
 
 ### 006 - Починить Codex project scope как multi-file transaction
 
-- [ ] Started
-- [ ] Implementation
-- [ ] Tests
-- [ ] Docs
-- [ ] Done
+- [x] Started
+- [x] Implementation
+- [x] Tests
+- [x] Docs
+- [x] Done
 
 ### 007 - Валидировать CLI `mode` и `scope` без unsafe casts
 

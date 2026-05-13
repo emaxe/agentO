@@ -1,8 +1,14 @@
+import { EventEmitter } from 'node:events';
+import { spawn } from 'node:child_process';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentAdapter } from '../adapters/base.js';
 import type { Profile, Provider } from '../config/schema.js';
 
 // Mock dependencies before importing the module under test
+vi.mock('node:child_process', () => ({
+  spawn: vi.fn(),
+}));
+
 vi.mock('../config/store.js', () => ({
   writeBackup: vi.fn(),
   readBackup: vi.fn(),
@@ -22,11 +28,12 @@ vi.mock('node:fs/promises', () => ({
 
 import { writeBackup, readBackup } from '../config/store.js';
 import { unlink } from 'node:fs/promises';
-import { prepareChild } from './child.js';
+import { launchChild, prepareChild } from './child.js';
 
 const mockWriteBackup = vi.mocked(writeBackup);
 const mockReadBackup = vi.mocked(readBackup);
 const mockUnlink = vi.mocked(unlink);
+const mockSpawn = vi.mocked(spawn);
 
 const testProvider: Provider = {
   id: 'p1',
@@ -54,12 +61,17 @@ function makeAdapter(currentConfig: Record<string, unknown> | null = null): Agen
   } as unknown as AgentAdapter;
 }
 
+function makeFakeChildProcess(): EventEmitter & { kill: ReturnType<typeof vi.fn> } {
+  return Object.assign(new EventEmitter(), { kill: vi.fn(() => true) });
+}
+
 describe('prepareChild', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockWriteBackup.mockResolvedValue(undefined);
     mockReadBackup.mockResolvedValue(null);
     mockUnlink.mockResolvedValue(undefined);
+    mockSpawn.mockReset();
   });
 
   it('backs up current config before writing new one', async () => {
@@ -199,5 +211,60 @@ describe('prepareChild', () => {
     const { cleanup } = await prepareChild({ adapter, profile: testProfile, providers: [testProvider], scope: 'global', command: 'claude' });
 
     await expect(cleanup()).resolves.toBeUndefined();
+  });
+
+  it('launchChild spawns with the prepared ExecRequest and cleans up on exit', async () => {
+    const adapter = makeAdapter(null);
+    const child = makeFakeChildProcess();
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+
+    const launch = launchChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+      args: ['--verbose'],
+      cwd: '/project',
+    });
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
+    expect(mockSpawn).toHaveBeenCalledWith('claude', ['--verbose'], {
+      stdio: 'inherit',
+      cwd: '/project',
+      shell: false,
+      env: expect.objectContaining({
+        PATH: '/usr/local/bin:/usr/bin:/bin',
+      }) as Record<string, string>,
+    });
+
+    child.emit('exit', 7);
+
+    await expect(launch).resolves.toBe(7);
+    expect(mockReadBackup).toHaveBeenCalledWith('test-agent', 'global');
+  });
+
+  it('launchChild cleans up on spawn error and returns failure', async () => {
+    const adapter = makeAdapter(null);
+    const child = makeFakeChildProcess();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+
+    const launch = launchChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
+    child.emit('error', new Error('boom'));
+
+    await expect(launch).resolves.toBe(1);
+    expect(mockReadBackup).toHaveBeenCalledWith('test-agent', 'global');
+    expect(consoleError).toHaveBeenCalledWith('Failed to launch claude:', 'boom');
+
+    consoleError.mockRestore();
   });
 });

@@ -25,7 +25,7 @@ function firstBackupFile(manifest: BackupManifest): BackupManifestFile {
 
 /**
  * Restores the primary agent config file described by a backup manifest.
- * Multi-file manifests are intentionally left for the dedicated transaction work.
+ * Kept for single-file callers and legacy backup compatibility.
  */
 export async function restorePrimaryBackupFile(
   adapter: AgentAdapter,
@@ -43,4 +43,38 @@ export async function restorePrimaryBackupFile(
 
   const configPath = file.path || adapter.configPaths(restoreCwd)[scope];
   await removeIfExists(configPath);
+}
+
+/**
+ * Restores every file described by a backup manifest.
+ *
+ * Single-file manifests use the adapter's existing writeConfig pipeline.
+ * Multi-file manifests require an adapter file-level restore hook so each
+ * physical path can be restored or removed independently.
+ */
+export async function restoreBackupManifest(
+  adapter: AgentAdapter,
+  manifest: BackupManifest,
+  scope: LaunchScope,
+  cwd?: string,
+): Promise<void> {
+  if (manifest.files.length === 0) {
+    throw new Error(`Backup for ${manifest.agentId} (${manifest.scope}) has no files`);
+  }
+
+  const restoreCwd = cwd ?? manifest.cwd;
+  if (adapter.restoreConfigFile) {
+    for (const file of manifest.files) {
+      await adapter.restoreConfigFile(file, scope, restoreCwd);
+    }
+    return;
+  }
+
+  if (manifest.files.length > 1) {
+    throw new Error(
+      `Backup for ${manifest.agentId} (${manifest.scope}) contains multiple files, but ${adapter.id} does not support file-level restore`,
+    );
+  }
+
+  await restorePrimaryBackupFile(adapter, manifest, scope, restoreCwd);
 }

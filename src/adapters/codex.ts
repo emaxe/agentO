@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -6,6 +6,7 @@ import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
+import type { BackupManifestFile, WriteBackupFile } from '../config/store.js';
 
 const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
   fireworks: 'https://api.fireworks.ai/inference/v1',
@@ -22,8 +23,28 @@ function deriveEnvKey(providerKey: string): string {
   return `CODEX_${providerKey.toUpperCase().replace(/-/g, '_')}_API_KEY`;
 }
 
-/** Backup глобального конфига Codex при записи в project scope */
-let codexGlobalBackup: { hadConfig: boolean; config: AgentConfig } | null = null;
+function missingFile(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}
+
+async function removeIfExists(path: string): Promise<void> {
+  try {
+    await unlink(path);
+  } catch (error) {
+    if (!missingFile(error)) throw error;
+  }
+}
+
+async function readTomlFile(path: string): Promise<AgentConfig | null> {
+  if (!existsSync(path)) return null;
+  const raw = await readFile(path, 'utf-8');
+  return parseToml(raw) as AgentConfig;
+}
+
+async function writeTomlFile(path: string, config: AgentConfig): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, stringifyToml(config as Parameters<typeof stringifyToml>[0]), 'utf-8');
+}
 
 export class CodexAdapter implements AgentAdapter {
   readonly id = 'codex';
@@ -40,9 +61,24 @@ export class CodexAdapter implements AgentAdapter {
 
   async readConfig(scope: LaunchScope, cwd?: string): Promise<AgentConfig | null> {
     const path = this.configPaths(cwd)[scope];
-    if (!existsSync(path)) return null;
-    const raw = await readFile(path, 'utf-8');
-    return parseToml(raw) as AgentConfig;
+    return readTomlFile(path);
+  }
+
+  async snapshotConfigFiles(scope: LaunchScope, cwd?: string): Promise<WriteBackupFile[]> {
+    const paths = this.configPaths(cwd);
+    const filePaths = scope === 'project'
+      ? [paths.global, paths.project]
+      : [paths[scope]];
+
+    return Promise.all(filePaths.map(async (path) => {
+      const content = await readTomlFile(path);
+      return {
+        path,
+        format: 'toml' as const,
+        hadFile: content !== null,
+        content,
+      };
+    }));
   }
 
   buildConfig(profile: Profile, providers: Provider[]): AgentConfig {
@@ -91,70 +127,21 @@ export class CodexAdapter implements AgentAdapter {
   async writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string): Promise<void> {
     if (scope === 'project') {
       const paths = this.configPaths(cwd);
-      const hasModelProviders =
-        config.model_providers !== undefined &&
-        Object.keys(config.model_providers as Record<string, unknown>).length > 0;
+      const hasGlobalOwnedConfig = ['model_providers', 'default_profile', 'profiles']
+        .some((key) => config[key] !== undefined);
 
-      // 1. Управляем глобальным конфигом (model_providers всегда в global)
-      if (hasModelProviders) {
-        // Новый конфиг — backup глобального конфига перед патчем
-        const globalPath = paths.global;
-        if (codexGlobalBackup === null) {
-          if (existsSync(globalPath)) {
-            const raw = await readFile(globalPath, 'utf-8');
-            codexGlobalBackup = { hadConfig: true, config: parseToml(raw) as AgentConfig };
-          } else {
-            codexGlobalBackup = { hadConfig: false, config: {} };
-          }
+      if (hasGlobalOwnedConfig) {
+        const globalConfig = await readTomlFile(paths.global) ?? {};
+        if (config.model_providers !== undefined) {
+          globalConfig.model_providers = config.model_providers;
         }
-
-        let globalConfig: AgentConfig = {};
-        if (existsSync(globalPath)) {
-          const raw = await readFile(globalPath, 'utf-8');
-          globalConfig = parseToml(raw) as AgentConfig;
+        if (config.default_profile !== undefined) {
+          globalConfig.default_profile = config.default_profile;
         }
-        globalConfig.model_providers = config.model_providers;
-        globalConfig.default_profile = config.default_profile;
-        globalConfig.profiles = config.profiles;
-        await mkdir(dirname(globalPath), { recursive: true });
-        await writeFile(
-          globalPath,
-          stringifyToml(globalConfig as Parameters<typeof stringifyToml>[0]),
-          'utf-8',
-        );
-      } else if (codexGlobalBackup) {
-        // Restore — восстанавливаем глобальный конфиг
-        const globalPath = paths.global;
-        if (codexGlobalBackup.hadConfig) {
-          await mkdir(dirname(globalPath), { recursive: true });
-          await writeFile(
-            globalPath,
-            stringifyToml(codexGlobalBackup.config as Parameters<typeof stringifyToml>[0]),
-            'utf-8',
-          );
-        } else {
-          // Глобального конфига не было — убираем наши ключи из существующего
-          if (existsSync(globalPath)) {
-            const raw = await readFile(globalPath, 'utf-8');
-            const globalConfig = parseToml(raw) as AgentConfig;
-            delete globalConfig.model_providers;
-            delete globalConfig.default_profile;
-            delete globalConfig.profiles;
-            const remainingKeys = Object.keys(globalConfig);
-            if (remainingKeys.length === 0) {
-              // Файл пустой после удаления — удаляем его
-              const { unlink } = await import('node:fs/promises');
-              await unlink(globalPath);
-            } else {
-              await writeFile(
-                globalPath,
-                stringifyToml(globalConfig as Parameters<typeof stringifyToml>[0]),
-                'utf-8',
-              );
-            }
-          }
+        if (config.profiles !== undefined) {
+          globalConfig.profiles = config.profiles;
         }
-        codexGlobalBackup = null;
+        await writeTomlFile(paths.global, globalConfig);
       }
 
       // 2. Управляем project конфигом (model)
@@ -163,19 +150,22 @@ export class CodexAdapter implements AgentAdapter {
       if (config.model) {
         projectConfig.model = config.model;
       }
-      await mkdir(dirname(projectPath), { recursive: true });
-      await writeFile(
-        projectPath,
-        stringifyToml(projectConfig as Parameters<typeof stringifyToml>[0]),
-        'utf-8',
-      );
+      await writeTomlFile(projectPath, projectConfig);
     } else {
       // scope === 'global' — пишем всё в global config как раньше
       const path = this.configPaths(cwd)[scope];
-      const dir = dirname(path);
-      await mkdir(dir, { recursive: true });
-      await writeFile(path, stringifyToml(config as Parameters<typeof stringifyToml>[0]), 'utf-8');
+      await writeTomlFile(path, config);
     }
+  }
+
+  async restoreConfigFile(file: BackupManifestFile, scope: LaunchScope, cwd?: string): Promise<void> {
+    const path = file.path || this.configPaths(cwd)[scope];
+    if (file.hadFile) {
+      await writeTomlFile(path, file.content as AgentConfig);
+      return;
+    }
+
+    await removeIfExists(path);
   }
 }
 
