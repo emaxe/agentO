@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, unlink, rename } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -43,6 +43,21 @@ export interface WriteBackupOptions {
   createdAt?: string;
 }
 
+/**
+ * Writes JSON atomically: serializes to a temp file in the same directory,
+ * sets the given file mode, then renames into place. Cleans up temp on error.
+ */
+async function writeJsonAtomic(filePath: string, data: unknown, mode = 0o600): Promise<void> {
+  const tmp = `${filePath}.tmp-${randomUUID()}`;
+  try {
+    await writeFile(tmp, JSON.stringify(data, null, 2), { encoding: 'utf-8', mode });
+    await rename(tmp, filePath);
+  } catch (err) {
+    await unlink(tmp).catch(() => undefined);
+    throw err;
+  }
+}
+
 const LEGACY_BACKUP_CREATED_AT = new Date(0).toISOString();
 const BACKUP_FORMATS: BackupFileFormat[] = ['json', 'toml', 'yaml', 'raw', 'none'];
 
@@ -80,8 +95,8 @@ export async function readConfig(): Promise<AgentOConfig> {
 
 /** Записывает конфиг AgentO, создаёт директорию при необходимости. */
 export async function writeConfig(config: AgentOConfig): Promise<void> {
-  await mkdir(CONFIG_DIR, { recursive: true });
-  await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+  await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  await writeJsonAtomic(CONFIG_PATH, config);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -168,7 +183,7 @@ export async function writeBackup(
   };
 
   await mkdir(dir, { recursive: true });
-  await writeFile(backupPath, JSON.stringify(manifest, null, 2), 'utf-8');
+  await writeJsonAtomic(backupPath, manifest);
 }
 
 /** Читает бэкап конфига агента. Возвращает null если бэкап не существует. */
@@ -214,6 +229,6 @@ export async function readAgentStatusCache(): Promise<Record<string, boolean>> {
 
 /** Writes agent install statuses cache to disk. */
 export async function writeAgentStatusCache(statuses: Record<string, boolean>): Promise<void> {
-  await mkdir(CONFIG_DIR, { recursive: true });
-  await writeFile(AGENT_STATUS_PATH, JSON.stringify(statuses, null, 2), 'utf-8');
+  await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  await writeJsonAtomic(AGENT_STATUS_PATH, statuses);
 }

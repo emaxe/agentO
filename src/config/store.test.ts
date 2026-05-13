@@ -150,6 +150,60 @@ describe('config store', () => {
     })).rejects.toThrow('agento restore -a qwen -s project');
   });
 
+  it('writeConfig creates file with valid JSON content', async () => {
+    const { writeConfig } = await getStore();
+    const { readFile: fsReadFile } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const config = { providers: [], profiles: [], settings: { defaultLaunchMode: 'child', defaultConfigScope: 'global' } };
+    await writeConfig(config as Parameters<typeof writeConfig>[0]);
+    const content = JSON.parse(await fsReadFile(join(testDir, '.agento', 'config.json'), 'utf-8')) as unknown;
+    expect(content).toMatchObject({ providers: [], profiles: [] });
+  });
+
+  it('writeConfig twice overwrites without error', async () => {
+    const { readConfig, writeConfig } = await getStore();
+    const initial = await readConfig();
+    initial.settings.defaultLaunchMode = 'independent';
+    await writeConfig(initial);
+    initial.settings.defaultLaunchMode = 'child';
+    await writeConfig(initial);
+    const result = await readConfig();
+    expect(result.settings.defaultLaunchMode).toBe('child');
+  });
+
+  it('writeConfig cleans up temp file when rename fails', async () => {
+    // Skip on Windows: EISDIR behaviour differs
+    if (process.platform === 'win32') return;
+    const { mkdir: fsMkdir, readdir: fsReaddir } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const configDir = join(testDir, '.agento');
+    const configPath = join(configDir, 'config.json');
+
+    // Make CONFIG_PATH a directory → rename(tmp, dir) fails with EISDIR on POSIX
+    await fsMkdir(configPath, { recursive: true });
+
+    // Get a valid AgentOConfig without reading the (now-directory) config path
+    const { AgentOConfigSchema } = await import('./schema.js');
+    const config = AgentOConfigSchema.parse({});
+
+    const { writeConfig } = await getStore();
+    await expect(writeConfig(config)).rejects.toThrow();
+
+    // No temp files should remain in the config dir
+    const entries = await fsReaddir(configDir);
+    expect(entries.filter((e) => e.includes('.tmp-'))).toHaveLength(0);
+  });
+
+  it('writeConfig sets 0o600 file mode on POSIX', async () => {
+    if (process.platform === 'win32') return;
+    const { writeConfig, readConfig } = await getStore();
+    const config = await readConfig();
+    await writeConfig(config);
+    const configPath = join(testDir, '.agento', 'config.json');
+    const { stat: fsStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const info = await fsStat(configPath);
+    // eslint-disable-next-line no-bitwise
+    expect(info.mode & 0o777).toBe(0o600);
+  });
+
   it('migrates old string[] models to ModelConfig[] on read', async () => {
     const { readConfig } = await getStore();
     // Write a config with old string[] format manually
