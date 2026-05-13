@@ -29,16 +29,17 @@ export function Agents({ dev, onBack }: AgentsProps): React.JSX.Element {
 
   const loadStatuses = useCallback(() => {
     const adapters = listAdapters({ dev });
+    const cwd = process.cwd();
     const result: AgentStatus[] = [];
     for (const adapter of adapters) {
-      const paths = adapter.configPaths();
+      const paths = adapter.configPaths(cwd);
       for (const scope of SCOPES) {
         result.push({
           adapterId: adapter.id,
           displayName: adapter.displayName,
           scope,
           configPath: paths[scope],
-          modified: backupExists(adapter.id, scope),
+          modified: backupExists(adapter.id, scope, cwd),
         });
       }
     }
@@ -56,11 +57,12 @@ export function Agents({ dev, onBack }: AgentsProps): React.JSX.Element {
       if (!s) return;
       const adapter = listAdapters({ dev }).find((a) => a.id === s.adapterId);
       if (!adapter) return;
-      readBackup(s.adapterId, s.scope)
+      const restoreCwd = process.cwd();
+      readBackup(s.adapterId, s.scope, restoreCwd)
         .then(async (backup) => {
           if (!backup) { setStatus('No backup found'); return; }
-          await restorePrimaryBackupFile(adapter, backup, s.scope);
-          await deleteBackup(s.adapterId, s.scope);
+          await restorePrimaryBackupFile(adapter, backup, s.scope, restoreCwd);
+          await deleteBackup(s.adapterId, s.scope, restoreCwd);
         })
         .then(() => { setStatus(`Restored ${s.displayName} [${s.scope}]`); loadStatuses(); })
         .catch((err) => setStatus(`Error: ${String(err)}`));

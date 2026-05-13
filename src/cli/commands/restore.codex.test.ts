@@ -49,6 +49,7 @@ describe('restore command Codex multi-file backup', () => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(process, 'cwd').mockReturnValue(projectDir);
   });
 
   afterEach(async () => {

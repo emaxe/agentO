@@ -107,7 +107,7 @@ describe('Codex project launch transaction', () => {
     const { cleanup } = await prepareCodexProject();
 
     const { readBackup, backupExists } = await import('../config/store.js');
-    const backup = await readBackup('codex', 'project');
+    const backup = await readBackup('codex', 'project', projectDir);
     expect(backup?.files.map((file) => file.path)).toEqual([paths.global, paths.project]);
     expect(backup?.files.map((file) => file.hadFile)).toEqual([true, true]);
 
@@ -121,7 +121,7 @@ describe('Codex project launch transaction', () => {
 
     expect(await readToml(paths.global)).toEqual(originalGlobal);
     expect(await readToml(paths.project)).toEqual(originalProject);
-    expect(backupExists('codex', 'project')).toBe(false);
+    expect(backupExists('codex', 'project', projectDir)).toBe(false);
   });
 
   it('cleanup deletes both Codex files when neither existed before launch', async () => {
@@ -130,7 +130,7 @@ describe('Codex project launch transaction', () => {
     const { cleanup } = await prepareCodexProject();
 
     const { readBackup } = await import('../config/store.js');
-    const backup = await readBackup('codex', 'project');
+    const backup = await readBackup('codex', 'project', projectDir);
     expect(backup?.files.map((file) => file.hadFile)).toEqual([false, false]);
     expect(existsSync(paths.global)).toBe(true);
     expect(existsSync(paths.project)).toBe(true);
@@ -149,7 +149,7 @@ describe('Codex project launch transaction', () => {
     const { cleanup } = await prepareCodexProject();
 
     const { readBackup } = await import('../config/store.js');
-    const backup = await readBackup('codex', 'project');
+    const backup = await readBackup('codex', 'project', projectDir);
     expect(backup?.files.map((file) => file.hadFile)).toEqual([true, false]);
 
     await cleanup();
@@ -166,7 +166,7 @@ describe('Codex project launch transaction', () => {
     const { cleanup } = await prepareCodexProject();
 
     const { readBackup } = await import('../config/store.js');
-    const backup = await readBackup('codex', 'project');
+    const backup = await readBackup('codex', 'project', projectDir);
     expect(backup?.files.map((file) => file.hadFile)).toEqual([false, true]);
 
     await cleanup();

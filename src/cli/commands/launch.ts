@@ -92,6 +92,7 @@ export function createLaunchCommand(): Command {
           process.exit(1);
         }
 
+        const launchCwd = process.cwd();
         if (mode === 'child') {
           const exitCode = await launchChild({
             adapter,
@@ -100,6 +101,7 @@ export function createLaunchCommand(): Command {
             scope,
             command,
             args,
+            cwd: launchCwd,
           });
           process.exit(exitCode);
         } else {
@@ -110,6 +112,7 @@ export function createLaunchCommand(): Command {
             scope,
             command,
             args,
+            cwd: launchCwd,
           });
           spawnSync(execReq.command, execReq.args, { stdio: 'inherit', env: execReq.env });
           process.exit(0);

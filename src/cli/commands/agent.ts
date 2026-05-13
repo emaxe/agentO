@@ -35,9 +35,9 @@ export function createAgentCommand(): Command {
         for (const adapter of adapters) {
           const scopes: Array<'global' | 'project'> = ['global', 'project'];
           for (const scope of scopes) {
-            const paths = adapter.configPaths();
+            const paths = adapter.configPaths(process.cwd());
             const configPath = paths[scope];
-            const hasBackup = backupExists(adapter.id, scope);
+            const hasBackup = backupExists(adapter.id, scope, process.cwd());
             const status = hasBackup ? 'modified (backup exists)' : 'original';
             console.log(`  ${adapter.displayName} [${scope}]: ${status}`);
             console.log(`    config: ${configPath}`);

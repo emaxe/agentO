@@ -34,19 +34,20 @@ export function createRestoreCommand(): Command {
         }
         const scope = scopeResult.data;
 
-        if (!backupExists(opts.agent, scope)) {
+        const restoreCwd = process.cwd();
+        if (!backupExists(opts.agent, scope, restoreCwd)) {
           console.error(`Error: No backup found for ${opts.agent} (${scope})`);
           return process.exit(1);
         }
 
-        const backup = await readBackup(opts.agent, scope);
+        const backup = await readBackup(opts.agent, scope, restoreCwd);
         if (backup === null) {
           console.error(`Error: Backup is empty for ${opts.agent} (${scope})`);
           return process.exit(1);
         }
 
-        await restoreBackupManifest(agent.adapter, backup, scope);
-        await deleteBackup(opts.agent, scope);
+        await restoreBackupManifest(agent.adapter, backup, scope, restoreCwd);
+        await deleteBackup(opts.agent, scope, restoreCwd);
         console.log(`Restored ${opts.agent} config (${scope})`);
         return process.exit(0);
       } catch (err) {

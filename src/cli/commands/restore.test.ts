@@ -85,6 +85,7 @@ describe('restore command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(process, 'cwd').mockReturnValue('/test/cwd');
 
     mocks.backupExists.mockReturnValue(true);
     mocks.readBackup.mockResolvedValue({
@@ -122,9 +123,9 @@ describe('restore command', () => {
   it('restores a non-legacy agent through the registry', async () => {
     await runRestore(['-a', 'qwen', '-s', 'global']);
 
-    expect(mocks.backupExists).toHaveBeenCalledWith('qwen', 'global');
-    expect(adapter('qwen').writeConfig).toHaveBeenCalledWith({ restored: true }, 'global', undefined);
-    expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'global');
+    expect(mocks.backupExists).toHaveBeenCalledWith('qwen', 'global', '/test/cwd');
+    expect(adapter('qwen').writeConfig).toHaveBeenCalledWith({ restored: true }, 'global', '/test/cwd');
+    expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'global', '/test/cwd');
     expect(logSpy).toHaveBeenCalledWith('Restored qwen config (global)');
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
@@ -132,8 +133,8 @@ describe('restore command', () => {
   it('restores a dev agent without a restore-specific dev flag', async () => {
     await runRestore(['-a', 'codex', '-s', 'project']);
 
-    expect(adapter('codex').writeConfig).toHaveBeenCalledWith({ restored: true }, 'project', undefined);
-    expect(mocks.deleteBackup).toHaveBeenCalledWith('codex', 'project');
+    expect(adapter('codex').writeConfig).toHaveBeenCalledWith({ restored: true }, 'project', '/test/cwd');
+    expect(mocks.deleteBackup).toHaveBeenCalledWith('codex', 'project', '/test/cwd');
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
@@ -161,8 +162,8 @@ describe('restore command', () => {
   it('deletes backup after a successful writeConfig', async () => {
     await runRestore(['-a', 'opencode', '-s', 'project']);
 
-    expect(adapter('opencode').writeConfig).toHaveBeenCalledWith({ restored: true }, 'project', undefined);
-    expect(mocks.deleteBackup).toHaveBeenCalledWith('opencode', 'project');
+    expect(adapter('opencode').writeConfig).toHaveBeenCalledWith({ restored: true }, 'project', '/test/cwd');
+    expect(mocks.deleteBackup).toHaveBeenCalledWith('opencode', 'project', '/test/cwd');
     expect(adapter('opencode').writeConfig.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.deleteBackup.mock.invocationCallOrder[0]);
   });
@@ -199,7 +200,7 @@ describe('restore command', () => {
 
     expect(mocks.unlink).toHaveBeenCalledWith('/project/.qwen/settings.json');
     expect(adapter('qwen').writeConfig).not.toHaveBeenCalled();
-    expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'project');
+    expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'project', '/test/cwd');
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
@@ -220,8 +221,8 @@ describe('restore command', () => {
 
     await runRestore(['-a', 'qwen', '-s', 'global']);
 
-    expect(adapter('qwen').writeConfig).toHaveBeenCalledWith({ legacy: true }, 'global', undefined);
-    expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'global');
+    expect(adapter('qwen').writeConfig).toHaveBeenCalledWith({ legacy: true }, 'global', '/test/cwd');
+    expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'global', '/test/cwd');
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 });

@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
-import { readConfig, readAgentStatusCache, writeAgentStatusCache } from '../../config/store.js';
+import { readConfig, readAgentStatusCache, writeAgentStatusCache, readBackup, deleteBackup } from '../../config/store.js';
+import { restoreBackupManifest } from '../../config/backup-restore.js';
 import { listAgents } from '../../agents/registry.js';
 import { prepareChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
@@ -62,6 +63,7 @@ export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache
   const [statusChecking, setStatusChecking] = useState(false);
   const [checkProgress, setCheckProgress] = useState<Record<string, 'pending' | 'checking' | 'done'>>({});
   const [spinnerFrame, setSpinnerFrame] = useState(0);
+  const [errorChoice, setErrorChoice] = useState(0);
 
   useEffect(() => {
     readConfig()
@@ -158,7 +160,113 @@ export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache
     return () => clearInterval(id);
   }, [statusChecking]);
 
+  const doLaunch = useCallback(() => {
+    const agents = listAgents({ dev });
+    const profile = profiles[selectedProfile];
+    const compatibleAgents = profile
+      ? getCompatibleAgents(agents, profile, providers)
+      : agents;
+    const agentEntry = compatibleAgents[selectedAgent];
+
+    if (!profile || !agentEntry || !settings) {
+      setError('Invalid selection');
+      return;
+    }
+
+    if (installStatuses[agentEntry.id] === false) {
+      setInstallAgentId(agentEntry.id);
+      setStep('install');
+      return;
+    }
+
+    setStep('launching');
+    setError('');
+    setErrorChoice(0);
+    setStatus(`Launching ${agentEntry.label}...`);
+
+    const scope = settings.defaultConfigScope;
+    const mode = settings.defaultLaunchMode;
+
+    const launchOptions = {
+      adapter: agentEntry.adapter,
+      profile,
+      providers,
+      scope,
+      command: agentEntry.command,
+      args: agentEntry.args,
+      cwd: process.cwd(),
+    };
+
+    if (mode === 'child') {
+      prepareChild(launchOptions)
+        .then(({ execReq, cleanup }) => {
+          onExec?.({ ...execReq, relaunch: true, cleanup });
+        })
+        .catch((err) => setError(String(err)));
+    } else {
+      launchIndependent(launchOptions)
+        .then((execReq) => {
+          onExec?.(execReq);
+        })
+        .catch((err) => setError(String(err)));
+    }
+  }, [dev, profiles, providers, selectedProfile, selectedAgent, settings, installStatuses, onExec]);
+
   useKeyInput((input, key) => {
+    if (step === 'launching' && error) {
+      if (key.escape || input === 'q' || input === 'b') {
+        setError('');
+        setStep('agent');
+        setErrorChoice(0);
+        return;
+      }
+      if (key.upArrow) {
+        setErrorChoice((c) => Math.max(0, c - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setErrorChoice((c) => Math.min(1, c + 1));
+        return;
+      }
+      if (key.return) {
+        if (errorChoice === 0) {
+          // Overwrite: restore existing backup then retry
+          const agents = listAgents({ dev });
+          const profile = profiles[selectedProfile];
+          const compatibleAgents = profile
+            ? getCompatibleAgents(agents, profile, providers)
+            : agents;
+          const agentEntry = compatibleAgents[selectedAgent];
+          if (!agentEntry || !settings) {
+            setError('Invalid selection');
+            return;
+          }
+          const scope = settings.defaultConfigScope;
+          const restoreCwd = process.cwd();
+          setStatus('Restoring backup...');
+          setError('');
+          readBackup(agentEntry.adapter.id, scope, restoreCwd)
+            .then((backup) => {
+              if (backup !== null) {
+                return restoreBackupManifest(agentEntry.adapter, backup, scope, restoreCwd).then(() =>
+                  deleteBackup(agentEntry.adapter.id, scope, restoreCwd),
+                );
+              }
+            })
+            .then(() => {
+              doLaunch();
+            })
+            .catch((err) => setError(String(err)));
+        } else {
+          setError('');
+          setStep('agent');
+          setErrorChoice(0);
+        }
+        return;
+      }
+      return;
+    }
+
     if (step === 'launching' && !error) return;
     if (step === 'install') return;
     if (step === 'agent' && statusChecking) return;
@@ -194,47 +302,7 @@ export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache
       }
 
       if (step === 'agent') {
-        const agentEntry = compatibleAgents[selectedAgent];
-
-        if (!profile || !agentEntry || !settings) {
-          setError('Invalid selection');
-          return;
-        }
-
-        if (installStatuses[agentEntry.id] === false) {
-          setInstallAgentId(agentEntry.id);
-          setStep('install');
-          return;
-        }
-
-        setStep('launching');
-        setStatus(`Launching ${agentEntry.label}...`);
-
-        const scope = settings.defaultConfigScope;
-        const mode = settings.defaultLaunchMode;
-
-        const launchOptions = {
-          adapter: agentEntry.adapter,
-          profile,
-          providers,
-          scope,
-          command: agentEntry.command,
-          args: agentEntry.args,
-        };
-
-        if (mode === 'child') {
-          prepareChild(launchOptions)
-            .then(({ execReq, cleanup }) => {
-              onExec?.({ ...execReq, relaunch: true, cleanup });
-            })
-            .catch((err) => setError(String(err)));
-        } else {
-          launchIndependent(launchOptions)
-            .then((execReq) => {
-              onExec?.(execReq);
-            })
-            .catch((err) => setError(String(err)));
-        }
+        doLaunch();
       } else {
         setSelectedAgent(0);
         setStep('agent');
@@ -243,10 +311,27 @@ export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache
   });
 
   if (error) {
+    const isLaunchError = step === 'launching';
+    const choices = isLaunchError
+      ? ['Overwrite and launch', 'Back']
+      : [];
     return (
       <Box flexDirection="column" padding={1}>
         <Text color="red">Error: {error}</Text>
-        <Text dimColor>Press Esc to go back</Text>
+        {isLaunchError && (
+          <Box flexDirection="column" marginTop={1}>
+            {choices.map((c, i) => (
+              <Text key={i} color={i === errorChoice ? 'green' : undefined}>
+                {i === errorChoice ? '▶ ' : '  '}
+                {c}
+              </Text>
+            ))}
+            <Box marginTop={1}>
+              <Text dimColor>↑↓ navigate, Enter select, Esc back</Text>
+            </Box>
+          </Box>
+        )}
+        {!isLaunchError && <Text dimColor>Press Esc to go back</Text>}
       </Box>
     );
   }

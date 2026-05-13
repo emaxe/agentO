@@ -11,6 +11,27 @@ const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
 const BACKUPS_DIR = join(CONFIG_DIR, 'backups');
 const AGENT_STATUS_PATH = join(CONFIG_DIR, 'agent-status.json');
 
+function escapePathSegment(segment: string): string {
+  return segment.replace(/[<>:"|?*]/g, '_');
+}
+
+function encodeCwdForBackup(cwd: string): string[] {
+  const normalized = cwd.replace(/\\/g, '/');
+  const withoutLeading = normalized.replace(/^\/+/u, '');
+  return withoutLeading.split('/').filter(Boolean).map(escapePathSegment);
+}
+
+function getBackupDir(agentId: string, scope: LaunchScope, cwd?: string): string {
+  if (scope === 'global' || !cwd) {
+    return join(BACKUPS_DIR, agentId);
+  }
+  return join(BACKUPS_DIR, agentId, scope, ...encodeCwdForBackup(cwd));
+}
+
+function getLegacyBackupPath(agentId: string, scope: LaunchScope): string {
+  return join(BACKUPS_DIR, agentId, `${scope}.bak.json`);
+}
+
 export type BackupFileFormat = 'json' | 'toml' | 'yaml' | 'raw' | 'none';
 
 export interface BackupManifestFile {
@@ -145,9 +166,16 @@ export async function writeBackup(
   scope: LaunchScope,
   options: WriteBackupOptions,
 ): Promise<void> {
-  const dir = join(BACKUPS_DIR, agentId);
+  const dir = getBackupDir(agentId, scope, options.cwd);
   const backupPath = join(dir, `${scope}.bak.json`);
   if (existsSync(backupPath)) {
+    throw new Error(
+      `Active backup already exists for ${agentId} (${scope}). Run "agento restore -a ${agentId} -s ${scope}" before launching again.`,
+    );
+  }
+
+  // Backward-compatibility: block if a legacy backup also exists for project scope
+  if (scope === 'project' && options.cwd && existsSync(getLegacyBackupPath(agentId, scope))) {
     throw new Error(
       `Active backup already exists for ${agentId} (${scope}). Run "agento restore -a ${agentId} -s ${scope}" before launching again.`,
     );
@@ -176,30 +204,55 @@ export async function writeBackup(
 export async function readBackup(
   agentId: string,
   scope: LaunchScope,
+  cwd?: string,
 ): Promise<BackupManifest | null> {
-  const backupPath = join(BACKUPS_DIR, agentId, `${scope}.bak.json`);
-  if (!existsSync(backupPath)) {
-    return null;
+  const backupPath = join(getBackupDir(agentId, scope, cwd), `${scope}.bak.json`);
+  if (existsSync(backupPath)) {
+    const raw = await readFile(backupPath, 'utf-8');
+    return normalizeBackupManifest(JSON.parse(raw) as unknown, agentId, scope);
   }
-  const raw = await readFile(backupPath, 'utf-8');
-  return normalizeBackupManifest(JSON.parse(raw) as unknown, agentId, scope);
+
+  // Backward-compatibility: fallback to legacy path for project scope
+  if (scope === 'project' && cwd) {
+    const legacyPath = getLegacyBackupPath(agentId, scope);
+    if (existsSync(legacyPath)) {
+      const raw = await readFile(legacyPath, 'utf-8');
+      return normalizeBackupManifest(JSON.parse(raw) as unknown, agentId, scope);
+    }
+  }
+
+  return null;
 }
 
 /** Проверяет существование бэкапа. */
-export function backupExists(agentId: string, scope: string): boolean {
-  const backupPath = join(BACKUPS_DIR, agentId, `${scope}.bak.json`);
-  return existsSync(backupPath);
+export function backupExists(agentId: string, scope: string, cwd?: string): boolean {
+  const backupPath = join(getBackupDir(agentId, scope as LaunchScope, cwd), `${scope}.bak.json`);
+  if (existsSync(backupPath)) {
+    return true;
+  }
+
+  // Backward-compatibility: fallback to legacy path for project scope
+  if (scope === 'project' && cwd) {
+    return existsSync(getLegacyBackupPath(agentId, scope as LaunchScope));
+  }
+
+  return false;
 }
 
 /** Удаляет бэкап конфига агента. Не бросает ошибку если файл не существует. */
-export async function deleteBackup(agentId: string, scope: string): Promise<void> {
-  const backupPath = join(BACKUPS_DIR, agentId, `${scope}.bak.json`);
+export async function deleteBackup(agentId: string, scope: string, cwd?: string): Promise<void> {
+  const backupPath = join(getBackupDir(agentId, scope as LaunchScope, cwd), `${scope}.bak.json`);
   try { await unlink(backupPath); } catch { /* file might not exist */ }
+
+  // Backward-compatibility: also try legacy path for project scope
+  if (scope === 'project' && cwd) {
+    try { await unlink(getLegacyBackupPath(agentId, scope as LaunchScope)); } catch { /* file might not exist */ }
+  }
 }
 
 /** Возвращает путь к бэкапу. */
-export function getBackupPath(agentId: string, scope: string): string {
-  return join(BACKUPS_DIR, agentId, `${scope}.bak.json`);
+export function getBackupPath(agentId: string, scope: string, cwd?: string): string {
+  return join(getBackupDir(agentId, scope as LaunchScope, cwd), `${scope}.bak.json`);
 }
 
 /** Reads cached agent install statuses from disk. */
