@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 let testDir = '';
 
@@ -46,12 +46,44 @@ describe('config store', () => {
     expect(read.settings.defaultLaunchMode).toBe('independent');
   });
 
-  it('writeBackup then readBackup returns backup', async () => {
-    const { writeBackup, readBackup } = await getStore();
+  it('writeBackup writes and readBackup returns a v2 manifest', async () => {
+    const { writeBackup, readBackup, getBackupPath } = await getStore();
     const content = { apiKey: 'test-key', model: 'test-model' };
-    await writeBackup('claude-code', 'global', content);
+    await writeBackup('claude-code', 'global', {
+      cwd: '/tmp/project',
+      sessionId: 'session-1',
+      createdAt: '2026-05-13T00:00:00.000Z',
+      files: [{
+        path: '/home/user/.claude/settings.json',
+        format: 'json',
+        hadFile: true,
+        content,
+      }],
+    });
+
     const result = await readBackup('claude-code', 'global');
-    expect(result).toEqual(content);
+    expect(result).toEqual({
+      version: 2,
+      sessionId: 'session-1',
+      agentId: 'claude-code',
+      scope: 'global',
+      cwd: '/tmp/project',
+      createdAt: '2026-05-13T00:00:00.000Z',
+      files: [{
+        path: '/home/user/.claude/settings.json',
+        format: 'json',
+        hadFile: true,
+        content,
+      }],
+    });
+
+    const { readFile } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const raw = JSON.parse(await readFile(getBackupPath('claude-code', 'global'), 'utf-8')) as Record<string, unknown>;
+    expect(raw.version).toBe(2);
+    expect(raw.sessionId).toBe('session-1');
+    expect(raw.createdAt).toBe('2026-05-13T00:00:00.000Z');
+    expect(raw.agentId).toBe('claude-code');
+    expect(raw.scope).toBe('global');
   });
 
   it('readBackup returns null when no backup exists', async () => {
@@ -63,13 +95,17 @@ describe('config store', () => {
   it('backupExists returns false when no backup, true after writeBackup', async () => {
     const { backupExists, writeBackup } = await getStore();
     expect(backupExists('opencode', 'project')).toBe(false);
-    await writeBackup('opencode', 'project', { test: true });
+    await writeBackup('opencode', 'project', {
+      files: [{ path: '/project/opencode.json', hadFile: true, content: { test: true } }],
+    });
     expect(backupExists('opencode', 'project')).toBe(true);
   });
 
   it('deleteBackup removes backup file so backupExists returns false', async () => {
     const { writeBackup, deleteBackup, backupExists } = await getStore();
-    await writeBackup('claude-code', 'global', { test: true });
+    await writeBackup('claude-code', 'global', {
+      files: [{ path: '/home/user/.claude/settings.json', hadFile: true, content: { test: true } }],
+    });
     expect(backupExists('claude-code', 'global')).toBe(true);
     await deleteBackup('claude-code', 'global');
     expect(backupExists('claude-code', 'global')).toBe(false);
@@ -78,6 +114,40 @@ describe('config store', () => {
   it('deleteBackup does not throw when backup does not exist', async () => {
     const { deleteBackup } = await getStore();
     await expect(deleteBackup('claude-code', 'global')).resolves.toBeUndefined();
+  });
+
+  it('readBackup normalizes legacy raw backups to v2-like manifests', async () => {
+    const { readBackup, getBackupPath } = await getStore();
+    const { writeFile, mkdir } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const backupPath = getBackupPath('qwen', 'global');
+    await mkdir(dirname(backupPath), { recursive: true });
+    await writeFile(backupPath, JSON.stringify({ legacy: true }), 'utf-8');
+
+    const result = await readBackup('qwen', 'global');
+
+    expect(result).toMatchObject({
+      version: 2,
+      sessionId: 'legacy',
+      agentId: 'qwen',
+      scope: 'global',
+      files: [{
+        path: '',
+        format: 'json',
+        hadFile: true,
+        content: { legacy: true },
+      }],
+    });
+  });
+
+  it('writeBackup does not overwrite an existing active backup', async () => {
+    const { writeBackup } = await getStore();
+    await writeBackup('qwen', 'project', {
+      files: [{ path: '/project/.qwen/settings.json', hadFile: true, content: { original: true } }],
+    });
+
+    await expect(writeBackup('qwen', 'project', {
+      files: [{ path: '/project/.qwen/settings.json', hadFile: true, content: { overwritten: true } }],
+    })).rejects.toThrow('agento restore -a qwen -s project');
   });
 
   it('migrates old string[] models to ModelConfig[] on read', async () => {

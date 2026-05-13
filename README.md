@@ -423,11 +423,13 @@ Each supported agent has a dedicated adapter that translates AgentO's generic co
 
 ### Backup & Restore
 
-Before modifying any agent configuration, AgentO creates a backup at `~/.agento/backups/<agent>/<scope>.bak.*`.
+Before modifying any agent configuration, AgentO creates a v2 manifest backup at `~/.agento/backups/<agent>/<scope>.bak.json`.
+
+If an active backup already exists for the same agent/scope, launch is blocked until you run `agento restore -a <agent> -s <scope>`. This prevents repeated Independent launches from overwriting the original backup.
 
 In **Child Mode**, the original config is automatically restored when the agent exits or receives SIGTERM/SIGINT.
 
-In **Independent Mode**, the config remains modified. Restore manually with `agento restore`.
+In **Independent Mode**, the config remains modified. Restore manually with `agento restore`. If the agent config file did not exist before launch, restore removes the generated file instead of writing an empty config.
 
 ## Development
 

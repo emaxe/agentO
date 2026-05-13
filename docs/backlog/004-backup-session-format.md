@@ -2,7 +2,7 @@
 
 ## Статус
 
-Backlog
+Done
 
 ## Приоритет
 
@@ -61,6 +61,14 @@ interface BackupManifest {
 - `agent status` показывает наличие активного backup корректно.
 - Tests покрывают legacy backup и v2 backup.
 
+## Реализация
+
+- Backup хранится как v2 manifest в существующем active path `~/.agento/backups/<agent>/<scope>.bak.json`.
+- Manifest содержит `sessionId`, `createdAt`, `agentId`, `scope`, optional `cwd` и `files[]` с `path`, `format`, `hadFile`, `content`.
+- Existing active backup не перезаписывается: `writeBackup` бросает ошибку с инструкцией выполнить `agento restore -a <agent> -s <scope>`.
+- Legacy raw backup читается и нормализуется в v2-like manifest с одним файлом и `hadFile: true`.
+- Restore/cleanup использует `hadFile`: при `true` восстанавливает через `adapter.writeConfig`, при `false` удаляет config path.
+
 ## Проверки
 
 ```bash
@@ -74,4 +82,3 @@ npm run build
 
 - Нужно аккуратно мигрировать старые backups, чтобы не сломать пользователей.
 - Нужно определить политику concurrent launches: запрещать, создавать nested backups или требовать manual restore.
-

@@ -10,10 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Added a unified agent registry for CLI launch/status, TUI launch/status and install wizard metadata, keeping agent order, `--dev` filtering, commands, default args and installers in one source of truth.
+- Backups now use a v2 manifest with `sessionId`, `createdAt`, `cwd`, touched file metadata and `hadFile` state instead of storing only the raw config object.
 
 ### Fixed
 
 - CLI `--dev` handling now works consistently for subcommands even when Commander stores the duplicated flag on the root command.
+- `agento restore` now uses the unified agent registry, supports all registered agents including `qwen`, `codex`, `copilot`, and `goose`, validates scope through `LaunchScopeSchema`, and deletes the backup after a successful restore.
+- Launch no longer silently overwrites an active backup for the same agent/scope; restore now removes generated config files when the original file did not exist.
 
 ### Planned
 

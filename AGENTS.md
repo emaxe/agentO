@@ -223,25 +223,29 @@ agento profile remove <name>
 ```bash
 agento agent status           # Статус конфигов агентов
 agento agent status --dev     # Показать статус включая development agents
-agento restore -a <agent> -s <scope>  # Восстановить конфиг из бэкапа
+agento restore -a <agent> -s <scope>  # Восстановить конфиг любого registry-агента из бэкапа
 ```
 
 ## Режимы запуска
 
 ### Child Mode (default)
 
-1. Backup текущего конфига агента → `~/.agento/backups/<agent>/<scope>.bak.json`
+1. Backup текущего конфига агента → v2 manifest `~/.agento/backups/<agent>/<scope>.bak.json` (`hadFile`, `cwd`, files metadata)
 2. Записать новый конфиг (сгенерированный из профиля)
 3. Запустить агента как child process
-4. После завершения: восстановить оригинальный конфиг
+4. После завершения: восстановить оригинальный конфиг или удалить файл, если до launch его не было
 5. SIGTERM/SIGINT: пробрасываются дочернему процессу, затем cleanup
+
+Если active backup для этого agent/scope уже существует, запуск останавливается до записи нового конфига. Сначала нужно выполнить `agento restore -a <agent> -s <scope>`.
 
 ### Independent Mode
 
-1. Backup текущего конфига
+1. Backup текущего конфига в v2 manifest
 2. Записать новый конфиг
 3. Вернуть `ExecRequest` для запуска внешним процессом
 4. Восстановление конфига — ответственность пользователя (или через `agento restore`)
+
+Повторный independent launch с тем же agent/scope не перезаписывает active backup; пользователь должен восстановить предыдущий backup перед новым launch.
 
 ## TUI (Terminal UI)
 
@@ -272,7 +276,9 @@ npm run test:watch  # Watch mode
 | `src/adapters/*.test.ts` | Генерацию конфигов для каждого агента |
 | `src/config/store.test.ts` | Чтение/запись `~/.agento/config.json` и бэкапов |
 | `src/launcher/child.test.ts` | Child launch flow (backup/restore) |
+| `src/launcher/independent.test.ts` | Independent launch backup flow |
 | `src/agents/registry.test.ts` | Единый registry агентов, порядок, `dev`-фильтр, default args |
+| `src/cli/commands/restore.test.ts` | CLI restore через registry, валидация scope, удаление backup |
 | `src/launcher/shell-path-resolver.test.ts` | Резолвинг PATH |
 | `src/profiles/profile-manager.test.ts` | CRUD профилей |
 | `src/providers/provider-manager.test.ts` | CRUD провайдеров |
@@ -323,9 +329,14 @@ npm run format     # Prettier
 
 ### Backup / Restore
 
-- Перед любым изменением конфига агента делается бэкап в `~/.agento/backups/`
-- Child mode гарантирует восстановление при любом исходе (exit, SIGTERM, SIGINT)
+- Перед любым изменением конфига агента делается active backup в `~/.agento/backups/<agent>/<scope>.bak.json`
+- Backup-файл хранится как v2 manifest: `version`, `sessionId`, `agentId`, `scope`, optional `cwd`, `createdAt`, `files[]` с `path`, `format`, `hadFile`, `content`
+- `writeBackup` не перезаписывает существующий active backup для того же `agentId/scope`; новый launch должен упасть до `adapter.writeConfig` с инструкцией выполнить `agento restore -a <agent> -s <scope>`
+- `readBackup` поддерживает legacy raw backup-файлы и нормализует их в v2-like manifest с одним файлом и `hadFile: true`
+- Restore/cleanup использует `hadFile`: при `true` вызывает `adapter.writeConfig(content, scope, cwd?)`, при `false` удаляет config path вместо записи `{}`
+- Child mode гарантирует восстановление при любом исходе (exit, SIGTERM, SIGINT) и удаляет backup после успешного cleanup
 - Independent mode оставляет конфиг изменённым — восстановление через `agento restore`
+- CLI restore использует `src/agents/registry.ts` с `{ dev: true }`, поэтому поддерживает все зарегистрированные агенты (`claude-code`, `opencode`, `qwen`, `codex`, `copilot`, `goose`) без отдельного `--dev` флага и удаляет backup после успешного restore
 
 ### Конфиг Scope
 

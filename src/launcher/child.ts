@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
-import { unlink } from 'node:fs/promises';
 import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
 import type { Profile, Provider } from '../config/schema.js';
-import { writeBackup, readBackup, deleteBackup } from '../config/store.js';
+import { restorePrimaryBackupFile } from '../config/backup-restore.js';
+import { writeBackup, readBackup, deleteBackup, inferBackupFileFormat } from '../config/store.js';
 import type { ExecRequest } from './independent.js';
 import { shellPathResolver } from './shell-path-resolver.js';
 
@@ -21,6 +21,34 @@ export interface ChildPrepareResult {
   cleanup: () => Promise<void>;
 }
 
+async function backupCurrentConfig(
+  adapter: AgentAdapter,
+  scope: LaunchScope,
+  cwd?: string,
+): Promise<void> {
+  const currentConfig = await adapter.readConfig(scope, cwd);
+  const configPath = adapter.configPaths(cwd)[scope];
+  await writeBackup(adapter.id, scope, {
+    cwd,
+    files: [{
+      path: configPath,
+      format: inferBackupFileFormat(configPath),
+      hadFile: currentConfig !== null,
+      content: currentConfig,
+    }],
+  });
+}
+
+function createCleanup(adapter: AgentAdapter, scope: LaunchScope, cwd?: string): () => Promise<void> {
+  return async (): Promise<void> => {
+    const backup = await readBackup(adapter.id, scope);
+    if (backup !== null) {
+      await restorePrimaryBackupFile(adapter, backup, scope, cwd);
+    }
+    await deleteBackup(adapter.id, scope);
+  };
+}
+
 /**
  * Готовит конфиг для запуска агента из TUI (child mode).
  * Делает backup и записывает новый конфиг, но не запускает процесс.
@@ -30,9 +58,7 @@ export async function prepareChild(options: ChildLaunchOptions): Promise<ChildPr
   const { adapter, profile, providers, scope, command, args = [], cwd } = options;
 
   // 1. Backup текущего конфига агента
-  const currentConfig = await adapter.readConfig(scope, cwd);
-  const hadConfig = currentConfig !== null;
-  await writeBackup(adapter.id, scope, currentConfig ?? {});
+  await backupCurrentConfig(adapter, scope, cwd);
 
   // 2. Генерируем и записываем новый конфиг
   const newConfig = adapter.buildConfig(profile, providers);
@@ -48,18 +74,7 @@ export async function prepareChild(options: ChildLaunchOptions): Promise<ChildPr
   const adapterEnv = adapter.buildEnv?.(profile, providers) ?? {};
 
   // 4. Cleanup-функция: восстанавливает оригинальный конфиг или удаляет файл
-  const cleanup = async (): Promise<void> => {
-    if (!hadConfig) {
-      const configPath = adapter.configPaths(cwd)[scope];
-      try { await unlink(configPath); } catch { /* file might not exist */ }
-    } else {
-      const backup = await readBackup(adapter.id, scope);
-      if (backup !== null) {
-        await adapter.writeConfig(backup as Record<string, unknown>, scope, cwd);
-      }
-    }
-    await deleteBackup(adapter.id, scope);
-  };
+  const cleanup = createCleanup(adapter, scope, cwd);
 
   return {
     execReq: { command, args, env: { ...cleanEnv, PATH: resolvedPath, ...adapterEnv }, agentId: adapter.id, profileId: profile.id },
@@ -77,27 +92,14 @@ export async function launchChild(options: ChildLaunchOptions): Promise<number> 
   const { adapter, profile, providers, scope, command, args = [], cwd } = options;
 
   // 1. Backup текущего конфига агента
-  const currentConfig = await adapter.readConfig(scope, cwd);
-  const hadConfig = currentConfig !== null;
-  await writeBackup(adapter.id, scope, currentConfig ?? {});
+  await backupCurrentConfig(adapter, scope, cwd);
 
   // 2. Генерируем и записываем новый конфиг
   const newConfig = adapter.buildConfig(profile, providers);
   await adapter.writeConfig(newConfig, scope, cwd);
 
   // 3. Cleanup-функция: восстанавливает оригинальный конфиг или удаляет файл
-  const cleanup = async (): Promise<void> => {
-    if (!hadConfig) {
-      const configPath = adapter.configPaths(cwd)[scope];
-      try { await unlink(configPath); } catch { /* file might not exist */ }
-    } else {
-      const backup = await readBackup(adapter.id, scope);
-      if (backup !== null) {
-        await adapter.writeConfig(backup as Record<string, unknown>, scope, cwd);
-      }
-    }
-    await deleteBackup(adapter.id, scope);
-  };
+  const cleanup = createCleanup(adapter, scope, cwd);
 
   // 4. Запускаем дочерний процесс
   const cleanEnv = Object.fromEntries(

@@ -2,7 +2,7 @@
 
 ## Статус
 
-Backlog
+Done
 
 ## Приоритет
 
@@ -59,6 +59,5 @@ node dist/bin/agento.js agent status --dev
 
 ## Риски
 
-- Для env-only адаптеров `copilot` и `goose` `writeConfig` no-op. Нужно решить, должен ли restore для них удалять backup и сообщать "nothing to restore" или проходить как no-op.
+- Для env-only адаптеров `copilot` и `goose` `writeConfig` no-op. В этой задаче restore проходит через adapter path и удаляет backup после успешного no-op `writeConfig`.
 - Для Codex project scope текущий adapter пишет в global и project, поэтому нужна связка с задачей 006.
-

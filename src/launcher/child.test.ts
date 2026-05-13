@@ -7,6 +7,7 @@ vi.mock('../config/store.js', () => ({
   writeBackup: vi.fn(),
   readBackup: vi.fn(),
   deleteBackup: vi.fn().mockResolvedValue(undefined),
+  inferBackupFileFormat: vi.fn((path: string) => path.endsWith('.toml') ? 'toml' : 'json'),
 }));
 
 vi.mock('./shell-path-resolver.js', () => ({
@@ -56,6 +57,9 @@ function makeAdapter(currentConfig: Record<string, unknown> | null = null): Agen
 describe('prepareChild', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockWriteBackup.mockResolvedValue(undefined);
+    mockReadBackup.mockResolvedValue(null);
+    mockUnlink.mockResolvedValue(undefined);
   });
 
   it('backs up current config before writing new one', async () => {
@@ -64,16 +68,47 @@ describe('prepareChild', () => {
 
     await prepareChild({ adapter, profile: testProfile, providers: [testProvider], scope: 'global', command: 'claude' });
 
-    expect(mockWriteBackup).toHaveBeenCalledWith('test-agent', 'global', existingConfig);
+    expect(mockWriteBackup).toHaveBeenCalledWith('test-agent', 'global', {
+      cwd: undefined,
+      files: [{
+        path: '/home/user/.config/test.json',
+        format: 'json',
+        hadFile: true,
+        content: existingConfig,
+      }],
+    });
     expect(adapter.writeConfig).toHaveBeenCalledTimes(1);
   });
 
-  it('writes empty object as backup when no config exists', async () => {
+  it('records hadFile=false when no config exists', async () => {
     const adapter = makeAdapter(null);
 
     await prepareChild({ adapter, profile: testProfile, providers: [testProvider], scope: 'global', command: 'claude' });
 
-    expect(mockWriteBackup).toHaveBeenCalledWith('test-agent', 'global', {});
+    expect(mockWriteBackup).toHaveBeenCalledWith('test-agent', 'global', {
+      cwd: undefined,
+      files: [{
+        path: '/home/user/.config/test.json',
+        format: 'json',
+        hadFile: false,
+        content: null,
+      }],
+    });
+  });
+
+  it('does not write new config when active backup already exists', async () => {
+    const adapter = makeAdapter({ original: true });
+    mockWriteBackup.mockRejectedValue(new Error('Active backup already exists for test-agent (global)'));
+
+    await expect(prepareChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+    })).rejects.toThrow('Active backup already exists');
+
+    expect(adapter.writeConfig).not.toHaveBeenCalled();
   });
 
   it('returns ExecRequest with resolved PATH and correct command', async () => {
@@ -96,7 +131,19 @@ describe('prepareChild', () => {
   it('cleanup restores original config when it existed', async () => {
     const existingConfig = { mcpServers: { myServer: {} } };
     const adapter = makeAdapter(existingConfig);
-    mockReadBackup.mockResolvedValue(existingConfig);
+    mockReadBackup.mockResolvedValue({
+      version: 2,
+      sessionId: 'session-1',
+      agentId: 'test-agent',
+      scope: 'global',
+      createdAt: '2026-05-13T00:00:00.000Z',
+      files: [{
+        path: '/home/user/.config/test.json',
+        format: 'json',
+        hadFile: true,
+        content: existingConfig,
+      }],
+    });
 
     const { cleanup } = await prepareChild({ adapter, profile: testProfile, providers: [testProvider], scope: 'global', command: 'claude' });
     await cleanup();
@@ -107,6 +154,19 @@ describe('prepareChild', () => {
 
   it('cleanup deletes config file when no original config existed', async () => {
     const adapter = makeAdapter(null);
+    mockReadBackup.mockResolvedValue({
+      version: 2,
+      sessionId: 'session-1',
+      agentId: 'test-agent',
+      scope: 'global',
+      createdAt: '2026-05-13T00:00:00.000Z',
+      files: [{
+        path: '/home/user/.config/test.json',
+        format: 'json',
+        hadFile: false,
+        content: null,
+      }],
+    });
 
     const { cleanup } = await prepareChild({ adapter, profile: testProfile, providers: [testProvider], scope: 'global', command: 'claude' });
     const callsBefore = vi.mocked(adapter.writeConfig).mock.calls.length;
@@ -119,7 +179,22 @@ describe('prepareChild', () => {
 
   it('cleanup tolerates unlink failure when config file was already removed', async () => {
     const adapter = makeAdapter(null);
-    mockUnlink.mockRejectedValue(new Error('ENOENT'));
+    const error = new Error('missing') as NodeJS.ErrnoException;
+    error.code = 'ENOENT';
+    mockUnlink.mockRejectedValue(error);
+    mockReadBackup.mockResolvedValue({
+      version: 2,
+      sessionId: 'session-1',
+      agentId: 'test-agent',
+      scope: 'global',
+      createdAt: '2026-05-13T00:00:00.000Z',
+      files: [{
+        path: '/home/user/.config/test.json',
+        format: 'json',
+        hadFile: false,
+        content: null,
+      }],
+    });
 
     const { cleanup } = await prepareChild({ adapter, profile: testProfile, providers: [testProvider], scope: 'global', command: 'claude' });
 

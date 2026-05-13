@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
 import { backupExists, readBackup, deleteBackup } from '../../config/store.js';
+import { restorePrimaryBackupFile } from '../../config/backup-restore.js';
 import { listAdapters } from '../../agents/registry.js';
 
 const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
@@ -58,7 +59,7 @@ export function Agents({ dev, onBack }: AgentsProps): React.JSX.Element {
       readBackup(s.adapterId, s.scope)
         .then(async (backup) => {
           if (!backup) { setStatus('No backup found'); return; }
-          await adapter.writeConfig(backup as Record<string, unknown>, s.scope);
+          await restorePrimaryBackupFile(adapter, backup, s.scope);
           await deleteBackup(s.adapterId, s.scope);
         })
         .then(() => { setStatus(`Restored ${s.displayName} [${s.scope}]`); loadStatuses(); })

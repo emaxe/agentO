@@ -2,12 +2,49 @@ import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { AgentOConfigSchema, type AgentOConfig } from './schema.js';
+import { randomUUID } from 'node:crypto';
+import { AgentOConfigSchema, type AgentOConfig, type LaunchScope } from './schema.js';
 
 const CONFIG_DIR = join(homedir(), '.agento');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
 const BACKUPS_DIR = join(CONFIG_DIR, 'backups');
 const AGENT_STATUS_PATH = join(CONFIG_DIR, 'agent-status.json');
+
+export type BackupFileFormat = 'json' | 'toml' | 'yaml' | 'raw' | 'none';
+
+export interface BackupManifestFile {
+  path: string;
+  format: BackupFileFormat;
+  hadFile: boolean;
+  content: unknown;
+}
+
+export interface BackupManifest {
+  version: 2;
+  sessionId: string;
+  agentId: string;
+  scope: LaunchScope;
+  cwd?: string;
+  createdAt: string;
+  files: BackupManifestFile[];
+}
+
+export interface WriteBackupFile {
+  path: string;
+  format?: BackupFileFormat;
+  hadFile: boolean;
+  content: unknown;
+}
+
+export interface WriteBackupOptions {
+  cwd?: string;
+  files: WriteBackupFile[];
+  sessionId?: string;
+  createdAt?: string;
+}
+
+const LEGACY_BACKUP_CREATED_AT = new Date(0).toISOString();
+const BACKUP_FORMATS: BackupFileFormat[] = ['json', 'toml', 'yaml', 'raw', 'none'];
 
 /** Мигрирует старый формат models: string[] → ModelConfig[]. */
 function migrateConfig(raw: unknown): unknown {
@@ -47,33 +84,104 @@ export async function writeConfig(config: AgentOConfig): Promise<void> {
   await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
 }
 
-/** Сохраняет бэкап конфига агента.
- * @param agentId - id агента (например 'claude-code')
- * @param scope - 'global' или 'project'
- * @param content - содержимое конфига (JSON-объект)
- */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeFormat(value: unknown): BackupFileFormat {
+  return typeof value === 'string' && BACKUP_FORMATS.includes(value as BackupFileFormat)
+    ? value as BackupFileFormat
+    : 'json';
+}
+
+export function inferBackupFileFormat(path: string): BackupFileFormat {
+  if (path.endsWith('.json')) return 'json';
+  if (path.endsWith('.toml')) return 'toml';
+  if (path.endsWith('.yaml') || path.endsWith('.yml')) return 'yaml';
+  return 'raw';
+}
+
+function normalizeBackupManifest(raw: unknown, agentId: string, scope: LaunchScope): BackupManifest {
+  if (isRecord(raw) && raw.version === 2 && Array.isArray(raw.files)) {
+    const files = raw.files
+      .filter(isRecord)
+      .map((file): BackupManifestFile => ({
+        path: typeof file.path === 'string' ? file.path : '',
+        format: normalizeFormat(file.format),
+        hadFile: file.hadFile === true,
+        content: file.content,
+      }));
+
+    return {
+      version: 2,
+      sessionId: typeof raw.sessionId === 'string' ? raw.sessionId : 'unknown',
+      agentId: typeof raw.agentId === 'string' ? raw.agentId : agentId,
+      scope: raw.scope === 'project' ? 'project' : scope,
+      cwd: typeof raw.cwd === 'string' ? raw.cwd : undefined,
+      createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : LEGACY_BACKUP_CREATED_AT,
+      files,
+    };
+  }
+
+  return {
+    version: 2,
+    sessionId: 'legacy',
+    agentId,
+    scope,
+    createdAt: LEGACY_BACKUP_CREATED_AT,
+    files: [{
+      path: '',
+      format: 'json',
+      hadFile: true,
+      content: raw,
+    }],
+  };
+}
+
+/** Сохраняет manifest-бэкап конфига агента. */
 export async function writeBackup(
   agentId: string,
-  scope: string,
-  content: unknown,
+  scope: LaunchScope,
+  options: WriteBackupOptions,
 ): Promise<void> {
   const dir = join(BACKUPS_DIR, agentId);
-  await mkdir(dir, { recursive: true });
   const backupPath = join(dir, `${scope}.bak.json`);
-  await writeFile(backupPath, JSON.stringify(content, null, 2), 'utf-8');
+  if (existsSync(backupPath)) {
+    throw new Error(
+      `Active backup already exists for ${agentId} (${scope}). Run "agento restore -a ${agentId} -s ${scope}" before launching again.`,
+    );
+  }
+
+  const manifest: BackupManifest = {
+    version: 2,
+    sessionId: options.sessionId ?? randomUUID(),
+    agentId,
+    scope,
+    cwd: options.cwd,
+    createdAt: options.createdAt ?? new Date().toISOString(),
+    files: options.files.map((file) => ({
+      path: file.path,
+      format: file.format ?? 'json',
+      hadFile: file.hadFile,
+      content: file.content,
+    })),
+  };
+
+  await mkdir(dir, { recursive: true });
+  await writeFile(backupPath, JSON.stringify(manifest, null, 2), 'utf-8');
 }
 
 /** Читает бэкап конфига агента. Возвращает null если бэкап не существует. */
 export async function readBackup(
   agentId: string,
-  scope: string,
-): Promise<unknown | null> {
+  scope: LaunchScope,
+): Promise<BackupManifest | null> {
   const backupPath = join(BACKUPS_DIR, agentId, `${scope}.bak.json`);
   if (!existsSync(backupPath)) {
     return null;
   }
   const raw = await readFile(backupPath, 'utf-8');
-  return JSON.parse(raw) as unknown;
+  return normalizeBackupManifest(JSON.parse(raw) as unknown, agentId, scope);
 }
 
 /** Проверяет существование бэкапа. */

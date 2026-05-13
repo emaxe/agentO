@@ -1,6 +1,6 @@
 import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
 import type { Profile, Provider } from '../config/schema.js';
-import { writeBackup } from '../config/store.js';
+import { inferBackupFileFormat, writeBackup } from '../config/store.js';
 import { shellPathResolver } from './shell-path-resolver.js';
 
 /**
@@ -44,7 +44,16 @@ export async function launchIndependent(options: IndependentLaunchOptions): Prom
 
   // 1. Backup текущего конфига агента
   const currentConfig = await adapter.readConfig(scope, cwd);
-  await writeBackup(adapter.id, scope, currentConfig ?? {});
+  const configPath = adapter.configPaths(cwd)[scope];
+  await writeBackup(adapter.id, scope, {
+    cwd,
+    files: [{
+      path: configPath,
+      format: inferBackupFileFormat(configPath),
+      hadFile: currentConfig !== null,
+      content: currentConfig,
+    }],
+  });
 
   // 2. Генерируем и записываем новый конфиг
   const newConfig = adapter.buildConfig(profile, providers);
