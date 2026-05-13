@@ -30,13 +30,6 @@
   "bin": {
     "agento": "dist/bin/agento.js"
   },
-  "main": "./dist/index.js",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
   "files": [
     "dist",
     "CHANGELOG.md",
@@ -50,7 +43,7 @@
   },
   "scripts": {
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-x64/spawn-helper node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper 2>/dev/null || true",
-    "prepublishOnly": "npm run lint && npm run build && npm test",
+    "prepublishOnly": "npm run lint && npm run build && node dist/bin/agento.js --version && npm test",
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest run",

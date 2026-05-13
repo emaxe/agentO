@@ -25,7 +25,7 @@
 | 009 | Добавить atomic writes и file permissions для конфигов | P1 | Done | [009-atomic-writes-permissions.md](./009-atomic-writes-permissions.md) |
 | 010 | Снизить риск хранения API keys в конфигах и backups | P1 | Backlog | [010-secret-handling.md](./010-secret-handling.md) |
 | 011 | Реализовать или убрать `independentMode` | P1 | Backlog | [011-independent-mode-semantics.md](./011-independent-mode-semantics.md) |
-| 012 | Исправить package export и добавить build smoke | P2 | Backlog | [012-package-export-build-smoke.md](./012-package-export-build-smoke.md) |
+| 012 | Исправить package export и добавить build smoke | P2 | Done | [012-package-export-build-smoke.md](./012-package-export-build-smoke.md) |
 | 013 | Расширить integration test coverage | P1 | Backlog | [013-integration-test-coverage.md](./013-integration-test-coverage.md) |
 | 014 | Синхронизировать README, README.ru, AGENTS и CHANGELOG | P1 | Backlog | [014-docs-sync.md](./014-docs-sync.md) |
 
@@ -121,11 +121,11 @@
 
 ### 012 - Исправить package export и добавить build smoke
 
-- [ ] Started
-- [ ] Implementation
-- [ ] Tests
-- [ ] Docs
-- [ ] Done
+- [x] Started
+- [x] Implementation
+- [x] Tests
+- [x] Docs
+- [x] Done
 
 ### 013 - Расширить integration test coverage
 

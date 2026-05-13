@@ -9,11 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `prepublishOnly` script now includes `node dist/bin/agento.js --version` smoke check after build.
 - `writeJsonAtomic` helper in `src/config/store.ts`: writes JSON to a temp file (`.tmp-<uuid>`) with mode `0o600`, then atomically renames into place; cleans up temp on error. Used by `writeConfig`, `writeBackup`, and `writeAgentStatusCache`. `~/.agento` directory created with mode `0o700`.
 - New `src/config/validation.ts` module with `validateProvider` and `validateProfile` domain-level validation functions; called in `addProvider`, `updateProvider`, `addProfile`, `updateProfile` before any config writes. Enforces: valid provider type, `baseUrl` required for `openai-compatible`, unique names, unknown `providerId` references, multi-model tier completeness, no duplicate tiers, and at least one `base` tier in multi-model profiles.
 
 ### Changed
 
+- Removed `"main"` and `"exports"` fields from `package.json`; package is CLI-only with no programmatic API surface.
 - Added a unified agent registry for CLI launch/status, TUI launch/status and install wizard metadata, keeping agent order, `--dev` filtering, commands, default args and installers in one source of truth.
 - Backups now use a v2 manifest with `sessionId`, `createdAt`, `cwd`, touched file metadata and `hadFile` state instead of storing only the raw config object.
 - Launch preparation now uses a shared transaction layer for backup creation, config writes, `ExecRequest` env/PATH assembly and cleanup across child and independent modes.
