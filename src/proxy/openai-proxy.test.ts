@@ -139,4 +139,79 @@ describe('startOpenAIProxy', () => {
     expect(receivedHeaders['x-api-key']).toBeUndefined();
     expect(receivedHeaders['authorization']).toBe('Bearer sk-secret');
   });
+
+  it('handles SSE events split across TCP chunks', async () => {
+    upstream.on('request', (_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.write('data: {"id":"c","choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n\ndata: {"id":"c","choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}\n\n');
+      res.write('data: {"id":"c","choices":[{"delta":{},"finish_reason":"stop"}]}\n\n');
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+
+    proxy = await startOpenAIProxy({ upstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-3', messages: [{ role: 'user', content: 'Hello' }], max_tokens: 100, stream: true }),
+    });
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('event: message_start');
+    expect(text).toContain('event: message_stop');
+  });
+
+  it('maps x-api-key array to Authorization', async () => {
+    let receivedHeaders: http.IncomingHttpHeaders = {};
+    upstream.on('request', (req, res) => {
+      receivedHeaders = req.headers;
+      res.writeHead(200);
+      res.end('ok');
+    });
+
+    proxy = await startOpenAIProxy({ upstreamUrl });
+    await fetch(`${proxy.url}/v1/models`, {
+      headers: {
+        'x-api-key': 'sk-secret',
+      },
+    });
+    expect(receivedHeaders['authorization']).toBe('Bearer sk-secret');
+  });
+
+  it('passes through non-JSON upstream error body unchanged', async () => {
+    upstream.on('request', (_req, res) => {
+      res.writeHead(502);
+      res.end('Bad Gateway HTML');
+    });
+
+    proxy = await startOpenAIProxy({ upstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-3', messages: [], max_tokens: 1 }),
+    });
+
+    expect(res.status).toBe(502);
+    const text = await res.text();
+    expect(text).toBe('Bad Gateway HTML');
+  });
+
+  it('rewrites /v1/messages/ with trailing slash', async () => {
+    let receivedUrl = '';
+    upstream.on('request', (req, res) => {
+      receivedUrl = req.url ?? '';
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'x', model: 'gpt-4', choices: [{ message: { role: 'assistant', content: '' }, finish_reason: 'stop' }], usage: { prompt_tokens: 0, completion_tokens: 0 } }));
+    });
+
+    proxy = await startOpenAIProxy({ upstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/messages/`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-3', messages: [], max_tokens: 1 }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(receivedUrl).toBe('/v1/chat/completions');
+  });
 });

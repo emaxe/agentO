@@ -3,16 +3,19 @@ import https from 'node:https';
 import { URL } from 'node:url';
 import { convertRequest, convertResponse, convertError, createStreamState, convertStreamChunk } from './openai-adapter.js';
 
+/** Options for starting the OpenAI-to-Anthropic proxy server. */
 export interface OpenAIProxyOptions {
   upstreamUrl: string;
   port?: number;
 }
 
+/** Running proxy server handle. */
 export interface ProxyServer {
   url: string;
   stop: () => Promise<void>;
 }
 
+/** Build outgoing proxy headers from the incoming request. */
 function buildProxyHeaders(
   incomingHeaders: http.IncomingHttpHeaders,
   bodyLength?: number,
@@ -36,6 +39,7 @@ function buildProxyHeaders(
   return headers;
 }
 
+/** Read the full body of an incoming message into a Buffer. */
 async function readBody(req: http.IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
@@ -44,11 +48,13 @@ async function readBody(req: http.IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+/** Determine whether the incoming request has a JSON content type. */
 function isJsonRequest(req: http.IncomingMessage): boolean {
   const ct = req.headers['content-type'] ?? '';
   return typeof ct === 'string' && ct.includes('application/json');
 }
 
+/** Parse a single SSE line into zero or more JSON events. */
 function sseLineToEvent(line: string): Array<Record<string, unknown>> {
   const trimmed = line.trim();
   if (!trimmed.startsWith('data: ')) return [];
@@ -62,6 +68,7 @@ function sseLineToEvent(line: string): Array<Record<string, unknown>> {
   }
 }
 
+/** Start an HTTP proxy that translates Anthropic requests to OpenAI upstream. */
 export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<ProxyServer> {
   const upstream = new URL(options.upstreamUrl);
   const upstreamModule = upstream.protocol === 'https:' ? https : http;
@@ -73,8 +80,9 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
       const upstreamPath = upstream.pathname.replace(/\/+$/, '');
       const reqPath = reqUrl.pathname;
 
+      const isMessagesEndpoint = reqPath === '/v1/messages' || reqPath === '/v1/messages/';
       let resolvedPath = reqPath;
-      if (reqPath === '/v1/messages') {
+      if (isMessagesEndpoint) {
         resolvedPath = '/v1/chat/completions';
       }
 
@@ -82,7 +90,7 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
       targetUrl.search = reqUrl.search;
 
       let body: Buffer | undefined;
-      const shouldRewrite = req.method === 'POST' && isJsonRequest(req) && reqPath === '/v1/messages';
+      const shouldRewrite = req.method === 'POST' && isJsonRequest(req) && isMessagesEndpoint;
 
       if (shouldRewrite) {
         const raw = await readBody(req);
@@ -103,14 +111,18 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
         targetUrl,
         { method: req.method, headers },
         (proxyRes) => {
-          const isStream = proxyRes.headers['content-type']?.includes('text/event-stream');
-          const isJson = proxyRes.headers['content-type']?.includes('application/json');
-          const isMessagesEndpoint = reqPath === '/v1/messages';
+          const contentType = proxyRes.headers['content-type'];
+          const ct = Array.isArray(contentType) ? contentType[0] : contentType;
+          const isStream = typeof ct === 'string' && ct.includes('text/event-stream');
+          const isJson = typeof ct === 'string' && ct.includes('application/json');
 
           if (isMessagesEndpoint && (proxyRes.statusCode ?? 200) >= 200 && (proxyRes.statusCode ?? 200) < 300) {
             if (isStream) {
+              const streamHeaders = { ...proxyRes.headers };
+              delete streamHeaders['content-length'];
+              delete streamHeaders['transfer-encoding'];
               res.writeHead(proxyRes.statusCode ?? 200, {
-                ...proxyRes.headers,
+                ...streamHeaders,
                 'content-type': 'text/event-stream',
               });
               const state = createStreamState('msg-proxy-' + Date.now(), 'unknown');
@@ -169,9 +181,21 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
                   res.end(Buffer.concat(chunks));
                 }
               });
+              proxyRes.on('error', (err) => {
+                if (!res.headersSent) {
+                  res.writeHead(502, { 'content-type': 'application/json' });
+                }
+                res.end(JSON.stringify(convertError(err instanceof Error ? err.message : String(err))));
+              });
             } else {
               res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
               proxyRes.pipe(res);
+              proxyRes.on('error', () => {
+                if (!res.headersSent) {
+                  res.writeHead(502);
+                }
+                res.end();
+              });
             }
           } else if (isMessagesEndpoint && isJson) {
             const chunks: Buffer[] = [];
@@ -195,9 +219,21 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
                 res.end(Buffer.concat(chunks));
               }
             });
+            proxyRes.on('error', (err) => {
+              if (!res.headersSent) {
+                res.writeHead(502, { 'content-type': 'application/json' });
+              }
+              res.end(JSON.stringify(convertError(err instanceof Error ? err.message : String(err))));
+            });
           } else {
             res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
             proxyRes.pipe(res);
+            proxyRes.on('error', () => {
+              if (!res.headersSent) {
+                res.writeHead(502);
+              }
+              res.end();
+            });
           }
         },
       );
@@ -207,6 +243,10 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
           res.writeHead(502, { 'content-type': 'application/json' });
           res.end(JSON.stringify(convertError({ error: { message: err.message, type: 'bad_gateway' } })));
         }
+      });
+
+      req.on('error', () => {
+        proxyReq.destroy();
       });
 
       if (body !== undefined) {
