@@ -1,18 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
-import { readConfig, readAgentStatusCache, writeAgentStatusCache, readBackup, deleteBackup } from '../../config/store.js';
-import { restoreBackupManifest } from '../../config/backup-restore.js';
-import { listAgents } from '../../agents/registry.js';
-import { prepareChild } from '../../launcher/child.js';
-import { launchIndependent } from '../../launcher/independent.js';
+import { useLaunchWizard } from '../hooks/useLaunchWizard.js';
+import { ProfileSelect } from './ProfileSelect.js';
+import { AgentSelect } from './AgentSelect.js';
 import { AgentInstall } from './AgentInstall.js';
 import type { ExecRequest } from '../../launcher/independent.js';
-import type { AgentId, Profile, Provider, ProviderType, Settings } from '../../config/schema.js';
-import type { AgentRegistryEntry } from '../../agents/registry.js';
-
-/** Workflow steps inside the LaunchAgent screen. */
-type Step = 'profile' | 'agent' | 'install' | 'launching';
 
 interface LaunchAgentProps {
   dev?: boolean;
@@ -22,307 +15,22 @@ interface LaunchAgentProps {
   agentStatusCache?: Record<string, boolean>;
 }
 
-/** Filters agents to those whose `supportedProviderTypes` cover every provider in the selected profile. */
-function getCompatibleAgents(
-  agents: readonly AgentRegistryEntry[],
-  profile: Profile,
-  providers: Provider[],
-): AgentRegistryEntry[] {
-  const providerTypes = new Set<ProviderType>();
-  for (const model of profile.models) {
-    const provider = providers.find((p) => p.id === model.providerId);
-    if (provider) providerTypes.add(provider.type);
-  }
-  return agents.filter((a) =>
-    [...providerTypes].every((t) => (a.adapter.supportedProviderTypes as readonly string[]).includes(t)),
-  );
-}
-
-/**
- * LaunchAgent screen — multi-step wizard:
- * 1. Select profile
- * 2. Select compatible agent (with install-check)
- * 3. (Optional) Install wizard if agent not installed
- * 4. Launch agent (delegates to child or independent launcher)
- */
 export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache }: LaunchAgentProps): React.JSX.Element {
-  const [step, setStep] = useState<Step>('profile');
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [selectedProfile, setSelectedProfile] = useState(0);
-  const [selectedAgent, setSelectedAgent] = useState(0);
-  const [status, setStatus] = useState('');
-  const [error, setError] = useState('');
-  const [installStatuses, setInstallStatuses] = useState<Record<string, boolean>>(() => ({ ...agentStatusCache }));
-  // Ref so the install-check effect always reads current statuses without adding
-  // installStatuses to its dependency array (which would cause an infinite loop).
-  const installStatusesRef = useRef(installStatuses);
-  installStatusesRef.current = installStatuses;
-  const [installAgentId, setInstallAgentId] = useState<AgentId | null>(null);
-  const [statusChecking, setStatusChecking] = useState(false);
-  const [checkProgress, setCheckProgress] = useState<Record<string, 'pending' | 'checking' | 'done'>>({});
-  const [spinnerFrame, setSpinnerFrame] = useState(0);
-  const [errorChoice, setErrorChoice] = useState(0);
+  const { state, actions, computed } = useLaunchWizard({ dev, onBack, onExec, launchError, agentStatusCache });
 
-  useEffect(() => {
-    readConfig()
-      .then((config) => {
-        setProfiles(config.profiles);
-        setProviders(config.providers);
-        setSettings(config.settings);
-      })
-      .catch((err) => setError(String(err)));
-    readAgentStatusCache()
-      .then((cache) => {
-        if (Object.keys(cache).length > 0) {
-          setInstallStatuses((prev) => ({ ...prev, ...cache }));
-        }
-      })
-      .catch(() => { /* ignore cache read errors */ });
-  }, []);
+  useKeyInput(actions.handleKey);
 
-  const launchErrorHandled = useRef(false);
-
-  useEffect(() => {
-    if (!launchError || launchErrorHandled.current || profiles.length === 0) return;
-    launchErrorHandled.current = true;
-    const idx = profiles.findIndex((p) => p.id === launchError.profileId);
-    if (idx >= 0) setSelectedProfile(idx);
-    setInstallStatuses((prev) => ({ ...prev, [launchError.agentId]: false }));
-    setError(launchError.error || `Agent ${launchError.agentId} not installed`);
-    setStep('agent');
-  }, [profiles, launchError]);
-
-  useEffect(() => {
-    if (step !== 'agent') return;
-
-    const currentStatuses = installStatusesRef.current;
-    const agents = listAgents({ dev });
-    const agentsToCheck = agents.filter((a) => currentStatuses[a.id] !== true);
-    const initialProgress: Record<string, 'pending' | 'checking' | 'done'> = {};
-    for (const a of agents) {
-      initialProgress[a.id] = currentStatuses[a.id] === true ? 'done' : agentsToCheck.some((x) => x.id === a.id) ? 'pending' : 'done';
-    }
-    setCheckProgress(initialProgress);
-
-    if (agentsToCheck.length === 0) {
-      setStatusChecking(true);
-      setTimeout(() => setStatusChecking(false), 200);
-      return;
-    }
-
-    setStatusChecking(true);
-    setTimeout(() => {
-      const checks = agentsToCheck.map(async (a) => {
-        setCheckProgress((prev) => ({ ...prev, [a.id]: 'checking' }));
-        const installer = a.installer;
-        if (!installer) {
-          setCheckProgress((prev) => ({ ...prev, [a.id]: 'done' }));
-          return [a.id, true] as const;
-        }
-        const result = await installer.checkInstalled();
-        setCheckProgress((prev) => ({ ...prev, [a.id]: 'done' }));
-        return [a.id, result.installed] as const;
-      });
-
-      Promise.all([...checks, new Promise<void>((r) => setTimeout(r, 200))])
-        .then((results) => {
-          const agentResults = results.slice(0, -1) as [string, boolean][];
-          setInstallStatuses((prev) => {
-            const next = { ...prev };
-            for (const [id, installed] of agentResults) next[id] = installed;
-            return next;
-          });
-        })
-        .catch(() => {/* assume installed on error */ })
-        .finally(() => {
-          setStatusChecking(false);
-        });
-    }, 0);
-  }, [step, dev]);
-
-  useEffect(() => {
-    // Intentional shared-reference mutation: propagates install statuses back to the
-    // module-level cache in start.ts for cross-relaunch persistence within the same process.
-    if (agentStatusCache) {
-      Object.assign(agentStatusCache, installStatuses);
-    }
-    // Guard: skip disk write when state is still empty (initial mount before any checks run)
-    // to avoid overwriting a valid on-disk cache with a blank object.
-    if (Object.keys(installStatuses).length === 0) return;
-    writeAgentStatusCache(installStatuses).catch(() => { /* ignore write errors */ });
-  }, [installStatuses]);
-
-  useEffect(() => {
-    if (!statusChecking) return;
-    const id = setInterval(() => setSpinnerFrame((f) => (f + 1) % 10), 80);
-    return () => clearInterval(id);
-  }, [statusChecking]);
-
-  const doLaunch = useCallback(() => {
-    const agents = listAgents({ dev });
-    const profile = profiles[selectedProfile];
-    const compatibleAgents = profile
-      ? getCompatibleAgents(agents, profile, providers)
-      : agents;
-    const agentEntry = compatibleAgents[selectedAgent];
-
-    if (!profile || !agentEntry || !settings) {
-      setError('Invalid selection');
-      return;
-    }
-
-    if (installStatuses[agentEntry.id] === false) {
-      setInstallAgentId(agentEntry.id);
-      setStep('install');
-      return;
-    }
-
-    setStep('launching');
-    setError('');
-    setErrorChoice(0);
-    setStatus(`Launching ${agentEntry.label}...`);
-
-    const scope = settings.defaultConfigScope;
-    const mode = settings.defaultLaunchMode;
-
-    const launchOptions = {
-      adapter: agentEntry.adapter,
-      profile,
-      providers,
-      scope,
-      command: agentEntry.command,
-      args: agentEntry.args,
-      cwd: process.cwd(),
-    };
-
-    if (mode === 'child') {
-      prepareChild(launchOptions)
-        .then(({ execReq, cleanup }) => {
-          onExec?.({ ...execReq, relaunch: true, cleanup });
-        })
-        .catch((err) => setError(String(err)));
-    } else {
-      launchIndependent(launchOptions)
-        .then((execReq) => {
-          onExec?.(execReq);
-        })
-        .catch((err) => setError(String(err)));
-    }
-  }, [dev, profiles, providers, selectedProfile, selectedAgent, settings, installStatuses, onExec]);
-
-  useKeyInput((input, key) => {
-    if (step === 'launching' && error) {
-      if (key.escape || input === 'q' || input === 'b') {
-        setError('');
-        setStep('agent');
-        setErrorChoice(0);
-        return;
-      }
-      if (key.upArrow) {
-        setErrorChoice((c) => Math.max(0, c - 1));
-        return;
-      }
-      if (key.downArrow) {
-        setErrorChoice((c) => Math.min(1, c + 1));
-        return;
-      }
-      if (key.return) {
-        if (errorChoice === 0) {
-          // Overwrite: restore existing backup then retry
-          const agents = listAgents({ dev });
-          const profile = profiles[selectedProfile];
-          const compatibleAgents = profile
-            ? getCompatibleAgents(agents, profile, providers)
-            : agents;
-          const agentEntry = compatibleAgents[selectedAgent];
-          if (!agentEntry || !settings) {
-            setError('Invalid selection');
-            return;
-          }
-          const scope = settings.defaultConfigScope;
-          const restoreCwd = process.cwd();
-          setStatus('Restoring backup...');
-          setError('');
-          readBackup(agentEntry.adapter.id, scope, restoreCwd)
-            .then((backup) => {
-              if (backup !== null) {
-                return restoreBackupManifest(agentEntry.adapter, backup, scope, restoreCwd).then(() =>
-                  deleteBackup(agentEntry.adapter.id, scope, restoreCwd),
-                );
-              }
-            })
-            .then(() => {
-              doLaunch();
-            })
-            .catch((err) => setError(String(err)));
-        } else {
-          setError('');
-          setStep('agent');
-          setErrorChoice(0);
-        }
-        return;
-      }
-      return;
-    }
-
-    if (step === 'launching' && !error) return;
-    if (step === 'install') return;
-    if (step === 'agent' && statusChecking) return;
-
-    if (key.escape || input === 'q') {
-      if (step === 'profile') {
-        onBack();
-        return;
-      }
-      const steps: Step[] = ['profile', 'agent'];
-      const idx = steps.indexOf(step);
-      if (idx > 0) setStep(steps[idx - 1] as Step);
-      return;
-    }
-
-    const agents = listAgents({ dev });
-    const profile = profiles[selectedProfile];
-    const compatibleAgents = profile
-      ? getCompatibleAgents(agents, profile, providers)
-      : agents;
-    const items = step === 'profile' ? profiles : compatibleAgents;
-    const selected = step === 'profile' ? selectedProfile : selectedAgent;
-    const setSelected = step === 'profile' ? setSelectedProfile : setSelectedAgent;
-
-    if (key.upArrow) {
-      setSelected(Math.max(0, selected - 1));
-    } else if (key.downArrow) {
-      setSelected(Math.min(items.length - 1, selected + 1));
-    } else if (key.return) {
-      if (step === 'profile' && profiles.length === 0) {
-        setError('No profiles configured. Add one first.');
-        return;
-      }
-
-      if (step === 'agent') {
-        doLaunch();
-      } else {
-        setSelectedAgent(0);
-        setStep('agent');
-      }
-    }
-  });
-
-  if (error) {
-    const isLaunchError = step === 'launching';
-    const choices = isLaunchError
-      ? ['Overwrite and launch', 'Back']
-      : [];
+  if (state.error) {
+    const isLaunchError = state.step === 'launching';
+    const choices = isLaunchError ? ['Overwrite and launch', 'Back'] : [];
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color="red">Error: {error}</Text>
+        <Text color="red">Error: {state.error}</Text>
         {isLaunchError && (
           <Box flexDirection="column" marginTop={1}>
             {choices.map((c, i) => (
-              <Text key={i} color={i === errorChoice ? 'green' : undefined}>
-                {i === errorChoice ? '▶ ' : '  '}
+              <Text key={i} color={i === state.errorChoice ? 'green' : undefined}>
+                {i === state.errorChoice ? '▶ ' : '  '}
                 {c}
               </Text>
             ))}
@@ -336,98 +44,44 @@ export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache
     );
   }
 
-  const renderList = <T extends { label?: string; name?: string }>(
-    items: T[],
-    selected: number,
-    title: string,
-  ): React.JSX.Element => (
-    <Box flexDirection="column" padding={1}>
-      <Text bold>{title}</Text>
-      <Text dimColor>↑↓ navigate, Enter select, Esc back</Text>
-      <Box flexDirection="column" marginTop={1}>
-        {items.map((item, i) => (
-          <Text key={i} color={i === selected ? 'green' : undefined}>
-            {i === selected ? '▶ ' : '  '}
-            {'label' in item ? item.label : item.name}
-          </Text>
-        ))}
-        {items.length === 0 && <Text dimColor>No items available</Text>}
-      </Box>
-    </Box>
-  );
-
-  if (step === 'profile') return renderList(profiles, selectedProfile, 'Select Profile');
-
-  const profile = profiles[selectedProfile];
-  const visibleAgents = profile
-    ? getCompatibleAgents(listAgents({ dev }), profile, providers)
-    : listAgents({ dev });
-
-  const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-
-  if (step === 'agent' && statusChecking) {
+  if (state.step === 'profile') {
     return (
-      <Box flexDirection="column" padding={1}>
-        <Text bold>Select Agent</Text>
-        <Text dimColor>↑↓ navigate, Enter select, Esc back</Text>
-        <Box flexDirection="column" marginTop={1}>
-          {visibleAgents.map((item, i) => {
-            const state = checkProgress[item.id] ?? 'pending';
-            const icon = state === 'done' ? '✓' : state === 'checking' ? SPINNER_FRAMES[spinnerFrame] : '○';
-            const color = state === 'done' ? 'green' : state === 'checking' ? 'yellow' : 'gray';
-            return (
-              <Text key={i} color={color} dimColor={state === 'pending'}>
-                {icon} {item.label}
-                {state === 'checking' && <Text dimColor> checking...</Text>}
-              </Text>
-            );
-          })}
-        </Box>
-      </Box>
+      <ProfileSelect
+        profiles={state.profiles}
+        selected={state.selectedProfile}
+        onSelect={actions.setSelectedProfile}
+        onBack={onBack}
+      />
     );
   }
 
-  if (step === 'agent') {
+  if (state.step === 'agent') {
     return (
-      <Box flexDirection="column" padding={1}>
-        <Text bold>Select Agent</Text>
-        <Text dimColor>↑↓ navigate, Enter select, Esc back</Text>
-        <Box flexDirection="column" marginTop={1}>
-          {visibleAgents.map((item, i) => {
-            const installed = installStatuses[item.id] !== false;
-            return (
-              <Text key={i} color={i === selectedAgent ? 'green' : undefined}>
-                {i === selectedAgent ? '▶ ' : '  '}
-                {item.label}
-                {!installed && (
-                  <Text dimColor> (not installed)</Text>
-                )}
-              </Text>
-            );
-          })}
-          {visibleAgents.length === 0 && <Text dimColor>No items available</Text>}
-        </Box>
-      </Box>
+      <AgentSelect
+        agents={computed.visibleAgents}
+        selected={state.selectedAgent}
+        installStatuses={state.installStatuses}
+        checkProgress={state.checkProgress}
+        statusChecking={state.statusChecking}
+        onSelect={actions.setSelectedAgent}
+        onBack={onBack}
+      />
     );
   }
 
-  if (step === 'install' && installAgentId) {
+  if (state.step === 'install' && state.installAgentId) {
     return (
       <AgentInstall
-        agentId={installAgentId}
-        onBack={() => { setInstallAgentId(null); setStep('agent'); }}
-        onDone={() => {
-          setInstallStatuses((prev) => ({ ...prev, [installAgentId]: true }));
-          setInstallAgentId(null);
-          setStep('agent');
-        }}
+        agentId={state.installAgentId}
+        onBack={actions.cancelInstall}
+        onDone={actions.completeInstall}
       />
     );
   }
 
   return (
     <Box flexDirection="column" padding={1}>
-      <Text>{status || 'Launching...'}</Text>
+      <Text>{state.status || 'Launching...'}</Text>
     </Box>
   );
 }

@@ -1,0 +1,290 @@
+import React, { useState, useCallback } from 'react';
+import { Box, Text } from 'ink';
+import TextInput from 'ink-text-input';
+import { useKeyInput } from '../use-key-input.js';
+import { SelectList } from '../components/SelectList.js';
+import type { Profile, Provider, ProfileModel, ModelTier } from '../../config/schema.js';
+import { capabilityMarker } from '../../config/schema.js';
+
+const TIERS: ModelTier[] = ['small', 'base', 'smart'];
+type EditSubStep = 'select-provider' | 'select-model' | 'select-tier';
+
+interface ProfileEditProps {
+  profile: Profile;
+  providers: Provider[];
+  onSave: (result: { name: string; models: ProfileModel[] }) => void;
+  onCancel: () => void;
+  startAddingModel?: boolean;
+}
+
+export function ProfileEdit({
+  profile,
+  providers,
+  onSave,
+  onCancel,
+  startAddingModel = false,
+}: ProfileEditProps): React.JSX.Element {
+  const [editName, setEditName] = useState(profile.name);
+  const [editModels, setEditModels] = useState<ProfileModel[]>([...profile.models]);
+  const [editModelCursor, setEditModelCursor] = useState(startAddingModel ? profile.models.length : 0);
+  const [editFocus, setEditFocus] = useState<'name' | 'models'>(startAddingModel ? 'models' : 'name');
+  const [editSubStep, setEditSubStep] = useState<EditSubStep | null>(startAddingModel ? 'select-provider' : null);
+  const [providerCursor, setProviderCursor] = useState(0);
+  const [modelCursor, setModelCursor] = useState(0);
+  const [customModel, setCustomModel] = useState('');
+  const [pendingProviderId, setPendingProviderId] = useState<string | null>(null);
+  const [pendingModel, setPendingModel] = useState('');
+  const [tierCursor, setTierCursor] = useState(1);
+  const [status, setStatus] = useState('');
+
+  const doSave = useCallback(() => {
+    const trimmedName = editName.trim();
+    if (!trimmedName || editModels.length === 0) {
+      setStatus('Name and at least one model required');
+      return;
+    }
+    let modelsToSave: ProfileModel[];
+    if (editModels.length === 1) {
+      modelsToSave = [{ providerId: editModels[0]!.providerId, model: editModels[0]!.model }];
+    } else {
+      const missingTier = editModels.some((m) => !m.tier);
+      if (missingTier) {
+        setStatus('All models must have a tier when there are multiple');
+        return;
+      }
+      const hasBase = editModels.some((m) => m.tier === 'base');
+      if (!hasBase) {
+        setStatus('At least one model must have tier=base');
+        return;
+      }
+      modelsToSave = editModels;
+    }
+    onSave({ name: trimmedName, models: modelsToSave });
+  }, [editName, editModels, onSave]);
+
+  useKeyInput((input, key) => {
+    if (editSubStep !== null) {
+      if (key.escape) {
+        if (editSubStep === 'select-provider') { setEditSubStep(null); return; }
+        if (editSubStep === 'select-model') { setEditSubStep('select-provider'); return; }
+        if (editSubStep === 'select-tier') { setEditSubStep('select-model'); return; }
+        return;
+      }
+      if (editSubStep === 'select-provider') {
+        if (key.upArrow) { setProviderCursor((i) => Math.max(0, i - 1)); return; }
+        if (key.downArrow) { setProviderCursor((i) => Math.min(providers.length - 1, i + 1)); return; }
+        if (key.return && providers[providerCursor]) {
+          setPendingProviderId(providers[providerCursor].id);
+          setModelCursor(0);
+          setCustomModel('');
+          setEditSubStep('select-model');
+        }
+        return;
+      }
+      if (editSubStep === 'select-model') {
+        const provider = providers.find((p) => p.id === pendingProviderId);
+        if (!provider) { setEditSubStep('select-provider'); return; }
+        const total = provider.models.length + 1;
+        if (key.upArrow) { setModelCursor((i) => Math.max(0, i - 1)); return; }
+        if (key.downArrow) { setModelCursor((i) => Math.min(total - 1, i + 1)); return; }
+        if (key.return) {
+          let chosen: string | null = null;
+          if (modelCursor < provider.models.length) {
+            chosen = provider.models[modelCursor]?.name ?? null;
+          } else {
+            const trimmed = customModel.trim();
+            if (!trimmed) { setStatus('Enter custom model name'); return; }
+            chosen = trimmed;
+          }
+          if (!chosen) return;
+          setStatus('');
+          setPendingModel(chosen);
+          const usedTiers = new Set(editModels.map((m) => m.tier).filter(Boolean));
+          const defaultIdx = TIERS.findIndex((t) => !usedTiers.has(t));
+          setTierCursor(defaultIdx === -1 ? 1 : defaultIdx);
+          setEditSubStep('select-tier');
+        }
+        return;
+      }
+      if (editSubStep === 'select-tier') {
+        const optionsCount = 4;
+        if (key.upArrow) { setTierCursor((i) => Math.max(0, i - 1)); return; }
+        if (key.downArrow) { setTierCursor((i) => Math.min(optionsCount - 1, i + 1)); return; }
+        if (key.return) {
+          const provider = providers.find((p) => p.id === pendingProviderId);
+          if (!provider || !pendingModel) { setEditSubStep('select-provider'); return; }
+          const tier = tierCursor < 3 ? TIERS[tierCursor] : undefined;
+          setEditModels((prev) => [...prev, { providerId: provider.id, model: pendingModel, tier }]);
+          setPendingModel('');
+          setEditSubStep(null);
+        }
+        return;
+      }
+      return;
+    }
+
+    if (key.escape) { onCancel(); return; }
+    if (key.tab) { setEditFocus((f) => f === 'name' ? 'models' : 'name'); return; }
+    if (input === 's') { doSave(); return; }
+
+    if (editFocus === 'name') {
+      if (key.return) { setEditFocus('models'); return; }
+      return; // TextInput handles text input
+    }
+
+    if (editFocus === 'models') {
+      const total = editModels.length + 1;
+      if (key.upArrow && !key.shift) {
+        setEditModelCursor((i) => Math.max(0, i - 1));
+      } else if (key.downArrow && !key.shift) {
+        setEditModelCursor((i) => Math.min(total - 1, i + 1));
+      } else if (key.shift && key.upArrow && editModelCursor > 0 && editModelCursor < editModels.length) {
+        setEditModels((prev) => {
+          const arr = [...prev];
+          [arr[editModelCursor - 1], arr[editModelCursor]] = [arr[editModelCursor]!, arr[editModelCursor - 1]!];
+          return arr;
+        });
+        setEditModelCursor((i) => i - 1);
+      } else if (key.shift && key.downArrow && editModelCursor < editModels.length - 1) {
+        setEditModels((prev) => {
+          const arr = [...prev];
+          [arr[editModelCursor], arr[editModelCursor + 1]] = [arr[editModelCursor + 1]!, arr[editModelCursor]!];
+          return arr;
+        });
+        setEditModelCursor((i) => i + 1);
+      } else if (input === 'd' && editModels[editModelCursor]) {
+        setEditModels((prev) => prev.filter((_, i) => i !== editModelCursor));
+        setEditModelCursor((i) => Math.max(0, i - 1));
+      } else if (key.return && editModelCursor === editModels.length) {
+        setProviderCursor(0);
+        setModelCursor(0);
+        setCustomModel('');
+        setEditSubStep('select-provider');
+      }
+    }
+  });
+
+  if (editSubStep !== null) {
+    const subTitle = editSubStep === 'select-provider' ? 'Select provider'
+      : editSubStep === 'select-model' ? 'Select model'
+      : 'Assign tier';
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text bold>Edit Profile — {subTitle}</Text>
+        <Text dimColor>Esc: back</Text>
+
+        {editSubStep === 'select-provider' && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text dimColor>↑↓: navigate | Enter: select</Text>
+            <SelectList
+              items={providers}
+              selected={providerCursor}
+              renderItem={(p, i, isSelected) => (
+                <Text color={isSelected ? 'green' : undefined}>
+                  {isSelected ? '▶ ' : '  '}{p.name} ({p.type}, {p.models.length} models)
+                </Text>
+              )}
+            />
+          </Box>
+        )}
+
+        {editSubStep === 'select-model' && (() => {
+          const provider = providers.find((p) => p.id === pendingProviderId);
+          if (!provider) return <></>;
+          const customIdx = provider.models.length;
+          return (
+            <Box flexDirection="column" marginTop={1}>
+              <Text dimColor>↑↓: navigate | Enter: select</Text>
+              <Box marginTop={1}>
+                <Text>Provider: <Text color="cyan">{provider.name}</Text></Text>
+              </Box>
+              <Box flexDirection="column" marginTop={1}>
+                {provider.models.map((m, i) => (
+                  <Text key={m.name} color={i === modelCursor ? 'green' : undefined}>
+                    {i === modelCursor ? '▶ ' : '  '}<Text color="gray">{capabilityMarker(m.capabilities)} </Text>{m.name}
+                  </Text>
+                ))}
+                <Box>
+                  <Text color={modelCursor === customIdx ? 'green' : 'cyan'}>
+                    {modelCursor === customIdx ? '▶ ' : '  '}[custom]:{' '}
+                  </Text>
+                  <TextInput
+                    value={customModel}
+                    onChange={setCustomModel}
+                    focus={modelCursor === customIdx}
+                    showCursor={modelCursor === customIdx}
+                    placeholder="model-name"
+                  />
+                </Box>
+              </Box>
+            </Box>
+          );
+        })()}
+
+        {editSubStep === 'select-tier' && (() => {
+          const provider = providers.find((p) => p.id === pendingProviderId);
+          const usedTiers = new Set(editModels.map((m) => m.tier).filter(Boolean));
+          return (
+            <Box flexDirection="column" marginTop={1}>
+              <Text dimColor>↑↓: navigate | Enter: confirm</Text>
+              <Box marginTop={1}>
+                <Text>Model: <Text color="cyan">{pendingModel}</Text> ({provider?.name ?? '?'})</Text>
+              </Box>
+              <Box flexDirection="column" marginTop={1}>
+                {TIERS.map((t, i) => (
+                  <Text key={t} color={i === tierCursor ? 'green' : usedTiers.has(t) ? 'yellow' : undefined}>
+                    {i === tierCursor ? '▶ ' : '  '}{t}{usedTiers.has(t) ? ' (already used)' : ''}
+                  </Text>
+                ))}
+                <Text color={tierCursor === 3 ? 'green' : undefined} dimColor={tierCursor !== 3}>
+                  {tierCursor === 3 ? '▶ ' : '  '}skip (no tier)
+                </Text>
+              </Box>
+            </Box>
+          );
+        })()}
+
+        {status && <Text color="yellow">{status}</Text>}
+      </Box>
+    );
+  }
+
+  return (
+    <Box flexDirection="column" padding={1}>
+      <Text bold>Edit Profile</Text>
+      <Text dimColor>Tab: name/models focus | s: save | Esc: cancel</Text>
+      <Box marginTop={1}>
+        <Text color={editFocus === 'name' ? 'green' : undefined}>
+          {editFocus === 'name' ? '▶ ' : '  '}Name:{' '}
+        </Text>
+        <TextInput
+          value={editName}
+          onChange={setEditName}
+          focus={editFocus === 'name'}
+          showCursor={editFocus === 'name'}
+        />
+      </Box>
+      <Box flexDirection="column" marginTop={1}>
+        <Text dimColor>
+          Models{editFocus === 'models' ? ' (↑↓ navigate | Shift+↑↓ reorder | d: delete | Enter on [+]: add)' : ''}:
+        </Text>
+        {editModels.map((m, i) => {
+          const p = providers.find((pr) => pr.id === m.providerId);
+          const focused = editFocus === 'models' && i === editModelCursor;
+          return (
+            <Text key={i} color={focused ? 'green' : undefined}>
+              {focused ? '▶ ' : '  '}{m.model}{m.tier ? ` [${m.tier}]` : ''} ({p?.name ?? m.providerId.slice(0, 8) + '...'})
+            </Text>
+          );
+        })}
+        <Text
+          color="cyan"
+          dimColor={!(editFocus === 'models' && editModelCursor === editModels.length)}
+        >
+          {editFocus === 'models' && editModelCursor === editModels.length ? '▶ ' : '  '}[+ add model]
+        </Text>
+      </Box>
+      {status && <Text color="yellow">{status}</Text>}
+    </Box>
+  );
+}
