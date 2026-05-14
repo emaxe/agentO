@@ -215,7 +215,9 @@ export function convertResponse(res: unknown): AnthropicResponse {
     }
   }
 
-  const usage = isRecord(r) && isRecord(r.usage) ? r.usage : {};
+  const rawUsage = isRecord(r) && isRecord(r.usage) ? r.usage : undefined;
+  const inputTokens = typeof rawUsage?.prompt_tokens === 'number' ? rawUsage.prompt_tokens : 0;
+  const outputTokens = typeof rawUsage?.completion_tokens === 'number' ? rawUsage.completion_tokens : 0;
 
   return {
     id: String(isRecord(r) ? r.id ?? '' : ''),
@@ -225,8 +227,8 @@ export function convertResponse(res: unknown): AnthropicResponse {
     model: String(isRecord(r) ? r.model ?? '' : ''),
     stop_reason: mapFinishReason(finishReason),
     usage: {
-      input_tokens: usage.prompt_tokens ?? 0,
-      output_tokens: usage.completion_tokens ?? 0,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
     },
   };
 }
@@ -332,7 +334,7 @@ export function convertStreamChunk(chunk: unknown, state: StreamState): Array<Re
   const content = delta.content;
   if (typeof content === 'string' && content !== '') {
     if (state.currentBlockType !== 'text') {
-      if (state.currentBlockType !== null && state.currentBlockType !== 'text' && state.currentBlockIndex !== null) {
+      if (state.currentBlockType !== null && state.currentBlockIndex !== null) {
         events.push({ type: 'content_block_stop', index: state.currentBlockIndex });
       }
       const idx = state.nextBlockIndex++;

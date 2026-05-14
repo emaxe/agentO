@@ -523,4 +523,34 @@ describe('convertError', () => {
       error: { type: 'api_error', message: 'something broke' },
     });
   });
+
+  it('handles null error', () => {
+    expect(convertError(null)).toEqual({ type: 'error', error: { type: 'api_error', message: 'null' } });
+  });
+
+  it('handles number error', () => {
+    expect(convertError(500)).toEqual({ type: 'error', error: { type: 'api_error', message: '500' } });
+  });
+
+  it('handles empty object error', () => {
+    expect(convertError({})).toEqual({ type: 'error', error: { type: 'api_error', message: 'Unknown error' } });
+  });
+
+  it('handles nested error missing type', () => {
+    expect(convertError({ error: { message: 'Missing type' } })).toEqual({
+      type: 'error', error: { type: 'api_error', message: 'Missing type' },
+    });
+  });
+
+  it('handles nested error missing message', () => {
+    expect(convertError({ error: { type: 'rate_limit' } })).toEqual({
+      type: 'error', error: { type: 'rate_limit', message: 'Unknown error' },
+    });
+  });
+
+  it('handles top-level message field', () => {
+    expect(convertError({ message: 'Plain message' })).toEqual({
+      type: 'error', error: { type: 'api_error', message: 'Plain message' },
+    });
+  });
 });
