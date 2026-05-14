@@ -114,7 +114,7 @@ function convertMessage(msg: AnthropicRequest['messages'][number]): OpenAIReques
       if (block.type === 'tool_result') {
         let stringifiedContent: string;
         try {
-          stringifiedContent = typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? '');
+          stringifiedContent = typeof block.content === 'string' ? block.content : (block.content === undefined ? '' : JSON.stringify(block.content));
         } catch {
           stringifiedContent = '';
         }
@@ -158,7 +158,7 @@ function convertToolChoice(toolChoice: Record<string, unknown>): unknown {
     case 'none':
       return 'none';
     case 'tool':
-      return { type: 'function', function: { name: toolChoice.name } };
+      return { type: 'function', function: { name: String(toolChoice.name ?? '') } };
     default:
       return toolChoice;
   }
@@ -181,9 +181,10 @@ export function convertResponse(res: unknown): AnthropicResponse {
   if (typeof res !== 'object' || res === null) {
     throw new Error('Invalid OpenAI response');
   }
-  const r = res as Record<string, unknown>;
-  const choice = ((r.choices as Array<Record<string, unknown>>)?.[0]) ?? {};
-  const message = (choice.message as Record<string, unknown>) ?? {};
+  const r = res;
+  const choices = isRecord(r) ? r.choices : undefined;
+  const choice = Array.isArray(choices) && choices.length > 0 && isRecord(choices[0]) ? choices[0] : {};
+  const message = isRecord(choice.message) ? choice.message : {};
   const finishReason = String(choice.finish_reason ?? 'stop');
 
   const content: Array<Record<string, unknown>> = [];
@@ -192,32 +193,35 @@ export function convertResponse(res: unknown): AnthropicResponse {
     content.push({ type: 'text', text: message.content });
   }
 
-  const toolCalls = message.tool_calls as Array<Record<string, unknown>> | undefined;
-  if (Array.isArray(toolCalls)) {
+  const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : undefined;
+  if (toolCalls) {
     for (const tc of toolCalls) {
+      if (!isRecord(tc)) continue;
+      if (!isRecord(tc.function)) continue;
+      const fn = tc.function;
       let input: unknown = {};
       try {
-        input = JSON.parse(String(tc.function?.arguments ?? '{}'));
+        input = JSON.parse(String(fn.arguments ?? '{}'));
       } catch {
         input = {};
       }
       content.push({
         type: 'tool_use',
         id: String(tc.id ?? ''),
-        name: String(tc.function?.name ?? ''),
+        name: String(fn.name ?? ''),
         input,
       });
     }
   }
 
-  const usage = (r.usage as Record<string, number>) ?? {};
+  const usage = isRecord(r) && isRecord(r.usage) ? r.usage : {};
 
   return {
-    id: String(r.id ?? ''),
+    id: String(isRecord(r) ? r.id ?? '' : ''),
     type: 'message',
     role: 'assistant',
     content,
-    model: String(r.model ?? ''),
+    model: String(isRecord(r) ? r.model ?? '' : ''),
     stop_reason: mapFinishReason(finishReason),
     usage: {
       input_tokens: usage.prompt_tokens ?? 0,
@@ -237,4 +241,9 @@ function mapFinishReason(fr: string): AnthropicResponse['stop_reason'] {
     default:
       return 'end_turn';
   }
+}
+
+/** Type guard for plain objects. */
+function isRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === 'object' && x !== null;
 }

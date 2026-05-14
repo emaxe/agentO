@@ -265,4 +265,84 @@ describe('convertResponse', () => {
     ]);
     expect(anthropic.stop_reason).toBe('tool_use');
   });
+
+  it('handles invalid JSON in tool_call arguments', () => {
+    const openai = {
+      id: 'x',
+      model: 'gpt-4',
+      choices: [
+        {
+          message: {
+            role: 'assistant',
+            content: null,
+            tool_calls: [
+              { id: 'c1', type: 'function', function: { name: 'f', arguments: '{bad}' } },
+            ],
+          },
+          finish_reason: 'tool_calls',
+        },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    };
+    const anthropic = convertResponse(openai);
+    expect(anthropic.content[0]).toEqual({ type: 'tool_use', id: 'c1', name: 'f', input: {} });
+  });
+
+  it('ignores null content', () => {
+    const openai = {
+      id: 'x',
+      model: 'gpt-4',
+      choices: [
+        { message: { role: 'assistant', content: null }, finish_reason: 'stop' },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    };
+    expect(convertResponse(openai).content).toEqual([]);
+  });
+
+  it('defaults usage to zero when missing', () => {
+    const openai = {
+      id: 'x',
+      model: 'gpt-4',
+      choices: [
+        { message: { role: 'assistant', content: '' }, finish_reason: 'stop' },
+      ],
+    };
+    expect(convertResponse(openai).usage).toEqual({ input_tokens: 0, output_tokens: 0 });
+  });
+
+  it('handles empty choices array', () => {
+    const openai = {
+      id: 'x',
+      model: 'gpt-4',
+      choices: [],
+      usage: { prompt_tokens: 0, completion_tokens: 0 },
+    };
+    expect(convertResponse(openai).content).toEqual([]);
+  });
+
+  it('throws on non-object response', () => {
+    expect(() => convertResponse(null)).toThrow('Invalid OpenAI response');
+    expect(() => convertResponse('string')).toThrow('Invalid OpenAI response');
+  });
+
+  it('skips malformed tool_calls without function property', () => {
+    const openai = {
+      id: 'x',
+      model: 'gpt-4',
+      choices: [
+        {
+          message: {
+            role: 'assistant',
+            content: null,
+            tool_calls: [{ id: 'c1', type: 'function' }],
+          },
+          finish_reason: 'tool_calls',
+        },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    };
+    const anthropic = convertResponse(openai);
+    expect(anthropic.content).toEqual([]);
+  });
 });
