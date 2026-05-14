@@ -10,7 +10,7 @@ const adapter = new ClaudeCodeAdapter();
 const testProvider: Provider = {
   id: '00000000-0000-0000-0000-000000000001',
   name: 'Test Provider',
-  type: 'anthropic',
+  type: 'anthropic-compatible',
   apiKey: 'sk-ant-test123',
   baseUrl: 'https://api.test.com',
   models: [{ name: 'claude-3-opus', capabilities: { image: true, video: false, audio: false } }],
@@ -98,7 +98,7 @@ describe('ClaudeCodeAdapter', () => {
     const secondProvider: Provider = {
       id: '00000000-0000-0000-0000-000000000099',
       name: 'Second Provider',
-      type: 'anthropic',
+      type: 'anthropic-compatible',
       apiKey: 'sk-ant-other',
       models: [{ name: 'claude-3-haiku', capabilities: { image: true, video: false, audio: false } }],
     };
@@ -116,7 +116,7 @@ describe('ClaudeCodeAdapter', () => {
   });
 
   it('supportedProviderTypes includes anthropic, fireworks, and openrouter', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['anthropic', 'fireworks', 'openrouter']);
+    expect(adapter.supportedProviderTypes).toEqual(['anthropic-compatible', 'fireworks', 'openrouter', 'custom-api']);
   });
 
   it('openrouter uses ANTHROPIC_AUTH_TOKEN and empty ANTHROPIC_API_KEY, no apiKeyHelper', () => {
@@ -176,6 +176,44 @@ describe('ClaudeCodeAdapter', () => {
     const config = adapter.buildConfig(profile, [fireworksProvider]);
     const env = config.env as Record<string, string>;
     expect(env.ANTHROPIC_BASE_URL).toBe('https://api.fireworks.ai/inference');
+  });
+
+  it('custom-api provider uses resolveCustomApiUrl for ANTHROPIC_BASE_URL', () => {
+    const customProvider: Provider = {
+      id: '00000000-0000-0000-0000-0000000000e1',
+      name: 'Custom Anthropic',
+      type: 'custom-api',
+      apiKey: 'sk-custom',
+      baseUrl: 'https://proxy.example.com',
+      customApiModes: { openai: false, anthropic: true, responses: false },
+      models: [{ name: 'claude-3-sonnet', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-0000000000e2',
+      name: 'Custom',
+      models: [{ providerId: customProvider.id, model: 'claude-3-sonnet', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [customProvider]);
+    const env = config.env as Record<string, string>;
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com/v1');
+  });
+
+  it('throws for custom-api provider without anthropic mode', () => {
+    const customProvider: Provider = {
+      id: '00000000-0000-0000-0000-0000000000e3',
+      name: 'Custom OpenAI',
+      type: 'custom-api',
+      apiKey: 'sk-custom',
+      baseUrl: 'https://proxy.example.com',
+      customApiModes: { openai: true, anthropic: false, responses: false },
+      models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-0000000000e4',
+      name: 'Custom',
+      models: [{ providerId: customProvider.id, model: 'gpt-4', tier: 'base' }],
+    };
+    expect(() => adapter.buildConfig(profile, [customProvider])).toThrow('requires anthropic mode');
   });
 
   it('writeConfig sets 0o600 file mode on POSIX', async () => {

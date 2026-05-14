@@ -33,7 +33,7 @@ async function seedProvider(): Promise<string> {
   const { addProvider } = await import('../providers/provider-manager.js');
   const p = await addProvider({
     name: `SeedProvider-${++_seedCount}`,
-    type: 'anthropic',
+    type: 'anthropic-compatible',
     apiKey: 'seed-key',
     models: [{ name: 'claude-3', capabilities: { image: true, video: false, audio: false } }],
   });

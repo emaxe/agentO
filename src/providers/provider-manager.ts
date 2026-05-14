@@ -28,8 +28,8 @@ export async function addProvider(input: CreateProviderInput): Promise<Provider>
   const config = await readConfig();
   validateProvider(input, config.providers);
   const provider = ProviderSchema.parse({ ...input, id: randomUUID() });
-  config.providers.push(provider);
-  await writeConfig(config);
+  const newConfig = { ...config, providers: [...config.providers, provider] };
+  await writeConfig(newConfig);
   return provider;
 }
 
@@ -46,8 +46,8 @@ export async function updateProvider(
   if (index === -1) throw new Error(`Provider not found: ${id}`);
   validateProvider({ ...config.providers[index], ...updates }, config.providers, id);
   const updated = ProviderSchema.parse({ ...config.providers[index], ...updates });
-  config.providers[index] = updated;
-  await writeConfig(config);
+  const newConfig = { ...config, providers: config.providers.map((p, i) => i === index ? updated : p) };
+  await writeConfig(newConfig);
   return updated;
 }
 
@@ -61,8 +61,8 @@ export async function removeProvider(idOrName: string): Promise<void> {
     (p) => p.id === idOrName || p.name === idOrName,
   );
   if (index === -1) throw new Error(`Provider not found: ${idOrName}`);
-  config.providers.splice(index, 1);
-  await writeConfig(config);
+  const newConfig = { ...config, providers: config.providers.filter((_, i) => i !== index) };
+  await writeConfig(newConfig);
 }
 
 /**

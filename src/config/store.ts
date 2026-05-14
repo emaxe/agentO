@@ -90,7 +90,11 @@ function migrateConfig(raw: unknown): unknown {
   return obj;
 }
 
-/** Читает конфиг AgentO. Если файл не существует, возвращает дефолтный конфиг. */
+/**
+ * Reads the AgentO config from disk.
+ * The returned object is owned by the caller — do not mutate it directly.
+ * Always produce a new config object and pass it to `writeConfig`.
+ */
 export async function readConfig(): Promise<AgentOConfig> {
   if (!existsSync(CONFIG_PATH)) {
     return AgentOConfigSchema.parse({});

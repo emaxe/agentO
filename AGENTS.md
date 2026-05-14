@@ -55,8 +55,10 @@ AgentO — CLI-инструмент для управления конфигур
 │   ├── launcher/              # Запуск агентов
 │   │   ├── child.ts           # Child mode (backup → patch → spawn → restore)
 │   │   ├── independent.ts     # Independent mode (backup → patch → exec)
-│   │   ├── transaction.ts     # Общий transaction layer: backup/write/env/cleanup
+│   │   ├── transaction.ts     # Общий transaction layer: backup/write/env/cleanup/proxy
 │   │   └── shell-path-resolver.ts  # Резолвинг PATH через login shell
+│   ├── proxy/                 # HTTP-прокси для адаптации запросов
+│   │   └── anthropic-scrubber.ts  # Вырезание неподдерживаемых полей Anthropic API (context_management) при работе Claude Code через сторонние провайдеры
 │   ├── profiles/              # Управление профилями
 │   │   └── profile-manager.ts
 │   ├── providers/             # Управление провайдерами
@@ -99,9 +101,9 @@ AgentO — CLI-инструмент для управления конфигур
 {
   id: string (uuid);
   name: string;                 // "Fireworks AI"
-  type: 'openai-compatible' | 'anthropic' | 'fireworks' | 'openrouter';
+  type: 'openai-compatible' | 'anthropic-compatible' | 'fireworks' | 'openrouter' | 'responses-compatible';
   apiKey: string;
-  baseUrl?: string;             // URL для openai-compatible (обязателен), опционален для остальных (fireworks/openrouter имеют дефолтные URL)
+  baseUrl?: string;             // URL для openai-compatible и responses-compatible (обязателен), опционален для остальных (fireworks/openrouter имеют дефолтные URL)
   models: ModelConfig[];        // Доступные модели провайдера
 }
 
@@ -153,12 +155,31 @@ AgentO — CLI-инструмент для управления конфигур
 
 | Агент | ID | Команда | Поддерживаемые типы | Формат конфига | Capability-флаги | Особенности |
 |-------|-----|---------|---|---|---|---|
-| Claude Code | `claude-code` | `claude` | `anthropic`, `fireworks`, `openrouter` | JSON (`~/.claude/settings.json`) | Игнорирует | Поддерживает tiers (small/base/smart). Только один провайдер на профиль. Для `openrouter` использует Anthropic Skin: `ANTHROPIC_AUTH_TOKEN` (Bearer) + пустой `ANTHROPIC_API_KEY`, БЕЗ `apiKeyHelper`. |
+| Claude Code | `claude-code` | `claude` | `anthropic`, `fireworks`, `openrouter` | JSON (`~/.claude/settings.json`) | Игнорирует | Поддерживает tiers (small/base/smart). Только один провайдер на профиль. Для `openrouter` использует Anthropic Skin: `ANTHROPIC_AUTH_TOKEN` (Bearer) + пустой `ANTHROPIC_API_KEY`, БЕЗ `apiKeyHelper`. При запуске с `openrouter`/`fireworks` автоматически поднимается локальный proxy (`src/proxy/anthropic-scrubber.ts`), который вырезает неподдерживаемые Anthropic-поля (например, `context_management`) из запросов. |
 | OpenCode | `opencode` | `opencode` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | JSON (`~/.config/opencode/config.json` или `./opencode.json`) | Пробрасывает в `models[<name>].modalities` | Префикс модели: `providerKey/model`. Для `openrouter` ключ провайдера всегда `openrouter`. |
 | Qwen CLI | `qwen` | `qwen` | `openai-compatible`, `fireworks`, `openrouter` | JSON (`~/.qwen/settings.json`) | Пробрасывает в `generationConfig.modalities` | **modelProviders ключ всегда `"openai"`** для openai-compatible провайдеров. Группирует модели по baseUrl. |
 | Codex CLI | `codex` | `codex` | `fireworks`, `openrouter` | TOML (`~/.codex/config.toml`) | Игнорирует | `dev: true` (скрыт по умолчанию). `wire_api: responses`. При `project` scope `model_providers`, `default_profile`, `profiles` пишет в global config, а `model` — в project config; backup/restore manifest содержит оба файла. Использует `buildEnv` для инжекта API ключа. |
 | Copilot | `copilot` | `copilot` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | — (env-only) | Игнорирует | Конфиг через env vars, `writeConfig` — no-op |
 | Goose | `goose` | `goose` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | — (env-only) | Игнорирует | `GOOSE_PROVIDER`/`GOOSE_MODEL`/`OPENAI_HOST`; `writeConfig` — no-op |
+
+### Локальный proxy для Claude Code (Anthropic Scrubber)
+
+При запуске Claude Code с провайдерами `openrouter` или `fireworks` (то есть через Anthropic-совместимые endpoints, а не нативный Anthropic API), AgentO автоматически поднимает локальный HTTP-proxy (`src/proxy/anthropic-scrubber.ts`) на случайном порту `127.0.0.1`.
+
+**Зачем:** Claude Code, как официальный клиент Anthropic, отправляет в запросах поля, специфичные для нативного Anthropic API (например, `context_management` для управления контекстным окном). Сторонние провайдеры (OpenRouter, Fireworks) не поддерживают эти поля и отвечают `400 Extra inputs are not permitted`.
+
+**Как работает:**
+- Proxy перехватывает исходящие от Claude Code POST-запросы (`/v1/messages` и др.)
+- Для запросов с `Content-Type: application/json` парсит тело, рекурсивно удаляет поля из denylist (по умолчанию `['context_management']`), сериализует обратно и пересылает на upstream
+- Все остальные запросы (GET, POST без JSON) проксируются прозрачно
+- Ответы от upstream pipe'ятся напрямую клиенту без буферизации, сохраняя SSE-стриминг
+- Proxy запускается в процессе AgentO перед стартом Claude Code и автоматически останавливается в cleanup-хуке после выхода агента
+- В `ANTHROPIC_BASE_URL` конфига Claude Code подставляется адрес локального proxy вместо реального upstream
+
+**Denylist:** настраивается через `denyList` параметр `startAnthropicScrubberProxy`. По умолчанию:
+```typescript
+['context_management']
+```
 
 ### Важная деталь: Qwen Adapter
 

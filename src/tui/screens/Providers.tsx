@@ -75,10 +75,11 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
   if (mode === 'add') {
     return (
       <ProviderForm
+        providers={providers}
         onSubmit={(data) => {
-          addProvider(data)
+          return addProvider(data)
             .then((p) => { setStatus(`Added "${p.name}"`); reload(); setMode('list'); })
-            .catch((err) => setStatus(`Error: ${String(err)}`));
+            .catch((err) => { setStatus(`Error: ${String(err)}`); throw err; });
         }}
         onCancel={() => setMode('list')}
       />
@@ -89,10 +90,11 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
     return (
       <ProviderForm
         provider={editTarget}
+        providers={providers}
         onSubmit={(data) => {
-          updateProvider(editTarget.id, data)
+          return updateProvider(editTarget.id, data)
             .then(() => { setStatus('Saved'); reload(); setMode('list'); })
-            .catch((err) => setStatus(`Error: ${String(err)}`));
+            .catch((err) => { setStatus(`Error: ${String(err)}`); throw err; });
         }}
         onCancel={() => setMode('list')}
       />

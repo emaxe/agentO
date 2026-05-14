@@ -6,6 +6,7 @@ import { writeJsonAtomic } from '../config/atomic-write.js';
 import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { ModelTier, Profile, ProfileModel, Provider, ProviderType } from '../config/schema.js';
+import { resolveCustomApiUrl } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
 
 export interface ClaudeCodeConfig {
@@ -36,7 +37,7 @@ function pickByTier(
 export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
   readonly id = 'claude-code';
   readonly displayName = 'Claude Code';
-  readonly supportedProviderTypes = ['anthropic', 'fireworks', 'openrouter'] as const;
+  readonly supportedProviderTypes = ['anthropic-compatible', 'fireworks', 'openrouter', 'custom-api'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -82,7 +83,15 @@ export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
       ANTHROPIC_DEFAULT_SONNET_MODEL: base.model,
       ANTHROPIC_DEFAULT_OPUS_MODEL: smart.model,
     };
-    const anthropicBase = baseProvider.baseUrl ?? DEFAULT_ANTHROPIC_BASE_URLS[baseProvider.type];
+    let anthropicBase: string | undefined;
+    if (baseProvider.type === 'custom-api') {
+      if (!baseProvider.customApiModes?.anthropic) {
+        throw new Error(`Claude Code requires anthropic mode for custom-api provider "${baseProvider.name}"`);
+      }
+      anthropicBase = resolveCustomApiUrl(baseProvider, 'anthropic');
+    } else {
+      anthropicBase = baseProvider.baseUrl ?? DEFAULT_ANTHROPIC_BASE_URLS[baseProvider.type];
+    }
     if (anthropicBase) {
       env['ANTHROPIC_BASE_URL'] = anthropicBase;
     }

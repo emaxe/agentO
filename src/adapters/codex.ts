@@ -7,6 +7,7 @@ import { writeFileAtomic } from '../config/atomic-write.js';
 import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
+import { resolveCustomApiUrl } from '../config/schema.js';
 import type { BackupManifestFile, WriteBackupFile } from '../config/store.js';
 
 export interface CodexModelProvider {
@@ -71,7 +72,7 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
   readonly id = 'codex';
   readonly displayName = 'Codex CLI';
   readonly dev = true;
-  readonly supportedProviderTypes = ['fireworks', 'openrouter'] as const;
+  readonly supportedProviderTypes = ['openai-compatible', 'responses-compatible', 'fireworks', 'openrouter', 'custom-api'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -112,14 +113,40 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
     const providerKey = deriveProviderKey(provider.name);
     const envKey = deriveEnvKey(providerKey);
 
+    let baseUrl: string;
+    let wireApi: string;
+
+    if (provider.type === 'custom-api') {
+      if (provider.customApiModes?.responses) {
+        wireApi = 'responses';
+        const resolved = resolveCustomApiUrl(provider, 'responses');
+        if (!resolved) {
+          throw new Error(`Codex CLI requires a baseUrl for custom-api provider "${provider.name}"`);
+        }
+        baseUrl = resolved;
+      } else if (provider.customApiModes?.openai) {
+        wireApi = 'openai';
+        const resolved = resolveCustomApiUrl(provider, 'openai');
+        if (!resolved) {
+          throw new Error(`Codex CLI requires a baseUrl for custom-api provider "${provider.name}"`);
+        }
+        baseUrl = resolved;
+      } else {
+        throw new Error(`Codex CLI: custom-api provider "${provider.name}" requires at least one compatible mode (openai or responses)`);
+      }
+    } else {
+      baseUrl = provider.baseUrl ?? DEFAULT_BASE_URLS[provider.type] ?? '';
+      wireApi = provider.type === 'openai-compatible' ? 'openai' : 'responses';
+    }
+
     return {
       model: base.model,
       model_providers: {
         [providerKey]: {
           name: provider.name,
-          base_url: provider.baseUrl ?? DEFAULT_BASE_URLS[provider.type] ?? '',
+          base_url: baseUrl,
           env_key: envKey,
-          wire_api: 'responses',
+          wire_api: wireApi,
         },
       },
       default_profile: 'default',

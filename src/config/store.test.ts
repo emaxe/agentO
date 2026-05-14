@@ -279,7 +279,7 @@ describe('config store', () => {
       providers: [{
         id: '00000000-0000-0000-0000-000000000001',
         name: 'Test',
-        type: 'anthropic',
+        type: 'anthropic-compatible',
         apiKey: 'key123',
         models: ['claude-3-opus', 'claude-3-sonnet'],
       }],

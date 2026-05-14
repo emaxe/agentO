@@ -39,19 +39,22 @@ export function createProviderCommand(): Command {
     .requiredOption('-n, --name <name>', 'Provider name')
     .requiredOption('-t, --type <type>', `Provider type (${PROVIDER_TYPES.join(', ')})`)
     .requiredOption('-k, --api-key <key>', 'API key')
-    .option('-u, --base-url <url>', 'Base URL (for openai-compatible)')
+    .option('-u, --base-url <url>', 'Base URL (for openai-compatible, responses-compatible, custom-api). For custom-api trailing /v1/ is stripped automatically')
+    .option('-c, --custom-api-modes <json>', 'JSON object with boolean flags {openai,anthropic,responses} (required for custom-api type)')
     .requiredOption('-M, --models <models>', 'Comma-separated list of model names')
-    .action(async (opts: { name: string; type: string; apiKey: string; baseUrl?: string; models: string }) => {
+    .action(async (opts: { name: string; type: string; apiKey: string; baseUrl?: string; customApiModes?: string; models: string }) => {
       try {
         const models = opts.models.split(',').map((m) => m.trim()).filter(Boolean).map((name) => ({
           name,
           capabilities: { image: true, video: false, audio: false },
         }));
+        const customApiModes = opts.customApiModes ? JSON.parse(opts.customApiModes) : undefined;
         const provider = await addProvider({
           name: opts.name,
           type: opts.type,
           apiKey: opts.apiKey,
           baseUrl: opts.baseUrl,
+          customApiModes,
           models,
         });
         console.log(`Provider "${provider.name}" added (id: ${provider.id})`);

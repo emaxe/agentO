@@ -5,13 +5,14 @@ import { join } from 'node:path';
 import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
+import { resolveCustomApiUrl } from '../config/schema.js';
 
 export interface CopilotConfig {
   [key: string]: unknown;
 }
 
 const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
-  anthropic: 'https://api.anthropic.com',
+  'anthropic-compatible': 'https://api.anthropic.com',
   fireworks: 'https://api.fireworks.ai/inference/v1',
   openrouter: 'https://openrouter.ai/api/v1',
 };
@@ -19,15 +20,17 @@ const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
 /** Map AgentO provider types to Copilot CLI COPILOT_PROVIDER_TYPE values. */
 const PROVIDER_TYPE_MAP: Record<ProviderType, string> = {
   'openai-compatible': 'openai',
-  'anthropic': 'anthropic',
+  'anthropic-compatible': 'anthropic',
   'fireworks': 'openai',
   'openrouter': 'openai',
+  'responses-compatible': 'openai',
+  'custom-api': 'openai',
 };
 
 export class CopilotAdapter implements AgentAdapter<CopilotConfig> {
   readonly id = 'copilot';
   readonly displayName = 'Copilot CLI';
-  readonly supportedProviderTypes = ['openai-compatible', 'anthropic', 'fireworks', 'openrouter'] as const;
+  readonly supportedProviderTypes = ['openai-compatible', 'anthropic-compatible', 'fireworks', 'openrouter', 'responses-compatible', 'custom-api'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -56,23 +59,40 @@ export class CopilotAdapter implements AgentAdapter<CopilotConfig> {
     const provider = providers.find((p) => p.id === base.providerId);
     if (!provider) return {};
 
-    const env: Record<string, string> = {
-      COPILOT_MODEL: base.model,
-      COPILOT_PROVIDER_TYPE: PROVIDER_TYPE_MAP[provider.type],
-      COPILOT_PROVIDER_API_KEY: provider.apiKey,
-    };
+    let copilotProviderType: string;
+    let resolvedUrl: string | undefined;
 
-    const defaultUrl = DEFAULT_BASE_URLS[provider.type];
-    if (!provider.baseUrl && provider.type === 'openai-compatible') {
-      throw new Error('baseUrl required for openai-compatible provider in Copilot CLI');
+    if (provider.type === 'custom-api') {
+      if (provider.customApiModes?.anthropic) {
+        copilotProviderType = 'anthropic';
+        resolvedUrl = resolveCustomApiUrl(provider, 'anthropic');
+      } else if (provider.customApiModes?.openai || provider.customApiModes?.responses) {
+        copilotProviderType = 'openai';
+        resolvedUrl = resolveCustomApiUrl(provider, 'openai') ?? resolveCustomApiUrl(provider, 'responses');
+      } else {
+        throw new Error(`Copilot CLI: custom-api provider "${provider.name}" requires at least one compatible mode (anthropic, openai, or responses)`);
+      }
+    } else {
+      copilotProviderType = PROVIDER_TYPE_MAP[provider.type];
+      const defaultUrl = DEFAULT_BASE_URLS[provider.type];
+      if (!provider.baseUrl && (provider.type === 'openai-compatible' || provider.type === 'responses-compatible')) {
+        throw new Error(`baseUrl required for ${provider.type} provider in Copilot CLI`);
+      }
+      resolvedUrl = provider.baseUrl ?? defaultUrl;
     }
-    const resolvedUrl = provider.baseUrl ?? defaultUrl;
+
     if (!resolvedUrl) {
       throw new Error(`No base URL configured for provider type "${provider.type}" in Copilot CLI`);
     }
-    env.COPILOT_PROVIDER_BASE_URL = resolvedUrl;
 
-    if (base.model.startsWith('gpt-5')) {
+    const env: Record<string, string> = {
+      COPILOT_MODEL: base.model,
+      COPILOT_PROVIDER_TYPE: copilotProviderType,
+      COPILOT_PROVIDER_API_KEY: provider.apiKey,
+      COPILOT_PROVIDER_BASE_URL: resolvedUrl,
+    };
+
+    if (base.model.startsWith('gpt-5') || provider.type === 'responses-compatible' || (provider.type === 'custom-api' && provider.customApiModes?.responses)) {
       env.COPILOT_PROVIDER_WIRE_API = 'responses';
     }
 

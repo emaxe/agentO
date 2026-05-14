@@ -119,6 +119,7 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
     return (
       <ProfileWizard
         providers={providers}
+        profiles={profiles}
         onDone={(result) => {
           addProfile({ name: result.name, models: result.models })
             .then((p) => { setStatus(`Added "${p.name}"`); reload(); setMode('list'); })
@@ -134,6 +135,7 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
       <ProfileEdit
         profile={detailProfile}
         providers={providers}
+        profiles={profiles}
         onSave={(result) => {
           updateProfile(detailProfile.id, { name: result.name, models: result.models })
             .then((updated) => { setDetailProfile(updated); reload(); setMode('detail'); })

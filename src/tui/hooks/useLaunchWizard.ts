@@ -45,9 +45,19 @@ function getCompatibleAgents(
     const provider = providers.find((p) => p.id === model.providerId);
     if (provider) providerTypes.add(provider.type);
   }
-  return agents.filter((a) =>
-    [...providerTypes].every((t) => (a.adapter.supportedProviderTypes as readonly string[]).includes(t)),
-  );
+  return agents.filter((a) => {
+    const typesOk = [...providerTypes].every((t) =>
+      (a.adapter.supportedProviderTypes as readonly string[]).includes(t),
+    );
+    if (!typesOk) return false;
+    // Final compatibility check: can the adapter actually build a config for this profile?
+    try {
+      a.adapter.buildConfig(profile, providers);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 export function useLaunchWizard({

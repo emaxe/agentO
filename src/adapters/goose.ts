@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
+import { resolveCustomApiUrl } from '../config/schema.js';
 
 export interface GooseConfig {
   raw?: string;
@@ -41,7 +42,7 @@ const OPENROUTER_DEFAULT_HOST = 'https://openrouter.ai';
 export class GooseAdapter implements AgentAdapter<GooseConfig> {
   readonly id = 'goose';
   readonly displayName = 'Goose';
-  readonly supportedProviderTypes = ['openai-compatible', 'anthropic', 'fireworks', 'openrouter'] as const;
+  readonly supportedProviderTypes = ['openai-compatible', 'anthropic-compatible', 'fireworks', 'openrouter', 'responses-compatible', 'custom-api'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -88,7 +89,7 @@ export class GooseAdapter implements AgentAdapter<GooseConfig> {
       GOOSE_MODEL: base.model,
     };
 
-    if (provider.type === 'anthropic') {
+    if (provider.type === 'anthropic-compatible') {
       env.GOOSE_PROVIDER = 'anthropic';
       env.ANTHROPIC_API_KEY = provider.apiKey;
       // Only set ANTHROPIC_HOST when overriding the default endpoint.
@@ -107,6 +108,32 @@ export class GooseAdapter implements AgentAdapter<GooseConfig> {
       env.GOOSE_PROVIDER = 'openai';
       env.OPENAI_API_KEY = provider.apiKey;
       env.OPENAI_HOST = toGooseOpenAIHost(provider.baseUrl ?? FIREWORKS_BASE_URL);
+    } else if (provider.type === 'responses-compatible') {
+      if (!provider.baseUrl) {
+        throw new Error('baseUrl required for responses-compatible provider in Goose');
+      }
+      env.GOOSE_PROVIDER = 'openai';
+      env.OPENAI_API_KEY = provider.apiKey;
+      env.OPENAI_HOST = toGooseOpenAIHost(provider.baseUrl);
+    } else if (provider.type === 'custom-api') {
+      if (provider.customApiModes?.anthropic) {
+        env.GOOSE_PROVIDER = 'anthropic';
+        env.ANTHROPIC_API_KEY = provider.apiKey;
+        const host = resolveCustomApiUrl(provider, 'anthropic');
+        if (host && host !== 'https://api.anthropic.com') {
+          env.ANTHROPIC_HOST = host;
+        }
+      } else if (provider.customApiModes?.openai || provider.customApiModes?.responses) {
+        env.GOOSE_PROVIDER = 'openai';
+        env.OPENAI_API_KEY = provider.apiKey;
+        const url = resolveCustomApiUrl(provider, 'openai') ?? resolveCustomApiUrl(provider, 'responses');
+        if (!url) {
+          throw new Error('Goose: custom-api provider must have openai or responses mode enabled');
+        }
+        env.OPENAI_HOST = toGooseOpenAIHost(url);
+      } else {
+        throw new Error(`Goose: custom-api provider "${provider.name}" requires at least one compatible mode (anthropic, openai, or responses)`);
+      }
     } else {
       // openai-compatible
       if (!provider.baseUrl) {

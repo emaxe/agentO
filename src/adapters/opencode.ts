@@ -14,6 +14,7 @@ import { writeJsonAtomic } from '../config/atomic-write.js';
 import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
+import { resolveCustomApiUrl } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
 
 export interface OpenCodeProviderConfig {
@@ -41,7 +42,7 @@ const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
 export class OpenCodeAdapter implements AgentAdapter<OpenCodeConfig> {
   readonly id = 'opencode';
   readonly displayName = 'OpenCode';
-  readonly supportedProviderTypes = ['anthropic', 'openai-compatible', 'fireworks', 'openrouter'] as const;
+  readonly supportedProviderTypes = ['anthropic-compatible', 'openai-compatible', 'fireworks', 'openrouter', 'responses-compatible', 'custom-api'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -72,7 +73,7 @@ export class OpenCodeAdapter implements AgentAdapter<OpenCodeConfig> {
     if (caps.audio) inputModalities.push('audio');
     const modalities = { input: inputModalities, output: ['text'] };
 
-    if (provider.type === 'anthropic') {
+    if (provider.type === 'anthropic-compatible') {
       const options: Record<string, unknown> = { apiKey: provider.apiKey };
       if (provider.baseUrl) options['baseURL'] = provider.baseUrl;
       return {
@@ -117,7 +118,38 @@ export class OpenCodeAdapter implements AgentAdapter<OpenCodeConfig> {
       };
     }
 
-    // openai-compatible: кастомный провайдер с именем из agento
+    if (provider.type === 'custom-api') {
+      if (provider.customApiModes?.anthropic) {
+        const options: Record<string, unknown> = { apiKey: provider.apiKey };
+        const resolved = resolveCustomApiUrl(provider, 'anthropic');
+        if (resolved) options['baseURL'] = resolved;
+        return {
+          model: `anthropic/${base.model}`,
+          provider: { anthropic: { options } },
+          models: { [base.model]: { modalities } },
+        };
+      }
+      if (provider.customApiModes?.openai || provider.customApiModes?.responses) {
+        const providerKey = provider.name.toLowerCase().replace(/\s+/g, '-');
+        const options: Record<string, unknown> = { apiKey: provider.apiKey };
+        const resolved = resolveCustomApiUrl(provider, 'openai') ?? resolveCustomApiUrl(provider, 'responses');
+        if (resolved) options['baseURL'] = resolved;
+        return {
+          model: `${providerKey}/${base.model}`,
+          provider: {
+            [providerKey]: {
+              npm: '@ai-sdk/openai-compatible',
+              name: provider.name,
+              options,
+              models: { [base.model]: { name: base.model, modalities } },
+            },
+          },
+        };
+      }
+      throw new Error(`OpenCode: custom-api provider "${provider.name}" requires at least one compatible mode (anthropic, openai, or responses)`);
+    }
+
+    // openai-compatible and responses-compatible: кастомный провайдер с именем из agento
     const providerKey = provider.name.toLowerCase().replace(/\s+/g, '-');
     const options: Record<string, unknown> = { apiKey: provider.apiKey };
     if (provider.baseUrl) options['baseURL'] = provider.baseUrl;

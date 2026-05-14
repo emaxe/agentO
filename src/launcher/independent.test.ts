@@ -24,7 +24,7 @@ const mockWriteBackup = vi.mocked(writeBackup);
 const testProvider: Provider = {
   id: 'p1',
   name: 'Test',
-  type: 'anthropic',
+  type: 'anthropic-compatible',
   apiKey: 'sk-test',
   baseUrl: 'https://api.test.com',
   models: [{ name: 'claude-3', capabilities: { image: true, video: false, audio: false } }],

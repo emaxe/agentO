@@ -28,7 +28,7 @@ afterEach(async () => {
 const provider: Provider = {
   id: '00000000-0000-0000-0000-000000000001',
   name: 'Test',
-  type: 'anthropic',
+  type: 'anthropic-compatible',
   apiKey: 'sk-test',
   models: [{ name: 'claude-3-5-sonnet', capabilities: { image: true, video: false, audio: false } }],
 };
@@ -126,7 +126,93 @@ describe('launch/restore integration', () => {
     expect(backupExists(claudeCodeAdapter.id, 'global')).toBe(false);
   });
 
-  it('5. Codex project scope: both TOML files deleted on cleanup (hadFile: false)', async () => {
+  it('5. Claude Code with openrouter provider injects local proxy into config ANTHROPIC_BASE_URL', async () => {
+    const { prepareLaunchTransaction } = await import('./transaction.js');
+    const { claudeCodeAdapter } = await import('../adapters/claude-code.js');
+
+    const openrouterProvider: Provider = {
+      id: '00000000-0000-0000-0000-000000000005',
+      name: 'OpenRouter',
+      type: 'openrouter',
+      apiKey: 'or-test',
+      models: [{ name: 'claude-3-5-sonnet', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const openrouterProfile: Profile = {
+      id: '00000000-0000-0000-0000-000000000006',
+      name: 'openrouter-default',
+      models: [{ providerId: openrouterProvider.id, model: 'claude-3-5-sonnet' }],
+    };
+
+    const { cleanup } = await prepareLaunchTransaction({
+      adapter: claudeCodeAdapter,
+      profile: openrouterProfile,
+      providers: [openrouterProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+
+    const configPath = join(testDir, '.claude', 'settings.json');
+    const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
+    const env = config.env as Record<string, string>;
+    expect(env['ANTHROPIC_BASE_URL']).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+
+    await cleanup();
+  });
+
+  it('6. Claude Code with fireworks provider injects local proxy into config ANTHROPIC_BASE_URL', async () => {
+    const { prepareLaunchTransaction } = await import('./transaction.js');
+    const { claudeCodeAdapter } = await import('../adapters/claude-code.js');
+
+    const fireworksProvider: Provider = {
+      id: '00000000-0000-0000-0000-000000000007',
+      name: 'Fireworks',
+      type: 'fireworks',
+      apiKey: 'fw-test',
+      models: [{ name: 'accounts/fireworks/models/kimi-k2p6', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const fireworksProfile: Profile = {
+      id: '00000000-0000-0000-0000-000000000008',
+      name: 'fireworks-default',
+      models: [{ providerId: fireworksProvider.id, model: 'accounts/fireworks/models/kimi-k2p6' }],
+    };
+
+    const { cleanup } = await prepareLaunchTransaction({
+      adapter: claudeCodeAdapter,
+      profile: fireworksProfile,
+      providers: [fireworksProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+
+    const configPath = join(testDir, '.claude', 'settings.json');
+    const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
+    const env = config.env as Record<string, string>;
+    expect(env['ANTHROPIC_BASE_URL']).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+
+    await cleanup();
+  });
+
+  it('7. Claude Code with anthropic provider does not inject proxy', async () => {
+    const { prepareLaunchTransaction } = await import('./transaction.js');
+    const { claudeCodeAdapter } = await import('../adapters/claude-code.js');
+
+    const { cleanup } = await prepareLaunchTransaction({
+      adapter: claudeCodeAdapter,
+      profile,
+      providers: [provider],
+      scope: 'global',
+      command: 'claude',
+    });
+
+    const configPath = join(testDir, '.claude', 'settings.json');
+    const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
+    const env = config.env as Record<string, string>;
+    expect(env['ANTHROPIC_BASE_URL']).toBeUndefined();
+
+    await cleanup();
+  });
+
+  it('8. Codex project scope: both TOML files deleted on cleanup (hadFile: false)', async () => {
     const { prepareLaunchTransaction } = await import('./transaction.js');
     const { codexAdapter } = await import('../adapters/codex.js');
 

@@ -7,7 +7,7 @@ const adapter = new CodexAdapter();
 const testProvider: Provider = {
   id: '00000000-0000-0000-0000-000000000001',
   name: 'Fireworks AI',
-  type: 'openai-compatible',
+  type: 'fireworks',
   apiKey: 'fw_test123',
   baseUrl: 'https://api.fireworks.ai/inference/v1',
   models: [{ name: 'accounts/fireworks/models/kimi-k2', capabilities: { image: true, video: false, audio: false } }],
@@ -21,7 +21,7 @@ const testProfile: Profile = {
 
 describe('CodexAdapter', () => {
   it('supportedProviderTypes includes fireworks and openrouter', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['fireworks', 'openrouter']);
+    expect(adapter.supportedProviderTypes).toEqual(['openai-compatible', 'responses-compatible', 'fireworks', 'openrouter', 'custom-api']);
   });
 
   describe('configPaths', () => {
@@ -98,7 +98,7 @@ describe('CodexAdapter', () => {
     });
 
     it('sets empty base_url when provider has no baseUrl', () => {
-      const providerNoUrl: Provider = { ...testProvider, baseUrl: undefined };
+      const providerNoUrl: Provider = { ...testProvider, type: 'openai-compatible', baseUrl: undefined };
       const config = adapter.buildConfig(testProfile, [providerNoUrl]);
       const providers = config.model_providers as Record<string, unknown>;
       const entry = providers['fireworks-ai'] as Record<string, unknown>;
@@ -124,6 +124,70 @@ describe('CodexAdapter', () => {
       const entry = providers['fireworks-ai'] as Record<string, unknown>;
       const configEnvKey = entry.env_key as string;
       expect(configEnvKey in env).toBe(true);
+    });
+  });
+
+  describe('custom-api provider', () => {
+    it('uses responses wire_api and /responses URL when responses mode enabled', () => {
+      const customProvider: Provider = {
+        id: '00000000-0000-0000-0000-0000000000e1',
+        name: 'Custom',
+        type: 'custom-api',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://proxy.example.com',
+        customApiModes: { openai: false, anthropic: false, responses: true },
+        models: [{ name: 'gpt-5', capabilities: { image: true, video: false, audio: false } }],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-0000000000e2',
+        name: 'Custom',
+        models: [{ providerId: customProvider.id, model: 'gpt-5', tier: 'base' }],
+      };
+      const config = adapter.buildConfig(profile, [customProvider]);
+      const providers = config.model_providers as Record<string, unknown>;
+      const entry = providers['custom'] as Record<string, unknown>;
+      expect(entry.wire_api).toBe('responses');
+      expect(entry.base_url).toBe('https://proxy.example.com/v1/responses');
+    });
+
+    it('uses openai wire_api and base URL when openai mode enabled', () => {
+      const customProvider: Provider = {
+        id: '00000000-0000-0000-0000-0000000000e3',
+        name: 'Custom',
+        type: 'custom-api',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://proxy.example.com',
+        customApiModes: { openai: true, anthropic: false, responses: false },
+        models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-0000000000e4',
+        name: 'Custom',
+        models: [{ providerId: customProvider.id, model: 'gpt-4', tier: 'base' }],
+      };
+      const config = adapter.buildConfig(profile, [customProvider]);
+      const providers = config.model_providers as Record<string, unknown>;
+      const entry = providers['custom'] as Record<string, unknown>;
+      expect(entry.wire_api).toBe('openai');
+      expect(entry.base_url).toBe('https://proxy.example.com');
+    });
+
+    it('throws when no compatible custom-api mode enabled', () => {
+      const customProvider: Provider = {
+        id: '00000000-0000-0000-0000-0000000000e5',
+        name: 'Custom',
+        type: 'custom-api',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://proxy.example.com',
+        customApiModes: { openai: false, anthropic: false, responses: false },
+        models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-0000000000e6',
+        name: 'Custom',
+        models: [{ providerId: customProvider.id, model: 'gpt-4', tier: 'base' }],
+      };
+      expect(() => adapter.buildConfig(profile, [customProvider])).toThrow('requires at least one compatible mode');
     });
   });
 

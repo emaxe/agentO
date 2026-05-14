@@ -92,6 +92,16 @@ export function createLaunchCommand(): Command {
           process.exit(1);
         }
 
+        // Deep compatibility check (e.g. custom-api modes)
+        try {
+          adapter.buildConfig(profile, config.providers);
+        } catch (err) {
+          console.error(
+            `Error: ${adapter.displayName} is not compatible with profile "${profile.name}": ${err instanceof Error ? err.message : String(err)}`
+          );
+          process.exit(1);
+        }
+
         const launchCwd = process.cwd();
         if (mode === 'child') {
           const exitCode = await launchChild({

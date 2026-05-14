@@ -28,6 +28,14 @@ export function validateProvider(
   existingProviders: Provider[],
   selfId?: string,
 ): void {
+  if (!data.name || !data.name.trim()) {
+    throw new Error('Provider name is required.');
+  }
+
+  if (!data.apiKey || !data.apiKey.trim()) {
+    throw new Error('Provider API key is required.');
+  }
+
   // type must be a known ProviderType
   const typeResult = ProviderTypeSchema.safeParse(data.type);
   if (!typeResult.success) {
@@ -36,9 +44,18 @@ export function validateProvider(
     );
   }
 
-  // openai-compatible requires baseUrl
-  if (data.type === 'openai-compatible' && !data.baseUrl) {
-    throw new Error('Provider type "openai-compatible" requires a baseUrl.');
+  // Types that require baseUrl
+  const baseUrlRequiredTypes = ['openai-compatible', 'responses-compatible', 'custom-api'] as const;
+  if (baseUrlRequiredTypes.includes(data.type as (typeof baseUrlRequiredTypes)[number]) && !data.baseUrl) {
+    throw new Error(`Provider type "${data.type}" requires a baseUrl.`);
+  }
+
+  // custom-api requires at least one enabled API mode
+  if (data.type === 'custom-api') {
+    const modes = (data as ProviderInput & { customApiModes?: { openai?: boolean; anthropic?: boolean; responses?: boolean } }).customApiModes;
+    if (!modes || (!modes.openai && !modes.anthropic && !modes.responses)) {
+      throw new Error('Provider type "custom-api" requires at least one API mode (openai, anthropic, or responses) to be enabled.');
+    }
   }
 
   // name must be unique (skip self when updating)
@@ -69,6 +86,10 @@ export function validateProfile(
   existingProviders: Provider[],
   selfId?: string,
 ): void {
+  if (!data.name || !data.name.trim()) {
+    throw new Error('Profile name is required.');
+  }
+
   // name must be unique (skip self when updating)
   const duplicate = existingProfiles.find(
     (p) => p.name === data.name && p.id !== selfId,

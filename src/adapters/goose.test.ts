@@ -7,7 +7,7 @@ const adapter = new GooseAdapter();
 const anthropicProvider: Provider = {
   id: '00000000-0000-0000-0000-000000000001',
   name: 'Anthropic',
-  type: 'anthropic',
+  type: 'anthropic-compatible',
   apiKey: 'sk-ant-test123',
   baseUrl: 'https://api.anthropic.com',
   models: [{ name: 'claude-sonnet-4-6', capabilities: { image: true, video: false, audio: false } }],
@@ -55,7 +55,7 @@ describe('GooseAdapter', () => {
   });
 
   it('supports all four provider types', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['openai-compatible', 'anthropic', 'fireworks', 'openrouter']);
+    expect(adapter.supportedProviderTypes).toEqual(['openai-compatible', 'anthropic-compatible', 'fireworks', 'openrouter', 'responses-compatible', 'custom-api']);
   });
 
   describe('configPaths', () => {
@@ -265,6 +265,68 @@ describe('GooseAdapter', () => {
       };
       const env = adapter.buildEnv(multi, [anthropicProvider]);
       expect(env.GOOSE_MODEL).toBe('sonnet');
+    });
+  });
+
+  describe('custom-api provider', () => {
+    it('routes to anthropic when anthropic mode enabled', () => {
+      const customProvider: Provider = {
+        id: '00000000-0000-0000-0000-0000000000e1',
+        name: 'Custom',
+        type: 'custom-api',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://proxy.example.com',
+        customApiModes: { openai: false, anthropic: true, responses: false },
+        models: [{ name: 'claude-3', capabilities: { image: true, video: false, audio: false } }],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-0000000000e2',
+        name: 'Custom',
+        models: [{ providerId: customProvider.id, model: 'claude-3' }],
+      };
+      const env = adapter.buildEnv(profile, [customProvider]);
+      expect(env.GOOSE_PROVIDER).toBe('anthropic');
+      expect(env.ANTHROPIC_API_KEY).toBe('sk-custom');
+      expect(env.ANTHROPIC_HOST).toBe('https://proxy.example.com/v1');
+    });
+
+    it('routes to openai when openai mode enabled', () => {
+      const customProvider: Provider = {
+        id: '00000000-0000-0000-0000-0000000000e3',
+        name: 'Custom',
+        type: 'custom-api',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://proxy.example.com',
+        customApiModes: { openai: true, anthropic: false, responses: false },
+        models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-0000000000e4',
+        name: 'Custom',
+        models: [{ providerId: customProvider.id, model: 'gpt-4' }],
+      };
+      const env = adapter.buildEnv(profile, [customProvider]);
+      expect(env.GOOSE_PROVIDER).toBe('openai');
+      expect(env.OPENAI_API_KEY).toBe('sk-custom');
+      expect(env.OPENAI_HOST).toBe('https://proxy.example.com');
+    });
+
+    it('throws when no compatible custom-api mode enabled', () => {
+      const customProvider: Provider = {
+        id: '00000000-0000-0000-0000-0000000000e5',
+        name: 'Custom',
+        type: 'custom-api',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://proxy.example.com',
+        customApiModes: { openai: false, anthropic: false, responses: false },
+        models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-0000000000e6',
+        name: 'Custom',
+        models: [{ providerId: customProvider.id, model: 'gpt-4' }],
+      };
+      expect(() => adapter.buildEnv(profile, [customProvider])).toThrow('requires at least one compatible mode');
     });
   });
 

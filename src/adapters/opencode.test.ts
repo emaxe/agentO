@@ -10,7 +10,7 @@ const adapter = new OpenCodeAdapter();
 const testProvider: Provider = {
   id: '00000000-0000-0000-0000-000000000001',
   name: 'Test Provider',
-  type: 'anthropic',
+  type: 'anthropic-compatible',
   apiKey: 'sk-ant-test123',
   baseUrl: 'https://api.test.com',
   models: [{ name: 'claude-3-opus', capabilities: { image: true, video: false, audio: false } }],
@@ -78,7 +78,7 @@ describe('OpenCodeAdapter', () => {
   });
 
   it('supportedProviderTypes includes all four types', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['anthropic', 'openai-compatible', 'fireworks', 'openrouter']);
+    expect(adapter.supportedProviderTypes).toEqual(['anthropic-compatible', 'openai-compatible', 'fireworks', 'openrouter', 'responses-compatible', 'custom-api']);
   });
 
   it('includes modalities based on model capabilities (anthropic)', () => {
@@ -190,6 +190,72 @@ describe('OpenCodeAdapter', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it('custom-api provider with anthropic mode returns anthropic provider block', () => {
+    const customProvider: Provider = {
+      id: '00000000-0000-0000-0000-0000000000e1',
+      name: 'Custom Anthropic',
+      type: 'custom-api',
+      apiKey: 'sk-custom',
+      baseUrl: 'https://proxy.example.com',
+      customApiModes: { openai: false, anthropic: true, responses: false },
+      models: [{ name: 'claude-3', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-0000000000e2',
+      name: 'Custom',
+      models: [{ providerId: customProvider.id, model: 'claude-3', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [customProvider]);
+    expect(config.model).toBe('anthropic/claude-3');
+    const provider = config.provider as Record<string, unknown>;
+    expect('anthropic' in provider).toBe(true);
+    const anthropic = provider.anthropic as Record<string, unknown>;
+    const options = anthropic.options as Record<string, string>;
+    expect(options.baseURL).toBe('https://proxy.example.com/v1');
+  });
+
+  it('custom-api provider with openai mode returns @ai-sdk/openai-compatible block', () => {
+    const customProvider: Provider = {
+      id: '00000000-0000-0000-0000-0000000000e3',
+      name: 'Custom OpenAI',
+      type: 'custom-api',
+      apiKey: 'sk-custom',
+      baseUrl: 'https://proxy.example.com',
+      customApiModes: { openai: true, anthropic: false, responses: false },
+      models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-0000000000e4',
+      name: 'Custom',
+      models: [{ providerId: customProvider.id, model: 'gpt-4', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [customProvider]);
+    const provider = config.provider as Record<string, unknown>;
+    expect('custom-openai' in provider).toBe(true);
+    const entry = provider['custom-openai'] as Record<string, unknown>;
+    expect(entry.npm).toBe('@ai-sdk/openai-compatible');
+    const options = entry.options as Record<string, string>;
+    expect(options.baseURL).toBe('https://proxy.example.com');
+  });
+
+  it('throws for custom-api provider without compatible mode', () => {
+    const customProvider: Provider = {
+      id: '00000000-0000-0000-0000-0000000000e5',
+      name: 'Custom',
+      type: 'custom-api',
+      apiKey: 'sk-custom',
+      baseUrl: 'https://proxy.example.com',
+      customApiModes: { openai: false, anthropic: false, responses: false },
+      models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-0000000000e6',
+      name: 'Custom',
+      models: [{ providerId: customProvider.id, model: 'gpt-4', tier: 'base' }],
+    };
+    expect(() => adapter.buildConfig(profile, [customProvider])).toThrow('requires at least one compatible mode');
   });
 
   describe('writeConfig merge', () => {

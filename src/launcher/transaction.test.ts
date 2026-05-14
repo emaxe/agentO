@@ -32,7 +32,7 @@ const mockUnlink = vi.mocked(unlink);
 const testProvider: Provider = {
   id: 'p1',
   name: 'Test',
-  type: 'anthropic',
+  type: 'anthropic-compatible',
   apiKey: 'sk-test',
   baseUrl: 'https://api.test.com',
   models: [{ name: 'claude-3', capabilities: { image: true, video: false, audio: false } }],
@@ -48,7 +48,7 @@ function makeAdapter(currentConfig: Record<string, unknown> | null = null): Agen
   return {
     id: 'test-agent',
     displayName: 'Test Agent',
-    supportedProviderTypes: ['anthropic'],
+    supportedProviderTypes: ['anthropic-compatible'],
     readConfig: vi.fn().mockResolvedValue(currentConfig),
     writeConfig: vi.fn().mockResolvedValue(undefined),
     buildConfig: vi.fn().mockReturnValue({ env: { TEST: 'value' } }),

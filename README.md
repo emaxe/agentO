@@ -13,7 +13,7 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 
 | Agent | Command | Config Format | Supported Providers | Special Features |
 |-------|---------|---------------|---|------------------|
-| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic`, `fireworks`, `openrouter` | Multi-tier support (small/base/smart) |
+| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic`, `fireworks`, `openrouter` | Multi-tier support (small/base/smart). |
 | [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Full function calling support via Vercel AI SDK |
 | [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter` | OpenAI-compatible API structure |
 | [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `fireworks`, `openrouter` | Environment variable injection. `wire_api: responses`. |
@@ -350,7 +350,7 @@ AgentO stores its configuration in `~/.agento/config.json`:
     {
       "id": "uuid",
       "name": "Anthropic",
-      "type": "anthropic",
+      "type": "anthropic-compatible",
       "apiKey": "sk-ant-...",
       "models": [
         { "name": "claude-opus-4-20250514", "capabilities": { "image": true, "video": false, "audio": false } },
@@ -407,7 +407,8 @@ AgentO stores its configuration in `~/.agento/config.json`:
 Each supported agent has a dedicated adapter that translates AgentO's generic config format into the agent's specific configuration:
 
 - **Claude Code** (supports `anthropic`, `fireworks`, `openrouter`): Generates `~/.claude/settings.json` with tier-based model selection and ANTHROPIC_* env vars. Uses Anthropic SDK.
-  - For `openrouter`: uses OpenRouter's **Anthropic Skin** — sets `ANTHROPIC_AUTH_TOKEN` (Bearer) + empty `ANTHROPIC_API_KEY`, no `apiKeyHelper`. Base URL: `https://openrouter.ai/api`
+  - For `openrouter` and `fireworks`: automatically starts a local proxy (`anthropic-scrubber`) that strips unsupported Anthropic-specific fields (e.g., `context_management`) from requests before forwarding to the upstream.
+  - For `openrouter`: uses OpenRouter's **Anthropic Skin** — sets `ANTHROPIC_AUTH_TOKEN` (Bearer) + empty `ANTHROPIC_API_KEY`, no `apiKeyHelper`. Base URL: `https://openrouter.ai/api`.
   - ⚠️ **Does NOT support** `openai-compatible` providers (Anthropic SDK incompatibility)
   - Capability flags are not propagated (Anthropic SDK doesn't expose modality config)
   

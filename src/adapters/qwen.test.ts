@@ -24,7 +24,7 @@ const testProfile: Profile = {
 
 describe('QwenAdapter', () => {
   it('supportedProviderTypes includes openai-compatible, fireworks and openrouter', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['openai-compatible', 'fireworks', 'openrouter']);
+    expect(adapter.supportedProviderTypes).toEqual(['openai-compatible', 'fireworks', 'openrouter', 'custom-api']);
   });
 
   describe('configPaths', () => {
@@ -113,7 +113,7 @@ describe('QwenAdapter', () => {
     });
 
     it('throws when provider type is anthropic', () => {
-      const anthropicProvider: Provider = { ...testProvider, type: 'anthropic' };
+      const anthropicProvider: Provider = { ...testProvider, type: 'anthropic-compatible' };
       expect(() => adapter.buildConfig(testProfile, [anthropicProvider])).toThrow('does not support Anthropic');
     });
 
@@ -201,6 +201,45 @@ describe('QwenAdapter', () => {
       expect(modelProviders.openai).toBeDefined();
       expect(modelProviders.openai![0]!.baseUrl).toBe('https://openrouter.ai/api/v1');
     });
+
+  it('custom-api provider with openai mode uses baseUrl directly', () => {
+    const customProvider: Provider = {
+      id: '00000000-0000-0000-0000-0000000000e1',
+      name: 'Custom',
+      type: 'custom-api',
+      apiKey: 'sk-custom',
+      baseUrl: 'https://proxy.example.com/v1',
+      customApiModes: { openai: true, anthropic: false, responses: false },
+      models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-0000000000e2',
+      name: 'Custom',
+      models: [{ providerId: customProvider.id, model: 'gpt-4', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [customProvider]);
+    const mp = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
+    expect(mp['openai']).toHaveLength(1);
+    expect(mp['openai']![0]!.baseUrl).toBe('https://proxy.example.com/v1');
+  });
+
+  it('throws for custom-api provider without openai mode', () => {
+    const customProvider: Provider = {
+      id: '00000000-0000-0000-0000-0000000000e3',
+      name: 'Custom',
+      type: 'custom-api',
+      apiKey: 'sk-custom',
+      baseUrl: 'https://proxy.example.com',
+      customApiModes: { openai: false, anthropic: true, responses: false },
+      models: [{ name: 'claude-3', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-0000000000e4',
+      name: 'Custom',
+      models: [{ providerId: customProvider.id, model: 'claude-3', tier: 'base' }],
+    };
+    expect(() => adapter.buildConfig(profile, [customProvider])).toThrow('requires openai mode');
+  });
 
     it('openrouter envKey derives from resolved baseUrl', () => {
       const openrouterProvider: Provider = {

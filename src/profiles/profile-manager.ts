@@ -20,8 +20,8 @@ export async function addProfile(input: CreateProfileInput): Promise<Profile> {
   const config = await readConfig();
   validateProfile(input, config.profiles, config.providers);
   const profile = ProfileSchema.parse({ ...input, id: randomUUID() });
-  config.profiles.push(profile);
-  await writeConfig(config);
+  const newConfig = { ...config, profiles: [...config.profiles, profile] };
+  await writeConfig(newConfig);
   return profile;
 }
 
@@ -38,8 +38,8 @@ export async function updateProfile(
   if (index === -1) throw new Error(`Profile not found: ${id}`);
   validateProfile({ ...config.profiles[index], ...updates }, config.profiles, config.providers, id);
   const updated = ProfileSchema.parse({ ...config.profiles[index], ...updates });
-  config.profiles[index] = updated;
-  await writeConfig(config);
+  const newConfig = { ...config, profiles: config.profiles.map((p, i) => i === index ? updated : p) };
+  await writeConfig(newConfig);
   return updated;
 }
 
@@ -53,8 +53,8 @@ export async function removeProfile(idOrName: string): Promise<void> {
     (p) => p.id === idOrName || p.name === idOrName,
   );
   if (index === -1) throw new Error(`Profile not found: ${idOrName}`);
-  config.profiles.splice(index, 1);
-  await writeConfig(config);
+  const newConfig = { ...config, profiles: config.profiles.filter((_, i) => i !== index) };
+  await writeConfig(newConfig);
 }
 
 /**
@@ -79,8 +79,8 @@ export async function moveModelUp(profileId: string, modelIndex: number): Promis
   [models[modelIndex - 1], models[modelIndex]] = [models[modelIndex], models[modelIndex - 1]];
   const updated = ProfileSchema.parse({ ...profile, models });
   const index = config.profiles.findIndex((p) => p.id === profileId);
-  config.profiles[index] = updated;
-  await writeConfig(config);
+  const newConfig = { ...config, profiles: config.profiles.map((p, i) => i === index ? updated : p) };
+  await writeConfig(newConfig);
   return updated;
 }
 
@@ -97,7 +97,7 @@ export async function moveModelDown(profileId: string, modelIndex: number): Prom
   [models[modelIndex], models[modelIndex + 1]] = [models[modelIndex + 1], models[modelIndex]];
   const updated = ProfileSchema.parse({ ...profile, models });
   const index = config.profiles.findIndex((p) => p.id === profileId);
-  config.profiles[index] = updated;
-  await writeConfig(config);
+  const newConfig = { ...config, profiles: config.profiles.map((p, i) => i === index ? updated : p) };
+  await writeConfig(newConfig);
   return updated;
 }

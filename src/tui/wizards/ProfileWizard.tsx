@@ -3,19 +3,21 @@ import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { useKeyInput } from '../use-key-input.js';
 import { SelectList } from '../components/SelectList.js';
-import type { Provider, ProfileModel, ModelTier } from '../../config/schema.js';
+import type { Provider, Profile, ProfileModel, ModelTier } from '../../config/schema.js';
 import { capabilityMarker } from '../../config/schema.js';
+import { validateProfile } from '../../config/validation.js';
 
 const TIERS: ModelTier[] = ['small', 'base', 'smart'];
 type WizardStep = 'name' | 'select-provider' | 'select-model' | 'select-tier' | 'review';
 
 interface ProfileWizardProps {
   providers: Provider[];
+  profiles: Profile[];
   onDone: (result: { name: string; models: ProfileModel[] }) => void;
   onCancel: () => void;
 }
 
-export function ProfileWizard({ providers, onDone, onCancel }: ProfileWizardProps): React.JSX.Element {
+export function ProfileWizard({ providers, profiles, onDone, onCancel }: ProfileWizardProps): React.JSX.Element {
   const [step, setStep] = useState<WizardStep>('name');
   const [formName, setFormName] = useState('');
   const [formModels, setFormModels] = useState<ProfileModel[]>([]);
@@ -29,28 +31,18 @@ export function ProfileWizard({ providers, onDone, onCancel }: ProfileWizardProp
   const [status, setStatus] = useState('');
 
   const validateAndSubmit = useCallback(() => {
-    if (!formName || formModels.length === 0) {
-      setStatus('Name and at least one model required');
-      return;
+    try {
+      const name = formName.trim();
+      const modelsToSave: ProfileModel[] =
+        formModels.length === 1
+          ? [{ providerId: formModels[0]!.providerId, model: formModels[0]!.model }]
+          : formModels;
+      validateProfile({ name, models: modelsToSave }, profiles, providers);
+      onDone({ name, models: modelsToSave });
+    } catch (err) {
+      setStatus(String(err));
     }
-    let modelsToSave: ProfileModel[];
-    if (formModels.length === 1) {
-      modelsToSave = [{ providerId: formModels[0]!.providerId, model: formModels[0]!.model }];
-    } else {
-      const missingTier = formModels.some((m) => !m.tier);
-      if (missingTier) {
-        setStatus('All models must have a tier when there are multiple');
-        return;
-      }
-      const hasBase = formModels.some((m) => m.tier === 'base');
-      if (!hasBase) {
-        setStatus('At least one model must have tier=base');
-        return;
-      }
-      modelsToSave = formModels;
-    }
-    onDone({ name: formName, models: modelsToSave });
-  }, [formName, formModels, onDone]);
+  }, [formName, formModels, profiles, providers, onDone]);
 
   useKeyInput((input, key) => {
     if (step === 'name') {

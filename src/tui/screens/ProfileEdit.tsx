@@ -5,6 +5,7 @@ import { useKeyInput } from '../use-key-input.js';
 import { SelectList } from '../components/SelectList.js';
 import type { Profile, Provider, ProfileModel, ModelTier } from '../../config/schema.js';
 import { capabilityMarker } from '../../config/schema.js';
+import { validateProfile } from '../../config/validation.js';
 
 const TIERS: ModelTier[] = ['small', 'base', 'smart'];
 type EditSubStep = 'select-provider' | 'select-model' | 'select-tier';
@@ -12,6 +13,7 @@ type EditSubStep = 'select-provider' | 'select-model' | 'select-tier';
 interface ProfileEditProps {
   profile: Profile;
   providers: Provider[];
+  profiles: Profile[];
   onSave: (result: { name: string; models: ProfileModel[] }) => void;
   onCancel: () => void;
   startAddingModel?: boolean;
@@ -20,6 +22,7 @@ interface ProfileEditProps {
 export function ProfileEdit({
   profile,
   providers,
+  profiles,
   onSave,
   onCancel,
   startAddingModel = false,
@@ -38,29 +41,18 @@ export function ProfileEdit({
   const [status, setStatus] = useState('');
 
   const doSave = useCallback(() => {
-    const trimmedName = editName.trim();
-    if (!trimmedName || editModels.length === 0) {
-      setStatus('Name and at least one model required');
-      return;
+    try {
+      const trimmedName = editName.trim();
+      const modelsToSave: ProfileModel[] =
+        editModels.length === 1
+          ? [{ providerId: editModels[0]!.providerId, model: editModels[0]!.model }]
+          : editModels;
+      validateProfile({ name: trimmedName, models: modelsToSave }, profiles, providers, profile.id);
+      onSave({ name: trimmedName, models: modelsToSave });
+    } catch (err) {
+      setStatus(String(err));
     }
-    let modelsToSave: ProfileModel[];
-    if (editModels.length === 1) {
-      modelsToSave = [{ providerId: editModels[0]!.providerId, model: editModels[0]!.model }];
-    } else {
-      const missingTier = editModels.some((m) => !m.tier);
-      if (missingTier) {
-        setStatus('All models must have a tier when there are multiple');
-        return;
-      }
-      const hasBase = editModels.some((m) => m.tier === 'base');
-      if (!hasBase) {
-        setStatus('At least one model must have tier=base');
-        return;
-      }
-      modelsToSave = editModels;
-    }
-    onSave({ name: trimmedName, models: modelsToSave });
-  }, [editName, editModels, onSave]);
+  }, [editName, editModels, profiles, providers, profile, onSave]);
 
   useKeyInput((input, key) => {
     if (editSubStep !== null) {

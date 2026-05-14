@@ -2,6 +2,7 @@ import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
 import { restoreBackupManifest } from '../config/backup-restore.js';
 import type { Profile, Provider } from '../config/schema.js';
 import { deleteBackup, inferBackupFileFormat, readBackup, readConfig, writeBackup } from '../config/store.js';
+import { startAnthropicScrubberProxy } from '../proxy/anthropic-scrubber.js';
 import { shellPathResolver } from './shell-path-resolver.js';
 
 /**
@@ -87,6 +88,34 @@ async function snapshotPrimaryConfigFile(
   }];
 }
 
+async function maybeStartProxy(
+  adapter: AgentAdapter,
+  profile: Profile,
+  providers: Provider[],
+  scope: LaunchScope,
+  cwd: string | undefined,
+  writtenConfig: Record<string, unknown>,
+): Promise<(() => Promise<void>) | undefined> {
+  if (adapter.id !== 'claude-code') return;
+
+  const baseModel = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
+  if (!baseModel) return;
+
+  const provider = providers.find((p) => p.id === baseModel.providerId);
+  if (!provider || provider.type === 'anthropic-compatible') return;
+
+  const env = writtenConfig.env as Record<string, string> | undefined;
+  const upstream = env?.['ANTHROPIC_BASE_URL'];
+  if (!upstream || typeof upstream !== 'string') return;
+
+  const proxy = await startAnthropicScrubberProxy({ upstreamUrl: upstream });
+
+  const newConfig = { ...writtenConfig, env: { ...env, ANTHROPIC_BASE_URL: proxy.url } };
+  await adapter.writeConfig(newConfig, scope, cwd, false);
+
+  return proxy.stop;
+}
+
 function createLaunchCleanup(adapter: AgentAdapter, scope: LaunchScope, cwd?: string): () => Promise<void> {
   return async (): Promise<void> => {
     const backup = await readBackup(adapter.id, scope, cwd);
@@ -117,8 +146,16 @@ export async function prepareLaunchTransaction(options: LaunchTransactionOptions
   const agentoConfig = await readConfig();
   await adapter.writeConfig(newConfig, scope, cwd, agentoConfig.settings.mergeAgentConfigs);
 
-  return {
-    execReq: await buildExecRequest({ ...options, args }),
-    cleanup: createLaunchCleanup(adapter, scope, cwd),
+  const execReq = await buildExecRequest({ ...options, args });
+  const stopProxy = await maybeStartProxy(adapter, profile, providers, scope, cwd, newConfig);
+  const baseCleanup = createLaunchCleanup(adapter, scope, cwd);
+
+  const cleanup = async (): Promise<void> => {
+    if (stopProxy) {
+      await stopProxy();
+    }
+    await baseCleanup();
   };
+
+  return { execReq, cleanup };
 }

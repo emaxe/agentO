@@ -6,6 +6,7 @@ import { writeJsonAtomic } from '../config/atomic-write.js';
 import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
+import { resolveCustomApiUrl } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
 
 export interface QwenModelProviderEntry {
@@ -46,7 +47,7 @@ function deriveEnvKey(baseUrl: string): string {
 export class QwenAdapter implements AgentAdapter<QwenConfig> {
   readonly id = 'qwen';
   readonly displayName = 'Qwen CLI';
-  readonly supportedProviderTypes = ['openai-compatible', 'fireworks', 'openrouter'] as const;
+  readonly supportedProviderTypes = ['openai-compatible', 'fireworks', 'openrouter', 'custom-api'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -79,10 +80,18 @@ export class QwenAdapter implements AgentAdapter<QwenConfig> {
       if (!provider) {
         throw new Error(`Provider not found for id: ${profileModel.providerId}`);
       }
-      if (provider.type === 'anthropic') {
+      if (provider.type === 'anthropic-compatible') {
         throw new Error(`Qwen CLI does not support Anthropic providers (provider: "${provider.name}")`);
       }
-      const resolvedBaseUrl = provider.baseUrl ?? DEFAULT_BASE_URLS[provider.type];
+      let resolvedBaseUrl: string | undefined;
+      if (provider.type === 'custom-api') {
+        if (!provider.customApiModes?.openai) {
+          throw new Error(`Qwen CLI requires openai mode for custom-api provider "${provider.name}"`);
+        }
+        resolvedBaseUrl = resolveCustomApiUrl(provider, 'openai');
+      } else {
+        resolvedBaseUrl = provider.baseUrl ?? DEFAULT_BASE_URLS[provider.type];
+      }
       if (!resolvedBaseUrl) {
         throw new Error(`Qwen CLI requires a baseUrl for provider "${provider.name}"`);
       }
