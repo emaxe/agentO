@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { convertRequest } from './openai-adapter.js';
+import { convertRequest, convertResponse } from './openai-adapter.js';
 
 describe('convertRequest', () => {
   it('converts simple text messages', () => {
@@ -209,5 +209,60 @@ describe('convertRequest', () => {
       { type: 'function', function: { description: 'No name' } },
       { type: 'function', function: { name: 'no_schema' } },
     ]);
+  });
+});
+
+describe('convertResponse', () => {
+  it('converts simple text response', () => {
+    const openai = {
+      id: 'chatcmpl-123',
+      object: 'chat.completion',
+      created: 1677652288,
+      model: 'gpt-4',
+      choices: [
+        {
+          index: 0,
+          message: { role: 'assistant', content: 'Hello there' },
+          finish_reason: 'stop',
+        },
+      ],
+      usage: { prompt_tokens: 9, completion_tokens: 12, total_tokens: 21 },
+    };
+    const anthropic = convertResponse(openai);
+    expect(anthropic.id).toBe('chatcmpl-123');
+    expect(anthropic.role).toBe('assistant');
+    expect(anthropic.content).toEqual([{ type: 'text', text: 'Hello there' }]);
+    expect(anthropic.stop_reason).toBe('end_turn');
+    expect(anthropic.usage.input_tokens).toBe(9);
+    expect(anthropic.usage.output_tokens).toBe(12);
+  });
+
+  it('converts response with tool_calls', () => {
+    const openai = {
+      id: 'chatcmpl-tool',
+      model: 'gpt-4',
+      choices: [
+        {
+          message: {
+            role: 'assistant',
+            content: null,
+            tool_calls: [
+              {
+                id: 'call_1',
+                type: 'function',
+                function: { name: 'get_weather', arguments: '{"city":"Paris"}' },
+              },
+            ],
+          },
+          finish_reason: 'tool_calls',
+        },
+      ],
+      usage: { prompt_tokens: 10, completion_tokens: 20 },
+    };
+    const anthropic = convertResponse(openai);
+    expect(anthropic.content).toEqual([
+      { type: 'tool_use', id: 'call_1', name: 'get_weather', input: { city: 'Paris' } },
+    ]);
+    expect(anthropic.stop_reason).toBe('tool_use');
   });
 });

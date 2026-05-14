@@ -163,3 +163,78 @@ function convertToolChoice(toolChoice: Record<string, unknown>): unknown {
       return toolChoice;
   }
 }
+
+/** Anthropic API response shape (subset used for conversion). */
+export interface AnthropicResponse {
+  id: string;
+  type: 'message';
+  role: 'assistant';
+  content: Array<Record<string, unknown>>;
+  model: string;
+  stop_reason: 'end_turn' | 'max_tokens' | 'stop_sequence' | 'tool_use' | null;
+  usage: { input_tokens: number; output_tokens: number };
+  [key: string]: unknown;
+}
+
+/** Convert an OpenAI chat completion response into an Anthropic-compatible response. */
+export function convertResponse(res: unknown): AnthropicResponse {
+  if (typeof res !== 'object' || res === null) {
+    throw new Error('Invalid OpenAI response');
+  }
+  const r = res as Record<string, unknown>;
+  const choice = ((r.choices as Array<Record<string, unknown>>)?.[0]) ?? {};
+  const message = (choice.message as Record<string, unknown>) ?? {};
+  const finishReason = String(choice.finish_reason ?? 'stop');
+
+  const content: Array<Record<string, unknown>> = [];
+
+  if (typeof message.content === 'string' && message.content) {
+    content.push({ type: 'text', text: message.content });
+  }
+
+  const toolCalls = message.tool_calls as Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(toolCalls)) {
+    for (const tc of toolCalls) {
+      let input: unknown = {};
+      try {
+        input = JSON.parse(String(tc.function?.arguments ?? '{}'));
+      } catch {
+        input = {};
+      }
+      content.push({
+        type: 'tool_use',
+        id: String(tc.id ?? ''),
+        name: String(tc.function?.name ?? ''),
+        input,
+      });
+    }
+  }
+
+  const usage = (r.usage as Record<string, number>) ?? {};
+
+  return {
+    id: String(r.id ?? ''),
+    type: 'message',
+    role: 'assistant',
+    content,
+    model: String(r.model ?? ''),
+    stop_reason: mapFinishReason(finishReason),
+    usage: {
+      input_tokens: usage.prompt_tokens ?? 0,
+      output_tokens: usage.completion_tokens ?? 0,
+    },
+  };
+}
+
+function mapFinishReason(fr: string): AnthropicResponse['stop_reason'] {
+  switch (fr) {
+    case 'stop':
+      return 'end_turn';
+    case 'length':
+      return 'max_tokens';
+    case 'tool_calls':
+      return 'tool_use';
+    default:
+      return 'end_turn';
+  }
+}
