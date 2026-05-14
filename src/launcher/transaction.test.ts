@@ -320,4 +320,74 @@ describe('prepareLaunchTransaction', () => {
     expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://api.fireworks.ai/inference' });
     expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
   });
+
+  it('starts OpenAI proxy for custom-api provider with openai mode and claude-code adapter', async () => {
+    const customProvider: Provider = {
+      id: 'p-custom-openai',
+      name: 'Custom OpenAI',
+      type: 'custom-api',
+      apiKey: 'sk-custom',
+      baseUrl: 'https://proxy.example.com',
+      customApiModes: { openai: true, anthropic: false, responses: false },
+      models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const customProfile: Profile = {
+      id: 'prof-custom',
+      name: 'Custom Profile',
+      models: [{ providerId: customProvider.id, model: 'gpt-4' }],
+    };
+    const adapter = makeAdapter(null);
+    adapter.id = 'claude-code';
+    adapter.displayName = 'Claude Code';
+    adapter.supportedProviderTypes = ['custom-api'];
+    adapter.buildConfig = vi.fn().mockReturnValue({
+      env: { ANTHROPIC_BASE_URL: 'https://proxy.example.com' },
+    });
+
+    await prepareLaunchTransaction({
+      adapter,
+      profile: customProfile,
+      providers: [customProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+
+    expect(mockStartOpenAIProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://proxy.example.com' });
+    expect(mockStartAnthropicScrubberProxy).not.toHaveBeenCalled();
+  });
+
+  it('starts anthropic scrubber proxy for custom-api provider with anthropic mode and claude-code adapter', async () => {
+    const customProvider: Provider = {
+      id: 'p-custom-anthropic',
+      name: 'Custom Anthropic',
+      type: 'custom-api',
+      apiKey: 'sk-custom',
+      baseUrl: 'https://proxy.example.com',
+      customApiModes: { openai: false, anthropic: true, responses: false },
+      models: [{ name: 'claude-3', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const customProfile: Profile = {
+      id: 'prof-custom-anth',
+      name: 'Custom Anthropic Profile',
+      models: [{ providerId: customProvider.id, model: 'claude-3' }],
+    };
+    const adapter = makeAdapter(null);
+    adapter.id = 'claude-code';
+    adapter.displayName = 'Claude Code';
+    adapter.supportedProviderTypes = ['custom-api'];
+    adapter.buildConfig = vi.fn().mockReturnValue({
+      env: { ANTHROPIC_BASE_URL: 'https://proxy.example.com/v1' },
+    });
+
+    await prepareLaunchTransaction({
+      adapter,
+      profile: customProfile,
+      providers: [customProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+
+    expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://proxy.example.com/v1' });
+    expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
+  });
 });

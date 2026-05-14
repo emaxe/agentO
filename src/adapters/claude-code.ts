@@ -86,10 +86,13 @@ export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
     };
     let anthropicBase: string | undefined;
     if (baseProvider.type === 'custom-api') {
-      if (!baseProvider.customApiModes?.anthropic) {
-        throw new Error(`Claude Code requires anthropic mode for custom-api provider "${baseProvider.name}"`);
+      if (baseProvider.customApiModes?.anthropic) {
+        anthropicBase = resolveCustomApiUrl(baseProvider, 'anthropic');
+      } else if (baseProvider.customApiModes?.openai) {
+        anthropicBase = resolveCustomApiUrl(baseProvider, 'openai');
+      } else {
+        throw new Error(`Claude Code requires anthropic or openai mode for custom-api provider "${baseProvider.name}"`);
       }
-      anthropicBase = resolveCustomApiUrl(baseProvider, 'anthropic');
     } else {
       anthropicBase = baseProvider.baseUrl ?? DEFAULT_ANTHROPIC_BASE_URLS[baseProvider.type];
     }

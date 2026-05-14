@@ -266,7 +266,44 @@ describe('launch/restore integration', () => {
     await cleanup();
   });
 
-  it('9. Codex project scope: both TOML files deleted on cleanup (hadFile: false)', async () => {
+  it('9. Claude Code with custom-api provider (openai mode) injects local OpenAI proxy into config ANTHROPIC_BASE_URL', async () => {
+    const { prepareLaunchTransaction } = await import('./transaction.js');
+    const { claudeCodeAdapter } = await import('../adapters/claude-code.js');
+
+    const customProvider: Provider = {
+      id: '00000000-0000-0000-0000-000000000016',
+      name: 'Custom OpenAI',
+      type: 'custom-api',
+      apiKey: 'sk-custom',
+      baseUrl: 'https://proxy.example.com',
+      customApiModes: { openai: true, anthropic: false, responses: false },
+      models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const customProfile: Profile = {
+      id: '00000000-0000-0000-0000-000000000017',
+      name: 'custom-openai-default',
+      models: [{ providerId: customProvider.id, model: 'gpt-4' }],
+    };
+
+    const { cleanup } = await prepareLaunchTransaction({
+      adapter: claudeCodeAdapter,
+      profile: customProfile,
+      providers: [customProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+
+    const configPath = join(testDir, '.claude', 'settings.json');
+    const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
+    const env = config.env as Record<string, string>;
+    expect(env['ANTHROPIC_BASE_URL']).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(mockStartOpenAIProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://proxy.example.com' });
+    expect(mockStartAnthropicScrubberProxy).not.toHaveBeenCalled();
+
+    await cleanup();
+  });
+
+  it('10. Codex project scope: both TOML files deleted on cleanup (hadFile: false)', async () => {
     const { prepareLaunchTransaction } = await import('./transaction.js');
     const { codexAdapter } = await import('../adapters/codex.js');
 

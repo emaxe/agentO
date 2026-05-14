@@ -118,7 +118,9 @@ async function maybeStartProxy(
   const upstream = env?.['ANTHROPIC_BASE_URL'];
   if (!upstream || typeof upstream !== 'string') return;
 
-  const proxy = provider.type === 'openai-compatible'
+  const needsOpenAIProxy = provider.type === 'openai-compatible'
+    || (provider.type === 'custom-api' && provider.customApiModes?.openai && !provider.customApiModes?.anthropic);
+  const proxy = needsOpenAIProxy
     ? await startOpenAIProxy({ upstreamUrl: upstream })
     : await startAnthropicScrubberProxy({ upstreamUrl: upstream });
 
