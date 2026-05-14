@@ -115,8 +115,8 @@ describe('ClaudeCodeAdapter', () => {
     );
   });
 
-  it('supportedProviderTypes includes anthropic, fireworks, and openrouter', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['anthropic-compatible', 'fireworks', 'openrouter', 'custom-api']);
+  it('supportedProviderTypes includes anthropic, fireworks, openrouter, custom-api, and openai-compatible', () => {
+    expect(adapter.supportedProviderTypes).toEqual(['anthropic-compatible', 'fireworks', 'openrouter', 'custom-api', 'openai-compatible']);
   });
 
   it('openrouter uses ANTHROPIC_AUTH_TOKEN and empty ANTHROPIC_API_KEY, no apiKeyHelper', () => {
@@ -229,6 +229,44 @@ describe('ClaudeCodeAdapter', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it('openai-compatible provider without baseUrl uses default OpenAI URL', () => {
+    const openaiProvider: Provider = {
+      id: '00000000-0000-0000-0000-000000000010',
+      name: 'OpenAI',
+      type: 'openai-compatible',
+      apiKey: 'sk-openai-test',
+      models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-000000000011',
+      name: 'OpenAI Profile',
+      models: [{ providerId: openaiProvider.id, model: 'gpt-4', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [openaiProvider]);
+    const env = config.env as Record<string, string>;
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://api.openai.com/v1');
+    expect(config.apiKeyHelper).toBe("bash -c 'echo sk-openai-test'");
+  });
+
+  it('openai-compatible provider respects user baseUrl override', () => {
+    const openaiProvider: Provider = {
+      id: '00000000-0000-0000-0000-000000000012',
+      name: 'OpenAI Custom',
+      type: 'openai-compatible',
+      apiKey: 'sk-openai-test',
+      baseUrl: 'https://proxy.example.com',
+      models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-000000000013',
+      name: 'OpenAI Custom Profile',
+      models: [{ providerId: openaiProvider.id, model: 'gpt-4', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [openaiProvider]);
+    const env = config.env as Record<string, string>;
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com');
   });
 
   describe('writeConfig merge', () => {

@@ -20,6 +20,7 @@ export interface ClaudeCodeConfig {
 const DEFAULT_ANTHROPIC_BASE_URLS: Partial<Record<ProviderType, string>> = {
   fireworks: 'https://api.fireworks.ai/inference',
   openrouter: 'https://openrouter.ai/api',
+  'openai-compatible': 'https://api.openai.com/v1',
 };
 
 function escapeForSingleQuoted(value: string): string {
@@ -37,7 +38,7 @@ function pickByTier(
 export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
   readonly id = 'claude-code';
   readonly displayName = 'Claude Code';
-  readonly supportedProviderTypes = ['anthropic-compatible', 'fireworks', 'openrouter', 'custom-api'] as const;
+  readonly supportedProviderTypes = ['anthropic-compatible', 'fireworks', 'openrouter', 'custom-api', 'openai-compatible'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
