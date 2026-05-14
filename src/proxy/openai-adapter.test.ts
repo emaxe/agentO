@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { convertRequest, convertResponse, createStreamState, convertStreamChunk } from './openai-adapter.js';
+import { convertRequest, convertResponse, createStreamState, convertStreamChunk, convertError } from './openai-adapter.js';
 
 describe('convertRequest', () => {
   it('converts simple text messages', () => {
@@ -504,5 +504,23 @@ describe('convertStreamChunk', () => {
     }, state);
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe('content_block_start');
+  });
+});
+
+describe('convertError', () => {
+  it('maps OpenAI error format to Anthropic error format', () => {
+    const openai = { error: { message: 'Bad request', type: 'invalid_request_error', code: '400' } };
+    const anthropic = convertError(openai);
+    expect(anthropic).toEqual({
+      type: 'error',
+      error: { type: 'invalid_request_error', message: 'Bad request' },
+    });
+  });
+
+  it('passes through string errors', () => {
+    expect(convertError('something broke')).toEqual({
+      type: 'error',
+      error: { type: 'api_error', message: 'something broke' },
+    });
   });
 });

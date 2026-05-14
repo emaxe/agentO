@@ -250,6 +250,27 @@ function isRecord(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null;
 }
 
+/** Convert an OpenAI-style error into an Anthropic-style error record. */
+export function convertError(err: unknown): Record<string, unknown> {
+  if (typeof err === 'string') {
+    return { type: 'error', error: { type: 'api_error', message: err } };
+  }
+  if (!isRecord(err)) {
+    return { type: 'error', error: { type: 'api_error', message: String(err) } };
+  }
+  if (isRecord(err.error)) {
+    const inner = err.error;
+    return {
+      type: 'error',
+      error: {
+        type: String(inner.type ?? 'api_error'),
+        message: String(inner.message ?? 'Unknown error'),
+      },
+    };
+  }
+  return { type: 'error', error: { type: 'api_error', message: String(err.message ?? 'Unknown error') } };
+}
+
 /** Mutable state accumulated while streaming an OpenAI chat completion into Anthropic SSE events. */
 export interface StreamState {
   id: string;
