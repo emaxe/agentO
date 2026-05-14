@@ -439,4 +439,70 @@ describe('convertStreamChunk', () => {
       { type: 'message_stop' },
     ]);
   });
+
+  it('stops text block before starting tool block', () => {
+    const state = createStreamState('msg-123', 'gpt-4');
+    convertStreamChunk({ id: 'c', choices: [{ delta: { role: 'assistant' }, finish_reason: null }] }, state);
+    convertStreamChunk({ id: 'c', choices: [{ delta: { content: 'Hello' }, finish_reason: null }] }, state);
+    const events = convertStreamChunk({
+      id: 'c',
+      choices: [{
+        delta: {
+          tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '' } }],
+        },
+        finish_reason: null,
+      }],
+    }, state);
+    expect(events[0].type).toBe('content_block_stop');
+    expect(events[1].type).toBe('content_block_start');
+  });
+
+  it('handles multiple tool calls in separate chunks', () => {
+    const state = createStreamState('msg-123', 'gpt-4');
+    convertStreamChunk({ id: 'c', choices: [{ delta: { role: 'assistant' }, finish_reason: null }] }, state);
+    const e1 = convertStreamChunk({
+      id: 'c',
+      choices: [{
+        delta: {
+          tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'foo', arguments: '' } }],
+        },
+        finish_reason: null,
+      }],
+    }, state);
+    expect(e1[0].type).toBe('content_block_start');
+    const e2 = convertStreamChunk({
+      id: 'c',
+      choices: [{
+        delta: {
+          tool_calls: [{ index: 1, id: 'call_2', type: 'function', function: { name: 'bar', arguments: '' } }],
+        },
+        finish_reason: null,
+      }],
+    }, state);
+    expect(e2[0].type).toBe('content_block_stop');
+    expect(e2[1].type).toBe('content_block_start');
+  });
+
+  it('returns empty events for null chunk', () => {
+    expect(convertStreamChunk(null, createStreamState('id', 'm'))).toEqual([]);
+  });
+
+  it('returns empty events for missing choices', () => {
+    expect(convertStreamChunk({}, createStreamState('id', 'm'))).toEqual([]);
+  });
+
+  it('returns empty events for empty choices', () => {
+    expect(convertStreamChunk({ choices: [] }, createStreamState('id', 'm'))).toEqual([]);
+  });
+
+  it('skips non-record tool_calls entries', () => {
+    const state = createStreamState('msg-123', 'gpt-4');
+    convertStreamChunk({ id: 'c', choices: [{ delta: { role: 'assistant' }, finish_reason: null }] }, state);
+    const events = convertStreamChunk({
+      id: 'c',
+      choices: [{ delta: { tool_calls: [null, { index: 0, id: 'c1', type: 'function', function: { name: 'f', arguments: '' } }] }, finish_reason: null }],
+    }, state);
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('content_block_start');
+  });
 });

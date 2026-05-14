@@ -150,6 +150,7 @@ function convertToolChoice(toolChoice: Record<string, unknown>): unknown {
   if (!('type' in toolChoice)) {
     return toolChoice;
   }
+  // Anthropic tool_choice.type values mapped to OpenAI equivalents.
   switch (toolChoice.type) {
     case 'auto':
       return 'auto';
@@ -230,6 +231,7 @@ export function convertResponse(res: unknown): AnthropicResponse {
   };
 }
 
+/** Map an OpenAI finish_reason string to the Anthropic stop_reason equivalent. */
 function mapFinishReason(fr: string): AnthropicResponse['stop_reason'] {
   switch (fr) {
     case 'stop':
@@ -257,6 +259,7 @@ export interface StreamState {
   currentBlockIndex: number | null;
   toolCalls: Map<number, { id: string; name: string; arguments: string; blockIndex: number | null }>;
   nextBlockIndex: number;
+  /** Approximate output token count (chunk count, not actual tokens) because OpenAI SSE does not provide per-chunk token counts. */
   outputTokens: number;
 }
 
@@ -308,6 +311,9 @@ export function convertStreamChunk(chunk: unknown, state: StreamState): Array<Re
   const content = delta.content;
   if (typeof content === 'string' && content !== '') {
     if (state.currentBlockType !== 'text') {
+      if (state.currentBlockType !== null && state.currentBlockType !== 'text' && state.currentBlockIndex !== null) {
+        events.push({ type: 'content_block_stop', index: state.currentBlockIndex });
+      }
       const idx = state.nextBlockIndex++;
       state.currentBlockType = 'text';
       state.currentBlockIndex = idx;
@@ -317,11 +323,14 @@ export function convertStreamChunk(chunk: unknown, state: StreamState): Array<Re
         content_block: { type: 'text', text: '' },
       });
     }
-    events.push({
-      type: 'content_block_delta',
-      index: state.currentBlockIndex!,
-      delta: { type: 'text_delta', text: content },
-    });
+    const idx = state.currentBlockIndex;
+    if (idx !== null) {
+      events.push({
+        type: 'content_block_delta',
+        index: idx,
+        delta: { type: 'text_delta', text: content },
+      });
+    }
     state.outputTokens += 1;
   }
 
@@ -341,8 +350,8 @@ export function convertStreamChunk(chunk: unknown, state: StreamState): Array<Re
         };
         state.toolCalls.set(idx, call);
       }
-      if (call.id && call.name && call.blockIndex === null) {
-        if (state.currentBlockType !== null && state.currentBlockType !== 'tool_use' && state.currentBlockIndex !== null) {
+      if (call.blockIndex === null) {
+        if (state.currentBlockType !== null && state.currentBlockIndex !== null) {
           events.push({ type: 'content_block_stop', index: state.currentBlockIndex });
         }
         const bIdx = state.nextBlockIndex++;
