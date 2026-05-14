@@ -1,5 +1,9 @@
 import type { AgentConfig } from './base.js';
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /**
  * Conservative shallow merge of agent configs.
  *
@@ -8,32 +12,19 @@ import type { AgentConfig } from './base.js';
  * - Nested objects are replaced whole (no deep merge).
  * - Keys listed in `envKeys` receive a flat (shallow) merge instead of replacement.
  */
-export function mergeAgentConfig(
-  existing: AgentConfig,
-  generated: AgentConfig,
+export function mergeAgentConfig<T extends AgentConfig>(
+  existing: T,
+  generated: T,
   envKeys: readonly string[],
-): AgentConfig {
-  const result: AgentConfig = { ...existing };
-
+): T {
+  const result: Record<string, unknown> = { ...existing };
   for (const key of Object.keys(generated)) {
     const genVal = generated[key];
-    if (
-      envKeys.includes(key) &&
-      typeof result[key] === 'object' &&
-      result[key] !== null &&
-      !Array.isArray(result[key]) &&
-      typeof genVal === 'object' &&
-      genVal !== null &&
-      !Array.isArray(genVal)
-    ) {
-      result[key] = {
-        ...(result[key] as Record<string, unknown>),
-        ...(genVal as Record<string, unknown>),
-      };
+    if (envKeys.includes(key) && isPlainObject(result[key]) && isPlainObject(genVal)) {
+      result[key] = { ...result[key], ...genVal };
     } else {
       result[key] = genVal;
     }
   }
-
-  return result;
+  return result as T;
 }

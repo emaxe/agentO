@@ -2,9 +2,13 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
+import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
+
+export interface CopilotConfig {
+  [key: string]: unknown;
+}
 
 const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
   anthropic: 'https://api.anthropic.com',
@@ -20,7 +24,7 @@ const PROVIDER_TYPE_MAP: Record<ProviderType, string> = {
   'openrouter': 'openai',
 };
 
-export class CopilotAdapter implements AgentAdapter {
+export class CopilotAdapter implements AgentAdapter<CopilotConfig> {
   readonly id = 'copilot';
   readonly displayName = 'Copilot CLI';
   readonly supportedProviderTypes = ['openai-compatible', 'anthropic', 'fireworks', 'openrouter'] as const;
@@ -32,14 +36,14 @@ export class CopilotAdapter implements AgentAdapter {
     };
   }
 
-  async readConfig(scope: LaunchScope, cwd?: string): Promise<AgentConfig | null> {
+  async readConfig(scope: LaunchScope, cwd?: string): Promise<CopilotConfig | null> {
     const path = this.configPaths(cwd)[scope];
     if (!existsSync(path)) return null;
     const raw = await readFile(path, 'utf-8');
-    return JSON.parse(raw) as AgentConfig;
+    return JSON.parse(raw) as CopilotConfig;
   }
 
-  buildConfig(_profile: Profile, _providers: Provider[]): AgentConfig {
+  buildConfig(_profile: Profile, _providers: Provider[]): CopilotConfig {
     // Copilot CLI accepts model via COPILOT_MODEL env var (handled by buildEnv),
     // so we do not need to mutate the settings file.
     return {};
@@ -75,7 +79,7 @@ export class CopilotAdapter implements AgentAdapter {
     return env;
   }
 
-  async writeConfig(_config: AgentConfig, _scope: LaunchScope, _cwd?: string, _mergeEnabled?: boolean): Promise<void> {
+  async writeConfig(_config: CopilotConfig, _scope: LaunchScope, _cwd?: string, _mergeEnabled?: boolean): Promise<void> {
     // No-op: Copilot CLI receives all config via environment variables (see buildEnv).
     // There is nothing to write to settings.json.
   }

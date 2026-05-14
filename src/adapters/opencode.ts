@@ -11,10 +11,25 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { writeJsonAtomic } from '../config/atomic-write.js';
-import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
+import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
+
+export interface OpenCodeProviderConfig {
+  npm?: string;
+  name?: string;
+  options: Record<string, unknown>;
+  models?: Record<string, { name: string; modalities: { input: string[]; output: string[] } }>;
+  [key: string]: unknown;
+}
+
+export interface OpenCodeConfig {
+  model: string;
+  provider: Record<string, OpenCodeProviderConfig>;
+  models?: Record<string, { modalities: { input: string[]; output: string[] } }>;
+  [key: string]: unknown;
+}
 
 /** Default API base URLs for provider types that need them. */
 const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
@@ -23,7 +38,7 @@ const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
 };
 
 /** Adapter for the OpenCode CLI agent. */
-export class OpenCodeAdapter implements AgentAdapter {
+export class OpenCodeAdapter implements AgentAdapter<OpenCodeConfig> {
   readonly id = 'opencode';
   readonly displayName = 'OpenCode';
   readonly supportedProviderTypes = ['anthropic', 'openai-compatible', 'fireworks', 'openrouter'] as const;
@@ -35,14 +50,14 @@ export class OpenCodeAdapter implements AgentAdapter {
     };
   }
 
-  async readConfig(scope: LaunchScope, cwd?: string): Promise<AgentConfig | null> {
+  async readConfig(scope: LaunchScope, cwd?: string): Promise<OpenCodeConfig | null> {
     const path = this.configPaths(cwd)[scope];
     if (!existsSync(path)) return null;
     const raw = await readFile(path, 'utf-8');
-    return JSON.parse(raw) as AgentConfig;
+    return JSON.parse(raw) as OpenCodeConfig;
   }
 
-  buildConfig(profile: Profile, providers: Provider[]): AgentConfig {
+  buildConfig(profile: Profile, providers: Provider[]): OpenCodeConfig {
     const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
     if (!base) throw new Error(`Profile "${profile.name}" has no models`);
 
@@ -127,7 +142,7 @@ export class OpenCodeAdapter implements AgentAdapter {
    * keys overwrite, and nested objects are replaced whole. OpenCode has no
    * env-only flat-merge keys (`envKeys` is empty).
    */
-  async writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
+  async writeConfig(config: OpenCodeConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
     const path = this.configPaths(cwd)[scope];
     const dir = join(path, '..');
     await mkdir(dir, { recursive: true });

@@ -3,10 +3,18 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { writeJsonAtomic } from '../config/atomic-write.js';
-import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
+import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { ModelTier, Profile, ProfileModel, Provider, ProviderType } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
+
+export interface ClaudeCodeConfig {
+  $schema?: string;
+  env?: Record<string, string>;
+  model?: string;
+  apiKeyHelper?: string;
+  [key: string]: unknown;
+}
 
 const DEFAULT_ANTHROPIC_BASE_URLS: Partial<Record<ProviderType, string>> = {
   fireworks: 'https://api.fireworks.ai/inference',
@@ -25,7 +33,7 @@ function pickByTier(
   return models.find((m) => m.tier === tier) ?? fallback;
 }
 
-export class ClaudeCodeAdapter implements AgentAdapter {
+export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
   readonly id = 'claude-code';
   readonly displayName = 'Claude Code';
   readonly supportedProviderTypes = ['anthropic', 'fireworks', 'openrouter'] as const;
@@ -37,14 +45,14 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     };
   }
 
-  async readConfig(scope: LaunchScope, cwd?: string): Promise<AgentConfig | null> {
+  async readConfig(scope: LaunchScope, cwd?: string): Promise<ClaudeCodeConfig | null> {
     const path = this.configPaths(cwd)[scope];
     if (!existsSync(path)) return null;
     const raw = await readFile(path, 'utf-8');
-    return JSON.parse(raw) as AgentConfig;
+    return JSON.parse(raw) as ClaudeCodeConfig;
   }
 
-  buildConfig(profile: Profile, providers: Provider[]): AgentConfig {
+  buildConfig(profile: Profile, providers: Provider[]): ClaudeCodeConfig {
     const first = profile.models[0];
     if (!first) throw new Error(`Profile "${profile.name}" has no models`);
 
@@ -92,7 +100,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
       };
     }
 
-    const config: AgentConfig = {
+    const config: ClaudeCodeConfig = {
       $schema: 'https://json.schemastore.org/claude-code-settings.json',
       apiKeyHelper: `bash -c 'echo ${escapeForSingleQuoted(baseProvider.apiKey)}'`,
       env,
@@ -109,7 +117,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
    * conservative shallow merge: unknown top-level keys are preserved, generated
    * keys overwrite, nested objects are replaced whole, and `env` is merged flat.
    */
-  async writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
+  async writeConfig(config: ClaudeCodeConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
     const path = this.configPaths(cwd)[scope];
     const dir = join(path, '..');
     await mkdir(dir, { recursive: true });

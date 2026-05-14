@@ -15,7 +15,7 @@ export interface AgentConfigPaths {
 }
 
 /** Интерфейс адаптера агента */
-export interface AgentAdapter {
+export interface AgentAdapter<TConfig extends AgentConfig = AgentConfig> {
   /** Уникальный идентификатор агента (например 'claude-code') */
   readonly id: string;
 
@@ -32,7 +32,7 @@ export interface AgentAdapter {
   configPaths(cwd?: string): AgentConfigPaths;
 
   /** Читает текущий конфиг агента для указанного scope */
-  readConfig(scope: LaunchScope, cwd?: string): Promise<AgentConfig | null>;
+  readConfig(scope: LaunchScope, cwd?: string): Promise<TConfig | null>;
 
   /**
    * Опционально: возвращает все физические файлы, которые будут изменены launch transaction.
@@ -43,10 +43,10 @@ export interface AgentAdapter {
   /** Генерирует конфиг агента из профиля AgentO и списка провайдеров.
    * Использует первую пару (провайдер, модель) из профиля.
    */
-  buildConfig(profile: Profile, providers: Provider[]): AgentConfig;
+  buildConfig(profile: Profile, providers: Provider[]): TConfig;
 
   /** Записывает конфиг агента для указанного scope */
-  writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void>;
+  writeConfig(config: TConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void>;
 
   /**
    * Опционально: восстанавливает конкретный файл из backup manifest.

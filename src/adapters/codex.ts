@@ -4,10 +4,30 @@ import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import { writeFileAtomic } from '../config/atomic-write.js';
-import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
+import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
 import type { BackupManifestFile, WriteBackupFile } from '../config/store.js';
+
+export interface CodexModelProvider {
+  name: string;
+  base_url: string;
+  env_key: string;
+  wire_api: string;
+}
+
+export interface CodexProfile {
+  model: string;
+  model_provider: string;
+}
+
+export interface CodexConfig {
+  model?: string;
+  model_providers?: Record<string, CodexModelProvider>;
+  default_profile?: string;
+  profiles?: Record<string, CodexProfile>;
+  [key: string]: unknown;
+}
 
 const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
   fireworks: 'https://api.fireworks.ai/inference/v1',
@@ -36,18 +56,18 @@ async function removeIfExists(path: string): Promise<void> {
   }
 }
 
-async function readTomlFile(path: string): Promise<AgentConfig | null> {
+async function readTomlFile(path: string): Promise<CodexConfig | null> {
   if (!existsSync(path)) return null;
   const raw = await readFile(path, 'utf-8');
-  return parseToml(raw) as AgentConfig;
+  return parseToml(raw) as CodexConfig;
 }
 
-async function writeTomlFile(path: string, config: AgentConfig): Promise<void> {
+async function writeTomlFile(path: string, config: CodexConfig): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
-  await writeFileAtomic(path, stringifyToml(config as Parameters<typeof stringifyToml>[0]));
+  await writeFileAtomic(path, stringifyToml(config));
 }
 
-export class CodexAdapter implements AgentAdapter {
+export class CodexAdapter implements AgentAdapter<CodexConfig> {
   readonly id = 'codex';
   readonly displayName = 'Codex CLI';
   readonly dev = true;
@@ -60,7 +80,7 @@ export class CodexAdapter implements AgentAdapter {
     };
   }
 
-  async readConfig(scope: LaunchScope, cwd?: string): Promise<AgentConfig | null> {
+  async readConfig(scope: LaunchScope, cwd?: string): Promise<CodexConfig | null> {
     const path = this.configPaths(cwd)[scope];
     return readTomlFile(path);
   }
@@ -82,7 +102,7 @@ export class CodexAdapter implements AgentAdapter {
     }));
   }
 
-  buildConfig(profile: Profile, providers: Provider[]): AgentConfig {
+  buildConfig(profile: Profile, providers: Provider[]): CodexConfig {
     const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
     if (!base) throw new Error(`Profile "${profile.name}" has no models`);
 
@@ -125,11 +145,11 @@ export class CodexAdapter implements AgentAdapter {
     return { [envKey]: provider.apiKey };
   }
 
-  async writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string): Promise<void> {
+  async writeConfig(config: CodexConfig, scope: LaunchScope, cwd?: string): Promise<void> {
     if (scope === 'project') {
       const paths = this.configPaths(cwd);
       const hasGlobalOwnedConfig = ['model_providers', 'default_profile', 'profiles']
-        .some((key) => config[key] !== undefined);
+        .some((key) => config[key as keyof CodexConfig] !== undefined);
 
       if (hasGlobalOwnedConfig) {
         const globalConfig = await readTomlFile(paths.global) ?? {};
@@ -147,7 +167,7 @@ export class CodexAdapter implements AgentAdapter {
 
       // 2. Управляем project конфигом (model)
       const projectPath = paths.project;
-      const projectConfig: AgentConfig = {};
+      const projectConfig: CodexConfig = {};
       if (config.model) {
         projectConfig.model = config.model;
       }
@@ -162,7 +182,7 @@ export class CodexAdapter implements AgentAdapter {
   async restoreConfigFile(file: BackupManifestFile, scope: LaunchScope, cwd?: string): Promise<void> {
     const path = file.path || this.configPaths(cwd)[scope];
     if (file.hadFile) {
-      await writeTomlFile(path, file.content as AgentConfig);
+      await writeTomlFile(path, file.content as CodexConfig);
       return;
     }
 

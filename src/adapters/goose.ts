@@ -2,9 +2,14 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
+import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
+
+export interface GooseConfig {
+  raw?: string;
+  [key: string]: unknown;
+}
 
 /**
  * Default base URLs for providers that Goose accesses via OpenAI-compatible protocol.
@@ -33,7 +38,7 @@ function toGooseOpenAIHost(url: string): string {
  */
 const OPENROUTER_DEFAULT_HOST = 'https://openrouter.ai';
 
-export class GooseAdapter implements AgentAdapter {
+export class GooseAdapter implements AgentAdapter<GooseConfig> {
   readonly id = 'goose';
   readonly displayName = 'Goose';
   readonly supportedProviderTypes = ['openai-compatible', 'anthropic', 'fireworks', 'openrouter'] as const;
@@ -45,15 +50,15 @@ export class GooseAdapter implements AgentAdapter {
     };
   }
 
-  async readConfig(scope: LaunchScope, cwd?: string): Promise<AgentConfig | null> {
+  async readConfig(scope: LaunchScope, cwd?: string): Promise<GooseConfig | null> {
     const path = this.configPaths(cwd)[scope];
     if (!existsSync(path)) return null;
     const raw = await readFile(path, 'utf-8');
     // Goose uses YAML — return raw text wrapped in an object so the base type is satisfied.
-    return { raw } as AgentConfig;
+    return { raw };
   }
 
-  buildConfig(_profile: Profile, _providers: Provider[]): AgentConfig {
+  buildConfig(_profile: Profile, _providers: Provider[]): GooseConfig {
     // Goose receives all configuration via environment variables (see buildEnv),
     // so we do not need to mutate the config file.
     return {};
@@ -115,7 +120,7 @@ export class GooseAdapter implements AgentAdapter {
     return env;
   }
 
-  async writeConfig(_config: AgentConfig, _scope: LaunchScope, _cwd?: string, _mergeEnabled?: boolean): Promise<void> {
+  async writeConfig(_config: GooseConfig, _scope: LaunchScope, _cwd?: string, _mergeEnabled?: boolean): Promise<void> {
     // No-op: Goose receives all config via environment variables (see buildEnv).
     // There is nothing to write to config.yaml.
   }

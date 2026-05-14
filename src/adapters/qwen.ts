@@ -3,10 +3,29 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { writeJsonAtomic } from '../config/atomic-write.js';
-import type { AgentAdapter, AgentConfig, AgentConfigPaths } from './base.js';
+import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
+
+export interface QwenModelProviderEntry {
+  id: string;
+  name: string;
+  baseUrl: string;
+  envKey: string;
+  generationConfig: {
+    modalities: { image: boolean; video: boolean; audio: boolean };
+  };
+}
+
+export interface QwenConfig {
+  env?: Record<string, string>;
+  modelProviders?: Record<string, QwenModelProviderEntry[]>;
+  security?: { auth: { selectedType: string } };
+  model?: { name: string };
+  $version?: number;
+  [key: string]: unknown;
+}
 
 const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
   fireworks: 'https://api.fireworks.ai/inference/v1',
@@ -24,7 +43,7 @@ function deriveEnvKey(baseUrl: string): string {
   return `QWEN_CUSTOM_API_KEY_OPENAI_${normalized}`;
 }
 
-export class QwenAdapter implements AgentAdapter {
+export class QwenAdapter implements AgentAdapter<QwenConfig> {
   readonly id = 'qwen';
   readonly displayName = 'Qwen CLI';
   readonly supportedProviderTypes = ['openai-compatible', 'fireworks', 'openrouter'] as const;
@@ -36,14 +55,14 @@ export class QwenAdapter implements AgentAdapter {
     };
   }
 
-  async readConfig(scope: LaunchScope, cwd?: string): Promise<AgentConfig | null> {
+  async readConfig(scope: LaunchScope, cwd?: string): Promise<QwenConfig | null> {
     const path = this.configPaths(cwd)[scope];
     if (!existsSync(path)) return null;
     const raw = await readFile(path, 'utf-8');
-    return JSON.parse(raw) as AgentConfig;
+    return JSON.parse(raw) as QwenConfig;
   }
 
-  buildConfig(profile: Profile, providers: Provider[]): AgentConfig {
+  buildConfig(profile: Profile, providers: Provider[]): QwenConfig {
     if (profile.models.length === 0) {
       throw new Error(`Profile "${profile.name}" has no models`);
     }
@@ -53,13 +72,7 @@ export class QwenAdapter implements AgentAdapter {
 
     // Строим список всех моделей, группируем по провайдеру
     const envMap: Record<string, string> = {};
-    const modelProviders: Record<string, Array<{
-      id: string;
-      name: string;
-      baseUrl: string;
-      envKey: string;
-      generationConfig: { modalities: { image: boolean; video: boolean; audio: boolean } };
-    }>> = {};
+    const modelProviders: Record<string, QwenModelProviderEntry[]> = {};
 
     for (const profileModel of profile.models) {
       const provider = providers.find((p) => p.id === profileModel.providerId);
@@ -111,7 +124,7 @@ export class QwenAdapter implements AgentAdapter {
    * conservative shallow merge: unknown top-level keys are preserved, generated
    * keys overwrite, nested objects are replaced whole, and `env` is merged flat.
    */
-  async writeConfig(config: AgentConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
+  async writeConfig(config: QwenConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
     const path = this.configPaths(cwd)[scope];
     const dir = join(path, '..');
     await mkdir(dir, { recursive: true });
