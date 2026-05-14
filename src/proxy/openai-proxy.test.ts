@@ -143,7 +143,11 @@ describe('startOpenAIProxy', () => {
   it('handles SSE events split across TCP chunks', async () => {
     upstream.on('request', (_req, res) => {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
-      res.write('data: {"id":"c","choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n\ndata: {"id":"c","choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}\n\n');
+      // First write: complete first event + incomplete second event (no trailing \n\n)
+      res.write('data: {"id":"c","choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n\ndata: {"id":"c","choices":[{"delta":{"content":"Hi');
+      // Second write: completes the second event
+      res.write('"},"finish_reason":null}]}\n\n');
+      // Remaining events
       res.write('data: {"id":"c","choices":[{"delta":{},"finish_reason":"stop"}]}\n\n');
       res.write('data: [DONE]\n\n');
       res.end();
@@ -170,11 +174,23 @@ describe('startOpenAIProxy', () => {
     });
 
     proxy = await startOpenAIProxy({ upstreamUrl });
-    await fetch(`${proxy.url}/v1/models`, {
-      headers: {
-        'x-api-key': 'sk-secret',
-      },
+
+    await new Promise<void>((resolve, reject) => {
+      const clientReq = http.request(
+        `${proxy.url}/v1/models`,
+        { method: 'GET', headers: { 'x-api-key': ['sk-secret'] } },
+        (clientRes) => {
+          clientRes.on('data', () => {});
+          clientRes.on('end', resolve);
+          clientRes.on('error', reject);
+        },
+      );
+      clientReq.on('error', reject);
+      clientReq.end();
     });
+
+    expect(receivedHeaders['anthropic-version']).toBeUndefined();
+    expect(receivedHeaders['x-api-key']).toBeUndefined();
     expect(receivedHeaders['authorization']).toBe('Bearer sk-secret');
   });
 
