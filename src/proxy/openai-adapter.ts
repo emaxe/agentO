@@ -247,3 +247,142 @@ function mapFinishReason(fr: string): AnthropicResponse['stop_reason'] {
 function isRecord(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null;
 }
+
+/** Mutable state accumulated while streaming an OpenAI chat completion into Anthropic SSE events. */
+export interface StreamState {
+  id: string;
+  model: string;
+  initialized: boolean;
+  currentBlockType: 'text' | 'tool_use' | null;
+  currentBlockIndex: number | null;
+  toolCalls: Map<number, { id: string; name: string; arguments: string; blockIndex: number | null }>;
+  nextBlockIndex: number;
+  outputTokens: number;
+}
+
+/** Create a fresh {@link StreamState} for a single streaming session. */
+export function createStreamState(id: string, model: string): StreamState {
+  return {
+    id,
+    model,
+    initialized: false,
+    currentBlockType: null,
+    currentBlockIndex: null,
+    toolCalls: new Map(),
+    nextBlockIndex: 0,
+    outputTokens: 0,
+  };
+}
+
+/**
+ * Convert a single OpenAI streaming chunk into zero or more Anthropic SSE events.
+ *
+ * Mutates `state` to keep track of block indexes, initialization, and output tokens.
+ */
+export function convertStreamChunk(chunk: unknown, state: StreamState): Array<Record<string, unknown>> {
+  if (!isRecord(chunk)) return [];
+  const choices = chunk.choices;
+  if (!Array.isArray(choices) || choices.length === 0) return [];
+  const choice = isRecord(choices[0]) ? choices[0] : {};
+  const delta = isRecord(choice.delta) ? choice.delta : {};
+  const finishReason = typeof choice.finish_reason === 'string' ? choice.finish_reason : null;
+
+  const events: Array<Record<string, unknown>> = [];
+
+  if (!state.initialized) {
+    state.initialized = true;
+    events.push({
+      type: 'message_start',
+      message: {
+        id: state.id,
+        type: 'message',
+        role: 'assistant',
+        model: state.model,
+        content: [],
+        stop_reason: null,
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+    });
+  }
+
+  const content = delta.content;
+  if (typeof content === 'string' && content !== '') {
+    if (state.currentBlockType !== 'text') {
+      const idx = state.nextBlockIndex++;
+      state.currentBlockType = 'text';
+      state.currentBlockIndex = idx;
+      events.push({
+        type: 'content_block_start',
+        index: idx,
+        content_block: { type: 'text', text: '' },
+      });
+    }
+    events.push({
+      type: 'content_block_delta',
+      index: state.currentBlockIndex!,
+      delta: { type: 'text_delta', text: content },
+    });
+    state.outputTokens += 1;
+  }
+
+  const toolCalls = Array.isArray(delta.tool_calls) ? delta.tool_calls : undefined;
+  if (toolCalls) {
+    for (const tc of toolCalls) {
+      if (!isRecord(tc)) continue;
+      const idx = typeof tc.index === 'number' ? tc.index : 0;
+      let call = state.toolCalls.get(idx);
+      if (!call) {
+        const fn = isRecord(tc.function) ? tc.function : {};
+        call = {
+          id: typeof tc.id === 'string' ? tc.id : '',
+          name: typeof fn.name === 'string' ? fn.name : '',
+          arguments: '',
+          blockIndex: null,
+        };
+        state.toolCalls.set(idx, call);
+      }
+      if (call.id && call.name && call.blockIndex === null) {
+        if (state.currentBlockType !== null && state.currentBlockType !== 'tool_use' && state.currentBlockIndex !== null) {
+          events.push({ type: 'content_block_stop', index: state.currentBlockIndex });
+        }
+        const bIdx = state.nextBlockIndex++;
+        state.currentBlockType = 'tool_use';
+        state.currentBlockIndex = bIdx;
+        call.blockIndex = bIdx;
+        events.push({
+          type: 'content_block_start',
+          index: bIdx,
+          content_block: { type: 'tool_use', id: call.id, name: call.name, input: {} },
+        });
+      }
+      const fn = isRecord(tc.function) ? tc.function : {};
+      const argDelta = typeof fn.arguments === 'string' ? fn.arguments : undefined;
+      if (argDelta !== undefined && argDelta !== '' && call.blockIndex !== null) {
+        call.arguments += argDelta;
+        events.push({
+          type: 'content_block_delta',
+          index: call.blockIndex,
+          delta: { type: 'input_json_delta', partial_json: argDelta },
+        });
+        state.outputTokens += 1;
+      }
+    }
+  }
+
+  if (finishReason !== null) {
+    if (state.currentBlockType !== null && state.currentBlockIndex !== null) {
+      events.push({ type: 'content_block_stop', index: state.currentBlockIndex });
+      state.currentBlockType = null;
+      state.currentBlockIndex = null;
+    }
+    const stopReason = mapFinishReason(finishReason);
+    events.push({
+      type: 'message_delta',
+      delta: { stop_reason: stopReason, stop_sequence: null },
+      usage: { output_tokens: state.outputTokens },
+    });
+    events.push({ type: 'message_stop' });
+  }
+
+  return events;
+}

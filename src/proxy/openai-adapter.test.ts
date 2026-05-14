@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { convertRequest, convertResponse } from './openai-adapter.js';
+import { convertRequest, convertResponse, createStreamState, convertStreamChunk } from './openai-adapter.js';
 
 describe('convertRequest', () => {
   it('converts simple text messages', () => {
@@ -344,5 +344,99 @@ describe('convertResponse', () => {
     };
     const anthropic = convertResponse(openai);
     expect(anthropic.content).toEqual([]);
+  });
+});
+
+describe('convertStreamChunk', () => {
+  it('returns message_start on first chunk', () => {
+    const state = createStreamState('msg-123', 'gpt-4');
+    const chunk = { id: 'chatcmpl-1', choices: [{ delta: { role: 'assistant' }, finish_reason: null }] };
+    const events = convertStreamChunk(chunk, state);
+    expect(events).toEqual([
+      {
+        type: 'message_start',
+        message: {
+          id: 'msg-123',
+          type: 'message',
+          role: 'assistant',
+          model: 'gpt-4',
+          content: [],
+          stop_reason: null,
+          usage: { input_tokens: 0, output_tokens: 0 },
+        },
+      },
+    ]);
+  });
+
+  it('emits full text streaming sequence', () => {
+    const state = createStreamState('msg-123', 'gpt-4');
+    const e1 = convertStreamChunk({ id: 'c', choices: [{ delta: { role: 'assistant' }, finish_reason: null }] }, state);
+    expect(e1).toHaveLength(1);
+    expect(e1[0].type).toBe('message_start');
+
+    const e2 = convertStreamChunk({ id: 'c', choices: [{ delta: { content: 'Hello' }, finish_reason: null }] }, state);
+    expect(e2).toEqual([
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hello' } },
+    ]);
+
+    const e3 = convertStreamChunk({ id: 'c', choices: [{ delta: { content: ' world' }, finish_reason: null }] }, state);
+    expect(e3).toEqual([
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: ' world' } },
+    ]);
+
+    const e4 = convertStreamChunk({ id: 'c', choices: [{ delta: {}, finish_reason: 'stop' }] }, state);
+    expect(e4).toEqual([
+      { type: 'content_block_stop', index: 0 },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 2 } },
+      { type: 'message_stop' },
+    ]);
+  });
+
+  it('emits full tool call streaming sequence', () => {
+    const state = createStreamState('msg-123', 'gpt-4');
+    convertStreamChunk({ id: 'c', choices: [{ delta: { role: 'assistant' }, finish_reason: null }] }, state);
+
+    const e1 = convertStreamChunk({
+      id: 'c',
+      choices: [{
+        delta: {
+          tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '' } }],
+        },
+        finish_reason: null,
+      }],
+    }, state);
+    expect(e1).toEqual([
+      { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 'call_1', name: 'get_weather', input: {} } },
+    ]);
+
+    const e2 = convertStreamChunk({
+      id: 'c',
+      choices: [{
+        delta: {
+          tool_calls: [{ index: 0, function: { arguments: '{"city":' } }],
+        },
+        finish_reason: null,
+      }],
+    }, state);
+    expect(e2).toEqual([
+      { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"city":' } },
+    ]);
+
+    const e3 = convertStreamChunk({
+      id: 'c',
+      choices: [{
+        delta: {
+          tool_calls: [{ index: 0, function: { arguments: '"Paris"}' } }],
+        },
+        finish_reason: 'tool_calls',
+      }],
+    }, state);
+    expect(e3).toEqual([
+      { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '"Paris"}' } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'message_delta', delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { output_tokens: 2 } },
+      { type: 'message_stop' },
+    ]);
   });
 });
