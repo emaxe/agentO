@@ -212,7 +212,40 @@ describe('launch/restore integration', () => {
     await cleanup();
   });
 
-  it('8. Codex project scope: both TOML files deleted on cleanup (hadFile: false)', async () => {
+  it('8. Claude Code with openai-compatible provider injects local OpenAI proxy into config ANTHROPIC_BASE_URL', async () => {
+    const { prepareLaunchTransaction } = await import('./transaction.js');
+    const { claudeCodeAdapter } = await import('../adapters/claude-code.js');
+
+    const openaiProvider: Provider = {
+      id: '00000000-0000-0000-0000-000000000014',
+      name: 'OpenAI',
+      type: 'openai-compatible',
+      apiKey: 'sk-openai-test',
+      models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const openaiProfile: Profile = {
+      id: '00000000-0000-0000-0000-000000000015',
+      name: 'openai-default',
+      models: [{ providerId: openaiProvider.id, model: 'gpt-4' }],
+    };
+
+    const { cleanup } = await prepareLaunchTransaction({
+      adapter: claudeCodeAdapter,
+      profile: openaiProfile,
+      providers: [openaiProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+
+    const configPath = join(testDir, '.claude', 'settings.json');
+    const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
+    const env = config.env as Record<string, string>;
+    expect(env['ANTHROPIC_BASE_URL']).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+
+    await cleanup();
+  });
+
+  it('9. Codex project scope: both TOML files deleted on cleanup (hadFile: false)', async () => {
     const { prepareLaunchTransaction } = await import('./transaction.js');
     const { codexAdapter } = await import('../adapters/codex.js');
 

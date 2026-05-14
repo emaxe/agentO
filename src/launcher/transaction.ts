@@ -3,6 +3,7 @@ import { restoreBackupManifest } from '../config/backup-restore.js';
 import type { Profile, Provider } from '../config/schema.js';
 import { deleteBackup, inferBackupFileFormat, readBackup, readConfig, writeBackup } from '../config/store.js';
 import { startAnthropicScrubberProxy } from '../proxy/anthropic-scrubber.js';
+import { startOpenAIProxy } from '../proxy/openai-proxy.js';
 import { shellPathResolver } from './shell-path-resolver.js';
 
 /**
@@ -108,7 +109,9 @@ async function maybeStartProxy(
   const upstream = env?.['ANTHROPIC_BASE_URL'];
   if (!upstream || typeof upstream !== 'string') return;
 
-  const proxy = await startAnthropicScrubberProxy({ upstreamUrl: upstream });
+  const proxy = provider.type === 'openai-compatible'
+    ? await startOpenAIProxy({ upstreamUrl: upstream })
+    : await startAnthropicScrubberProxy({ upstreamUrl: upstream });
 
   const newConfig = { ...writtenConfig, env: { ...env, ANTHROPIC_BASE_URL: proxy.url } };
   await adapter.writeConfig(newConfig, scope, cwd, false);
