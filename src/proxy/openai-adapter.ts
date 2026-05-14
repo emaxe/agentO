@@ -1,3 +1,4 @@
+/** Anthropic API request shape (subset used for conversion). */
 export interface AnthropicRequest {
   model: string;
   messages: Array<{ role: string; content: unknown }>;
@@ -11,6 +12,7 @@ export interface AnthropicRequest {
   tool_choice?: Record<string, unknown>;
 }
 
+/** OpenAI Chat Completions API request shape (subset used for conversion). */
 export interface OpenAIRequest {
   model: string;
   messages: Array<{
@@ -30,6 +32,7 @@ export interface OpenAIRequest {
   tool_choice?: unknown;
 }
 
+/** Convert an Anthropic-style request into an OpenAI-compatible request. */
 export function convertRequest(req: AnthropicRequest): OpenAIRequest {
   const messages: OpenAIRequest['messages'] = [];
 
@@ -57,6 +60,7 @@ export function convertRequest(req: AnthropicRequest): OpenAIRequest {
     tool_choice: req.tool_choice ? convertToolChoice(req.tool_choice) : undefined,
   };
 
+  // Detects OpenAI o-series models (o1, o3, etc.) by their "o" prefix + digit naming.
   if (/^o\d/.test(req.model)) {
     result.max_completion_tokens = req.max_tokens;
   } else {
@@ -66,6 +70,7 @@ export function convertRequest(req: AnthropicRequest): OpenAIRequest {
   return result;
 }
 
+/** Convert a single Anthropic message into one or more OpenAI messages. */
 function convertMessage(msg: AnthropicRequest['messages'][number]): OpenAIRequest['messages'][number] | OpenAIRequest['messages'] {
   const role = msg.role;
   const content = msg.content;
@@ -78,21 +83,27 @@ function convertMessage(msg: AnthropicRequest['messages'][number]): OpenAIReques
       if (block.type === 'text') {
         textParts.push(String(block.text ?? ''));
       } else if (block.type === 'tool_use') {
+        let args: string;
+        try {
+          args = JSON.stringify(block.input ?? {});
+        } catch {
+          args = '{}';
+        }
         toolCalls.push({
           id: String(block.id ?? ''),
           type: 'function',
           function: {
             name: String(block.name ?? ''),
-            arguments: JSON.stringify(block.input ?? {}),
+            arguments: args,
           },
         });
       }
     }
-    const result: Record<string, unknown> = { role: 'assistant' };
+    const result: OpenAIRequest['messages'][number] = { role: 'assistant' };
     const text = textParts.join('');
     if (text) result.content = text;
     if (toolCalls.length) result.tool_calls = toolCalls;
-    return result as OpenAIRequest['messages'][number];
+    return result;
   }
 
   if (role === 'user' && Array.isArray(content)) {
@@ -101,10 +112,16 @@ function convertMessage(msg: AnthropicRequest['messages'][number]): OpenAIReques
     for (const block of content) {
       if (typeof block !== 'object' || block === null) continue;
       if (block.type === 'tool_result') {
+        let stringifiedContent: string;
+        try {
+          stringifiedContent = typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? '');
+        } catch {
+          stringifiedContent = '';
+        }
         toolResults.push({
           role: 'tool',
           tool_call_id: String(block.tool_use_id ?? ''),
-          content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? ''),
+          content: stringifiedContent,
         });
       } else if (block.type === 'text') {
         textParts.push(String(block.text ?? ''));
@@ -119,19 +136,21 @@ function convertMessage(msg: AnthropicRequest['messages'][number]): OpenAIReques
   return { role, content };
 }
 
+/** Convert an Anthropic tool definition into an OpenAI tool definition. */
 function convertTool(tool: Record<string, unknown>): Record<string, unknown> {
-  return {
-    type: 'function',
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.input_schema,
-    },
-  };
+  const fn: Record<string, unknown> = {};
+  if ('name' in tool) fn.name = tool.name;
+  if ('description' in tool) fn.description = tool.description;
+  if ('input_schema' in tool) fn.parameters = tool.input_schema;
+  return { type: 'function', function: fn };
 }
 
-function convertToolChoice(tc: Record<string, unknown>): unknown {
-  switch (tc.type) {
+/** Convert an Anthropic tool_choice value into an OpenAI tool_choice value. */
+function convertToolChoice(toolChoice: Record<string, unknown>): unknown {
+  if (!('type' in toolChoice)) {
+    return toolChoice;
+  }
+  switch (toolChoice.type) {
     case 'auto':
       return 'auto';
     case 'any':
@@ -139,8 +158,8 @@ function convertToolChoice(tc: Record<string, unknown>): unknown {
     case 'none':
       return 'none';
     case 'tool':
-      return { type: 'function', function: { name: tc.name } };
+      return { type: 'function', function: { name: toolChoice.name } };
     default:
-      return tc;
+      return toolChoice;
   }
 }
