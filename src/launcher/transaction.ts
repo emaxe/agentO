@@ -89,6 +89,11 @@ async function snapshotPrimaryConfigFile(
   }];
 }
 
+/**
+ * Starts a local proxy when the provider requires protocol translation.
+ * For openai-compatible providers, starts the OpenAI→Anthropic bidirectional proxy.
+ * For fireworks/openrouter/custom-api (anthropic mode), starts the anthropic scrubber proxy.
+ */
 async function maybeStartProxy(
   adapter: AgentAdapter,
   profile: Profile,
@@ -105,7 +110,11 @@ async function maybeStartProxy(
   const provider = providers.find((p) => p.id === baseModel.providerId);
   if (!provider || provider.type === 'anthropic-compatible') return;
 
-  const env = writtenConfig.env as Record<string, string> | undefined;
+  const rawEnv = writtenConfig.env;
+  const env =
+    typeof rawEnv === 'object' && rawEnv !== null && !Array.isArray(rawEnv)
+      ? (rawEnv as Record<string, unknown>)
+      : undefined;
   const upstream = env?.['ANTHROPIC_BASE_URL'];
   if (!upstream || typeof upstream !== 'string') return;
 

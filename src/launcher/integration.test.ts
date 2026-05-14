@@ -15,8 +15,23 @@ vi.mock('../launcher/shell-path-resolver.js', () => ({
   shellPathResolver: { resolve: vi.fn().mockResolvedValue('/usr/bin:/bin') },
 }));
 
+vi.mock('../proxy/openai-proxy.js', () => ({
+  startOpenAIProxy: vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:9999', stop: vi.fn() }),
+}));
+
+vi.mock('../proxy/anthropic-scrubber.js', () => ({
+  startAnthropicScrubberProxy: vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:9998', stop: vi.fn() }),
+}));
+
+import { startOpenAIProxy } from '../proxy/openai-proxy.js';
+import { startAnthropicScrubberProxy } from '../proxy/anthropic-scrubber.js';
+const mockStartOpenAIProxy = vi.mocked(startOpenAIProxy);
+const mockStartAnthropicScrubberProxy = vi.mocked(startAnthropicScrubberProxy);
+
 beforeEach(async () => {
   vi.resetModules();
+  mockStartOpenAIProxy.mockClear();
+  mockStartAnthropicScrubberProxy.mockClear();
   const { tmpdir } = await vi.importActual<typeof import('node:os')>('node:os');
   testDir = await mkdtemp(join(tmpdir(), 'agento-int-test-'));
 });
@@ -155,6 +170,8 @@ describe('launch/restore integration', () => {
     const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
     const env = config.env as Record<string, string>;
     expect(env['ANTHROPIC_BASE_URL']).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://openrouter.ai/api' });
+    expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
 
     await cleanup();
   });
@@ -188,6 +205,8 @@ describe('launch/restore integration', () => {
     const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
     const env = config.env as Record<string, string>;
     expect(env['ANTHROPIC_BASE_URL']).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://api.fireworks.ai/inference' });
+    expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
 
     await cleanup();
   });
@@ -241,6 +260,8 @@ describe('launch/restore integration', () => {
     const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
     const env = config.env as Record<string, string>;
     expect(env['ANTHROPIC_BASE_URL']).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(mockStartOpenAIProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://api.openai.com/v1' });
+    expect(mockStartAnthropicScrubberProxy).not.toHaveBeenCalled();
 
     await cleanup();
   });
