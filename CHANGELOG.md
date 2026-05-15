@@ -7,21 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-05-15
+
 ### Added
+
+- **OpenAI-to-Anthropic Proxy** (`src/proxy/openai-proxy.ts`): локальный HTTP-proxy, транслирующий OpenAI API в формат Anthropic, — позволяет Claude Code работать с `openai-compatible` провайдерами.
+  - Трансляция non-streaming ответов (OpenAI → Anthropic).
+  - Трансляция streaming SSE ответов (OpenAI → Anthropic).
+  - Конвертация ошибок (OpenAI errors → Anthropic errors).
+  - Автоматически стартует в `prepareLaunchTransaction` для `claude-code` + `openai-compatible` провайдер (аналогично Anthropic Scrubber для `fireworks`/`openrouter`).
+  - Unit tests: `src/proxy/openai-proxy.test.ts` (142 строки: non-streaming, streaming SSE, error conversion).
+
+- **Claude Code поддерживает `openai-compatible` провайдеры**: `openai-compatible` добавлен в `supportedProviderTypes` адаптера; запросы проксируются через OpenAI-to-Anthropic proxy.
+
+- **Поддержка системного proxy** (`src/proxy/proxy-utils.ts`): исходящие HTTP-запросы обоих proxy-серверов уважают переменные окружения `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy`. Добавлена утилита `scripts/diagnose-proxy.mjs` для диагностики конфигурации proxy.
+
+- **Codex CLI переведён в stable**: удалён флаг `dev: true`; Codex отображается в TUI и CLI без флага `--dev`.
+
+- **TUI рефакторинг** (`refactor(tui)`): монолитные экраны LaunchAgent, Providers, Profiles декомпозированы на отдельные sub-компоненты и custom hooks (`useLaunchWizard`, `ProfileWizard`, `ProviderForm`, `ProviderList`, `AgentSelect`, `ProfileSelect`, `ProfileList`, `ProfileDetail`, `ProfileEdit`, `SelectList`, `TextField`).
 
 - **Anthropic Scrubber Proxy** (`src/proxy/anthropic-scrubber.ts`): локальный HTTP-proxy для Claude Code при работе через `openrouter` и `fireworks`.
   - Вырезает неподдерживаемые Anthropic-поля (например, `context_management`) из JSON-тела POST-запросов перед пересылкой на upstream.
   - Прозрачно проксирует GET-запросы и non-JSON POST без модификации.
   - Ответы pipe'ятся напрямую (SSE streaming сохраняется).
-  - **Корректно сохраняет base path upstream** при конструировании целевого URL: например, `https://api.fireworks.ai/inference` + `/v1/messages` → `/inference/v1/messages`.
+  - **Корректно сохраняет base path upstream**: `https://api.fireworks.ai/inference` + `/v1/messages` → `/inference/v1/messages`.
   - **Корректно сохраняет query parameters** (`?beta=true` и др.): ранее query string попадала в `pathname` и URL-encoded (`%3F`), что ломало Anthropic beta-endpoints.
-  - Интегрирован в `prepareLaunchTransaction` (`src/launcher/transaction.ts`): proxy стартует автоматически для `claude-code` + non-`anthropic` провайдер, заменяет `ANTHROPIC_BASE_URL` в конфиге на `http://127.0.0.1:<random_port>`, останавливается в cleanup-хуке.
-  - Unit tests: `src/proxy/anthropic-scrubber.test.ts` (12 тестов: scrubbing, custom denyList, pass-through, invalid JSON, 502, streaming, recursive scrub, base path preservation, trailing slash handling, query parameters).
-  - Integration tests: `src/launcher/integration.test.ts` дополнен тестами на proxy-инжекцию для OpenRouter/Fireworks и отсутствие proxy для Anthropic.
+  - Интегрирован в `prepareLaunchTransaction`: proxy стартует автоматически для `claude-code` + non-`anthropic` провайдер, заменяет `ANTHROPIC_BASE_URL` в конфиге на `http://127.0.0.1:<random_port>`, останавливается в cleanup-хуке.
+  - Unit tests: `src/proxy/anthropic-scrubber.test.ts` (12 тестов).
+  - Integration tests: `src/launcher/integration.test.ts` дополнен тестами на proxy-инжекцию для OpenRouter/Fireworks.
 
 ### Fixed
 
-- **TUI launch deadlock**: `bin/agento.ts` использовал `spawnSync` для запуска агента после выхода из TUI. `spawnSync` блокировал event loop Node.js, из-за чего локальный proxy (`anthropic-scrubber`) не мог обрабатывать HTTP-запросы от Claude Code. Заменено на асинхронный `spawn` — event loop остаётся свободным, proxy обрабатывает запросы в реальном времени.
+- **OpenCode теперь использует нативный `@ai-sdk/openai`** для реальных OpenAI API запросов (ранее ошибочно использовался `@ai-sdk/openai-compatible`); автоматически определяется, когда `baseUrl` провайдера совпадает с `https://api.openai.com/v1` или не задан для типа `openai-compatible`.
+- **Codex `wire_api`**: исправлено значение по умолчанию с `'openai'` на `'responses'` для всех типов провайдеров.
+- **Codex default base URL для `openai-compatible`**: добавлен дефолт `https://api.openai.com/v1` — провайдеры без явного `baseUrl` работают из коробки.
+- **`baseUrl` опционален для `openai-compatible`**: провайдеры с известным дефолтом (Fireworks, OpenRouter, OpenAI) больше не требуют явного флага `-u`.
+- **TUI launch deadlock**: `bin/agento.ts` использовал `spawnSync` для запуска агента после выхода из TUI. `spawnSync` блокировал event loop Node.js, из-за чего локальный proxy не мог обрабатывать HTTP-запросы от Claude Code. Заменено на асинхронный `spawn`.
 
 ## [0.4.3] - 2026-05-13
 

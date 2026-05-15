@@ -13,10 +13,10 @@ AgentO — это CLI-инструмент для централизованно
 
 | Агент | Команда | Формат конфига | Поддерживаемые провайдеры | Особенности |
 |-------|---------|----------------|---|-------------|
-| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic`, `fireworks`, `openrouter` | Поддержка уровней (small/base/smart) |
+| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic`, `fireworks`, `openrouter`, `openai-compatible` | Поддержка уровней (small/base/smart). Для не-Anthropic провайдеров используется локальный proxy. |
 | [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Полная поддержка function calling через Vercel AI SDK; пробрасывает модальности |
 | [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter` | Структура OpenAI-совместимого API; пробрасывает модальности |
-| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `fireworks`, `openrouter` | Инжект переменных окружения. Скрыт по умолчанию (флаг `--dev`). |
+| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `openai-compatible`, `fireworks`, `openrouter` | `wire_api: responses`. Стабильный (флаг `--dev` не требуется). |
 | [Copilot](https://github.com/github/gh-copilot) | `copilot` | только env-переменные | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Весь конфиг передаётся через переменные окружения — файл настроек не изменяется. |
 | [Goose](https://goose-docs.ai) | `goose` | только env-переменные | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Весь конфиг через env vars (`GOOSE_PROVIDER`, `GOOSE_MODEL`). |
 
@@ -30,9 +30,8 @@ AgentO — это CLI-инструмент для централизованно
 | `openrouter` | claude-code, opencode, qwen, codex, copilot, goose | [OpenRouter](https://openrouter.ai) — универсальный шлюз (Anthropic Skin / OpenAI / Responses API) |
 
 **Примечания:**
-- `claude-code` работает с `anthropic`, `fireworks` и `openrouter` (требование Anthropic SDK). Для `openrouter` использует **Anthropic Skin** — `ANTHROPIC_AUTH_TOKEN` (Bearer).
+- `claude-code` работает со всеми 4 типами провайдеров; для не-`anthropic` провайдеров используется локальный proxy для трансляции протокола (Anthropic Scrubber для `fireworks`/`openrouter`; OpenAI-to-Anthropic proxy для `openai-compatible`). Для `openrouter` использует **Anthropic Skin** — `ANTHROPIC_AUTH_TOKEN` (Bearer).
 - `copilot` и `goose` работают со всеми 4 типами провайдеров; конфиг передаётся через переменные окружения, файл настроек не изменяется.
-- Для других OpenAI-совместимых провайдеров используйте `opencode`, `qwen`, `copilot` или `goose`.
 - `openrouter` наиболее универсален — работает со всеми 6 агентами.
 
 ## Флаги возможностей моделей
@@ -127,7 +126,7 @@ agento launch -p default -a qwen -m child -s project
 ### Главное меню
 
 ```
-┌────────── AgentO v0.4.3 ──────────┐
+┌────────── AgentO v0.4.4 ──────────┐
 │                                   │
 │ ▶  Запустить агента               │
 │    Провайдеры                     │
@@ -232,7 +231,7 @@ Profile: default
 
 ```bash
 agento          # Запуск интерактивного TUI
-agento --dev    # Показать development-агентов (например, codex) в TUI
+agento --dev    # Показать development-агентов в TUI
 ```
 
 ### `agento launch` — Запуск агента
@@ -245,7 +244,7 @@ agento launch -p <profile> -a <agent> [options]
   -a, --agent <id>       Агент: claude-code, opencode, qwen, codex (обязательно)
   -m, --mode <mode>      Режим запуска: child или independent (по умолчанию из настроек)
   -s, --scope <scope>    Область конфига: global или project (по умолчанию из настроек)
-  -d, --dev              Показать development-агентов (например, codex)
+  -d, --dev              Показать development-агентов
 ```
 
 **Режимы запуска:**
@@ -275,7 +274,8 @@ agento provider remove <name>                 # Удалить провайде�
 **Дефолты Base URL:**
 - `anthropic`: использует стандартный endpoint Anthropic
 - `fireworks`: автоматически `https://api.fireworks.ai/inference`, если не указан
-- `openai-compatible`: должен быть указан явно через `-u`
+- `openrouter`: автоматически `https://openrouter.ai/api/v1` (Claude Code: `https://openrouter.ai/api`), если не указан
+- `openai-compatible`: автоматически `https://api.openai.com/v1`, если не указан; для нестандартных провайдеров указывайте явно через `-u`
 
 ### `agento profile` — Управление профилями
 
@@ -293,7 +293,7 @@ agento profile remove <name>                  # Удалить профиль
 
 ```bash
 agento agent status                           # Статус конфигов всех агентов
-agento agent status --dev                     # Включая development-агентов (например, codex)
+agento agent status --dev                     # Включая development-агентов
 ```
 
 ### `agento restore` — Восстановление конфига
@@ -353,10 +353,13 @@ AgentO хранит свою конфигурацию в `~/.agento/config.json`
 
 Каждый поддерживаемый агент имеет адаптер, который переводит универсальный формат AgentO в специфичный конфиг агента:
 
-- **Claude Code** (`anthropic`, `fireworks`, `openrouter`): Генерирует `~/.claude/settings.json` с выбором модели по уровням и переменными окружения `ANTHROPIC_*`. Использует Anthropic SDK. Для `openrouter` использует **Anthropic Skin** — `ANTHROPIC_AUTH_TOKEN` (Bearer). Флаги возможностей не пробрасываются.
-- **OpenCode** (`anthropic`, `openai-compatible`, `fireworks`, `openrouter`): Генерирует `~/.config/opencode/config.json` через Vercel AI SDK. Полная поддержка function calling через `@ai-sdk/openai-compatible`. Для каждой модели генерируется `modalities: { input: [...], output: ["text"] }` из флагов возможностей.
+- **Claude Code** (`anthropic`, `fireworks`, `openrouter`, `openai-compatible`): Генерирует `~/.claude/settings.json` с выбором модели по уровням и переменными окружения `ANTHROPIC_*`. Использует Anthropic SDK.
+  - Для `fireworks` и `openrouter`: автоматически стартует локальный **Anthropic Scrubber proxy**, вырезающий неподдерживаемые поля из запросов.
+  - Для `openai-compatible`: автоматически стартует локальный **OpenAI-to-Anthropic proxy**, транслирующий OpenAI API (включая SSE streaming) в Anthropic-формат.
+  - Для `openrouter` использует **Anthropic Skin** — `ANTHROPIC_AUTH_TOKEN` (Bearer). Флаги возможностей не пробрасываются.
+- **OpenCode** (`anthropic`, `openai-compatible`, `fireworks`, `openrouter`): Генерирует `~/.config/opencode/config.json` через Vercel AI SDK. Использует нативный `@ai-sdk/openai` для реальных OpenAI API (автоопределение по `baseUrl`). Полная поддержка function calling. Для каждой модели генерируется `modalities: { input: [...], output: ["text"] }` из флагов возможностей.
 - **Qwen CLI** (`openai-compatible`, `fireworks`, `openrouter`): Генерирует `~/.qwen/settings.json` со структурой OpenAI-совместимого провайдера. Требует `baseUrl`. Пробрасывает флаги возможностей через `generationConfig.modalities`.
-- **Codex CLI** (`--dev` для отображения): Генерирует `~/.codex/config.toml` с `wire_api: responses`, профилями и ссылками на переменные окружения. При project-области разделяет конфиг между глобальным (`model_providers`) и проектным (`model`) конфигами. Флаги возможностей не пробрасываются.
+- **Codex CLI** (стабильный, флаг `--dev` не нужен): Генерирует `~/.codex/config.toml` с `wire_api: responses`, профилями и ссылками на переменные окружения. При project-области разделяет конфиг между глобальным (`model_providers`) и проектным (`model`) конфигами. Поддерживает `openai-compatible`, `fireworks`, `openrouter`. Флаги возможностей не пробрасываются.
 - **Copilot** (все 4 типа провайдеров): Не записывает и не изменяет файл настроек. Весь конфиг передаётся через `COPILOT_MODEL`, `COPILOT_PROVIDER_TYPE`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_PROVIDER_BASE_URL`. Типы `fireworks` и `openrouter` отображаются как `COPILOT_PROVIDER_TYPE=openai`. Для моделей семейства gpt-5 автоматически добавляется `COPILOT_PROVIDER_WIRE_API=responses`.
 - **Goose** (все 4 типа провайдеров): Не изменяет файл настроек. Весь конфиг через `GOOSE_PROVIDER` + `GOOSE_MODEL` + ключи провайдера. `anthropic` → `ANTHROPIC_API_KEY`; `openrouter` → `OPENROUTER_API_KEY`; `fireworks`/`openai-compatible` → `OPENAI_API_KEY` + `OPENAI_HOST`. Суффикс `/v1` автоматически убирается из `OPENAI_HOST` (Goose сам дописывает `/v1/chat/completions`).
 
