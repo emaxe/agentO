@@ -151,9 +151,31 @@ export class OpenCodeAdapter implements AgentAdapter<OpenCodeConfig> {
     }
 
     // openai-compatible and responses-compatible: кастомный провайдер с именем из agento
+    const resolvedBaseUrl = provider.baseUrl ?? DEFAULT_BASE_URLS[provider.type];
+
+    // Use native @ai-sdk/openai when targeting the actual OpenAI API — it handles
+    // model-specific parameters correctly (e.g. max_completion_tokens for gpt-5.x),
+    // whereas @ai-sdk/openai-compatible always sends max_tokens which OpenAI rejects
+    // for newer models.
+    const isNativeOpenAI =
+      provider.type === 'openai-compatible' &&
+      (provider.baseUrl == null || provider.baseUrl === DEFAULT_BASE_URLS['openai-compatible']);
+
+    if (isNativeOpenAI) {
+      return {
+        model: `openai/${base.model}`,
+        provider: {
+          openai: {
+            npm: '@ai-sdk/openai',
+            options: { apiKey: provider.apiKey },
+            models: { [base.model]: { name: base.model, modalities } },
+          },
+        },
+      };
+    }
+
     const providerKey = provider.name.toLowerCase().replace(/\s+/g, '-');
     const options: Record<string, unknown> = { apiKey: provider.apiKey };
-    const resolvedBaseUrl = provider.baseUrl ?? DEFAULT_BASE_URLS[provider.type];
     if (resolvedBaseUrl) options['baseURL'] = resolvedBaseUrl;
     return {
       model: `${providerKey}/${base.model}`,

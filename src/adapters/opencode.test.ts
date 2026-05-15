@@ -49,7 +49,7 @@ describe('OpenCodeAdapter', () => {
   });
 
   it('openai-compatible uses normalized provider name as key', () => {
-    const openaiProvider = { ...testProvider, type: 'openai-compatible' as const, name: 'Fireworks AI' };
+    const openaiProvider = { ...testProvider, type: 'openai-compatible' as const, name: 'Fireworks AI', baseUrl: 'https://api.fireworks.ai/v1' };
     const config = adapter.buildConfig(testProfile, [openaiProvider]);
     expect(config.model).toBe('fireworks-ai/claude-3-opus');
     const provider = config.provider as Record<string, unknown>;
@@ -61,6 +61,52 @@ describe('OpenCodeAdapter', () => {
     expect('claude-3-opus' in models).toBe(true);
     const options = fw.options as Record<string, unknown>;
     expect(options.apiKey).toBe('sk-ant-test123');
+  });
+
+  it('openai-compatible with no baseUrl uses native @ai-sdk/openai for actual OpenAI API', () => {
+    const openaiProvider: Provider = {
+      id: '00000000-0000-0000-0000-000000000010',
+      name: 'OpenAI',
+      type: 'openai-compatible',
+      apiKey: 'sk-openai-test',
+      models: [{ name: 'gpt-5.4', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-000000000011',
+      name: 'OpenAI Profile',
+      models: [{ providerId: openaiProvider.id, model: 'gpt-5.4', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [openaiProvider]);
+    expect(config.model).toBe('openai/gpt-5.4');
+    const provider = config.provider as Record<string, unknown>;
+    expect('openai' in provider).toBe(true);
+    const entry = provider.openai as Record<string, unknown>;
+    expect(entry.npm).toBe('@ai-sdk/openai');
+    const options = entry.options as Record<string, unknown>;
+    expect(options.apiKey).toBe('sk-openai-test');
+    expect('baseURL' in options).toBe(false);
+  });
+
+  it('openai-compatible with explicit OpenAI baseUrl uses native @ai-sdk/openai', () => {
+    const openaiProvider: Provider = {
+      id: '00000000-0000-0000-0000-000000000012',
+      name: 'OpenAI Direct',
+      type: 'openai-compatible',
+      apiKey: 'sk-openai-test2',
+      baseUrl: 'https://api.openai.com/v1',
+      models: [{ name: 'gpt-5.4', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-000000000013',
+      name: 'OpenAI Direct Profile',
+      models: [{ providerId: openaiProvider.id, model: 'gpt-5.4', tier: 'base' }],
+    };
+    const config = adapter.buildConfig(profile, [openaiProvider]);
+    expect(config.model).toBe('openai/gpt-5.4');
+    const provider = config.provider as Record<string, unknown>;
+    expect('openai' in provider).toBe(true);
+    const entry = provider.openai as Record<string, unknown>;
+    expect(entry.npm).toBe('@ai-sdk/openai');
   });
 
   it('multi-tier profile selects base tier model', () => {
