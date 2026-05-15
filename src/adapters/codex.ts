@@ -71,7 +71,6 @@ async function writeTomlFile(path: string, config: CodexConfig): Promise<void> {
 export class CodexAdapter implements AgentAdapter<CodexConfig> {
   readonly id = 'codex';
   readonly displayName = 'Codex CLI';
-  readonly dev = true;
   readonly supportedProviderTypes = ['openai-compatible', 'responses-compatible', 'fireworks', 'openrouter', 'custom-api'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
