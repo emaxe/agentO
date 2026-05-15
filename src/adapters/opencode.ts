@@ -34,6 +34,7 @@ export interface OpenCodeConfig {
 
 /** Default API base URLs for provider types that need them. */
 const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
+  'openai-compatible': 'https://api.openai.com/v1',
   fireworks: 'https://api.fireworks.ai/inference/v1',
   openrouter: 'https://openrouter.ai/api/v1',
 };
@@ -152,7 +153,8 @@ export class OpenCodeAdapter implements AgentAdapter<OpenCodeConfig> {
     // openai-compatible and responses-compatible: кастомный провайдер с именем из agento
     const providerKey = provider.name.toLowerCase().replace(/\s+/g, '-');
     const options: Record<string, unknown> = { apiKey: provider.apiKey };
-    if (provider.baseUrl) options['baseURL'] = provider.baseUrl;
+    const resolvedBaseUrl = provider.baseUrl ?? DEFAULT_BASE_URLS[provider.type];
+    if (resolvedBaseUrl) options['baseURL'] = resolvedBaseUrl;
     return {
       model: `${providerKey}/${base.model}`,
       provider: {

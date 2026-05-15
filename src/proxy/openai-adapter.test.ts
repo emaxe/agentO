@@ -159,9 +159,11 @@ describe('convertRequest', () => {
       max_tokens: 100,
     };
     const openai = convertRequest(anthropic);
+    // tool messages must immediately follow the assistant tool_calls message;
+    // any user text from the same Anthropic turn comes after.
     expect(openai.messages).toEqual([
-      { role: 'user', content: 'Result: Thank you' },
       { role: 'tool', tool_call_id: 'tu_1', content: 'Sunny' },
+      { role: 'user', content: 'Result: Thank you' },
     ]);
   });
 

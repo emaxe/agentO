@@ -64,12 +64,10 @@ describe('provider manager', () => {
       expect(await listProviders()).toHaveLength(0);
     });
 
-    it('addProvider openai-compatible without baseUrl throws', async () => {
+    it('addProvider openai-compatible without baseUrl succeeds (defaults to https://api.openai.com/v1)', async () => {
       const { addProvider, listProviders } = await getManager();
-      await expect(
-        addProvider({ name: 'Compat', type: 'openai-compatible', apiKey: 'k', models: [{ name: 'm', capabilities: { image: true, video: false, audio: false } }] }),
-      ).rejects.toThrow('requires a baseUrl');
-      expect(await listProviders()).toHaveLength(0);
+      await addProvider({ name: 'Compat', type: 'openai-compatible', apiKey: 'k', models: [{ name: 'm', capabilities: { image: true, video: false, audio: false } }] });
+      expect(await listProviders()).toHaveLength(1);
     });
 
     it('addProvider with duplicate name throws', async () => {

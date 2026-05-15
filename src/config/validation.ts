@@ -3,7 +3,7 @@
  *
  * These checks go beyond Zod schema shape validation to enforce business rules:
  * - Provider name uniqueness
- * - openai-compatible requires baseUrl
+ * - responses-compatible and custom-api require baseUrl (openai-compatible defaults to https://api.openai.com/v1)
  * - Profile model providerId references must resolve to existing providers
  * - Multi-model profiles require a tier on every model
  * - Multi-model profiles must have at least one model with tier=base
@@ -44,8 +44,8 @@ export function validateProvider(
     );
   }
 
-  // Types that require baseUrl
-  const baseUrlRequiredTypes = ['openai-compatible', 'responses-compatible', 'custom-api'] as const;
+  // Types that require baseUrl (openai-compatible defaults to https://api.openai.com/v1)
+  const baseUrlRequiredTypes = ['responses-compatible', 'custom-api'] as const;
   if (baseUrlRequiredTypes.includes(data.type as (typeof baseUrlRequiredTypes)[number]) && !data.baseUrl) {
     throw new Error(`Provider type "${data.type}" requires a baseUrl.`);
   }

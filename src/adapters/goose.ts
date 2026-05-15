@@ -18,6 +18,9 @@ export interface GooseConfig {
  */
 const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1';
 
+/** Default OpenAI-compatible endpoint used when the user omits baseUrl. */
+const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+
 /**
  * Converts a full API base URL (which may include a versioned path like `/v1`) into
  * a host-only value suitable for Goose's `OPENAI_HOST` variable.
@@ -76,7 +79,7 @@ export class GooseAdapter implements AgentAdapter<GooseConfig> {
    *   anthropic      → ANTHROPIC_API_KEY, optionally ANTHROPIC_HOST (custom endpoint)
    *   openrouter     → OPENROUTER_API_KEY, optionally OPENROUTER_HOST (non-default endpoint)
    *   fireworks      → routed as GOOSE_PROVIDER=openai + OPENAI_API_KEY + OPENAI_HOST
-   *   openai-compat  → GOOSE_PROVIDER=openai + OPENAI_API_KEY + OPENAI_HOST (baseUrl required)
+   *   openai-compat  → GOOSE_PROVIDER=openai + OPENAI_API_KEY + OPENAI_HOST (baseUrl optional, defaults to https://api.openai.com/v1)
    */
   buildEnv(profile: Profile, providers: Provider[]): Record<string, string> {
     const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
@@ -135,13 +138,10 @@ export class GooseAdapter implements AgentAdapter<GooseConfig> {
         throw new Error(`Goose: custom-api provider "${provider.name}" requires at least one compatible mode (anthropic, openai, or responses)`);
       }
     } else {
-      // openai-compatible
-      if (!provider.baseUrl) {
-        throw new Error('baseUrl required for openai-compatible provider in Goose');
-      }
+      // openai-compatible — baseUrl is optional; falls back to https://api.openai.com/v1
       env.GOOSE_PROVIDER = 'openai';
       env.OPENAI_API_KEY = provider.apiKey;
-      env.OPENAI_HOST = toGooseOpenAIHost(provider.baseUrl);
+      env.OPENAI_HOST = toGooseOpenAIHost(provider.baseUrl ?? OPENAI_DEFAULT_BASE_URL);
     }
 
     return env;

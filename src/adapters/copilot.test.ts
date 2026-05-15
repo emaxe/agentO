@@ -174,14 +174,15 @@ describe('CopilotAdapter', () => {
       expect(env.COPILOT_PROVIDER_BASE_URL).toBe('https://api.anthropic.com');
     });
 
-    it('throws for openai-compatible without baseUrl', () => {
+    it('uses default OpenAI URL for openai-compatible without baseUrl', () => {
       const noUrl = { ...openaiCompatibleProvider, baseUrl: undefined };
       const profile: Profile = {
         id: '00000000-0000-0000-0000-000000000018',
         name: 'Local NoUrl',
         models: [{ providerId: noUrl.id, model: 'deepseek' }],
       };
-      expect(() => adapter.buildEnv(profile, [noUrl])).toThrow('baseUrl required');
+      const env = adapter.buildEnv(profile, [noUrl]);
+      expect(env.COPILOT_PROVIDER_BASE_URL).toBe('https://api.openai.com/v1');
     });
 
     it('throws for unknown provider type without baseUrl or default URL', () => {

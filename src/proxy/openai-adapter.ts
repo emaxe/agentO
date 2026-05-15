@@ -60,8 +60,8 @@ export function convertRequest(req: AnthropicRequest): OpenAIRequest {
     tool_choice: req.tool_choice ? convertToolChoice(req.tool_choice) : undefined,
   };
 
-  // Detects OpenAI o-series models (o1, o3, etc.) by their "o" prefix + digit naming.
-  if (/^o\d/.test(req.model)) {
+  // o-series (o1, o3, o4) and gpt-5.x require max_completion_tokens; older models use max_tokens.
+  if (/^o\d/.test(req.model) || /^gpt-5/.test(req.model)) {
     result.max_completion_tokens = req.max_tokens;
   } else {
     result.max_tokens = req.max_tokens;
@@ -128,7 +128,9 @@ function convertMessage(msg: AnthropicRequest['messages'][number]): OpenAIReques
       }
     }
     if (textParts.length > 0) {
-      toolResults.unshift({ role: 'user', content: textParts.join('') });
+      // Text parts must come AFTER tool messages: OpenAI requires all tool role messages
+      // to immediately follow the assistant message that issued the tool_calls.
+      toolResults.push({ role: 'user', content: textParts.join('') });
     }
     return toolResults;
   }

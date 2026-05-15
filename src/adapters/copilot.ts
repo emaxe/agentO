@@ -15,6 +15,7 @@ const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
   'anthropic-compatible': 'https://api.anthropic.com',
   fireworks: 'https://api.fireworks.ai/inference/v1',
   openrouter: 'https://openrouter.ai/api/v1',
+  'openai-compatible': 'https://api.openai.com/v1',
 };
 
 /** Map AgentO provider types to Copilot CLI COPILOT_PROVIDER_TYPE values. */
@@ -75,7 +76,7 @@ export class CopilotAdapter implements AgentAdapter<CopilotConfig> {
     } else {
       copilotProviderType = PROVIDER_TYPE_MAP[provider.type];
       const defaultUrl = DEFAULT_BASE_URLS[provider.type];
-      if (!provider.baseUrl && (provider.type === 'openai-compatible' || provider.type === 'responses-compatible')) {
+      if (!provider.baseUrl && provider.type === 'responses-compatible') {
         throw new Error(`baseUrl required for ${provider.type} provider in Copilot CLI`);
       }
       resolvedUrl = provider.baseUrl ?? defaultUrl;

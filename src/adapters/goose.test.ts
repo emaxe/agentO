@@ -237,14 +237,15 @@ describe('GooseAdapter', () => {
         expect(env.OPENAI_HOST).toBe('http://localhost:11434');
       });
 
-      it('throws when baseUrl missing', () => {
+      it('uses default OpenAI host when baseUrl missing', () => {
         const noUrl = { ...openaiCompatibleProvider, baseUrl: undefined };
         const profile: Profile = {
           id: '00000000-0000-0000-0000-000000000015',
           name: 'Local NoUrl',
           models: [{ providerId: noUrl.id, model: 'deepseek' }],
         };
-        expect(() => adapter.buildEnv(profile, [noUrl])).toThrow('baseUrl required');
+        const env = adapter.buildEnv(profile, [noUrl]);
+        expect(env.OPENAI_HOST).toBe('https://api.openai.com');
       });
     });
 
