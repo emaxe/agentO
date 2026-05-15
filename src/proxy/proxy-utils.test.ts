@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { getOutboundAgent } from './proxy-utils.js';
+import { buildProxyHeaders, getOutboundAgent, normalizeProxyUpstream } from './proxy-utils.js';
 
 const PROXY_URL = 'http://proxy.example.com:8080';
 
@@ -96,5 +96,54 @@ describe('getOutboundAgent', () => {
   it('returns undefined for 127.0.0.55 (any loopback) even when proxy set', () => {
     process.env.HTTPS_PROXY = PROXY_URL;
     expect(getOutboundAgent(new URL('https://127.0.0.55:443'))).toBeUndefined();
+  });
+});
+
+describe('normalizeProxyUpstream', () => {
+  it('strips trailing /v1 from URL pathname', () => {
+    expect(normalizeProxyUpstream('https://api.fireworks.ai/inference/v1')).toBe(
+      'https://api.fireworks.ai/inference',
+    );
+  });
+
+  it('strips trailing /v1/ from URL pathname', () => {
+    expect(normalizeProxyUpstream('https://api.fireworks.ai/inference/v1/')).toBe(
+      'https://api.fireworks.ai/inference',
+    );
+  });
+
+  it('leaves URL unchanged when no trailing /v1', () => {
+    expect(normalizeProxyUpstream('https://api.fireworks.ai/inference')).toBe(
+      'https://api.fireworks.ai/inference',
+    );
+  });
+
+  it('preserves other path segments and query params', () => {
+    expect(normalizeProxyUpstream('https://example.com/api/v1/v1?q=1')).toBe(
+      'https://example.com/api/v1?q=1',
+    );
+  });
+});
+
+describe('buildProxyHeaders', () => {
+  it('removes hop-by-hop headers', () => {
+    const h = buildProxyHeaders({ host: 'foo', 'content-length': '4', 'transfer-encoding': 'chunked' });
+    expect(h).toEqual({});
+  });
+
+  it('strips anthropic-version', () => {
+    const h = buildProxyHeaders({ 'anthropic-version': '2023-06-01', 'x-api-key': 'k' }, 5);
+    expect(h).not.toHaveProperty('anthropic-version');
+  });
+
+  it('converts x-api-key to Authorization: Bearer', () => {
+    const h = buildProxyHeaders({ 'x-api-key': 'token123' }, 5);
+    expect(h['authorization']).toBe('Bearer token123');
+    expect(h).not.toHaveProperty('x-api-key');
+  });
+
+  it('sets content-length from bodyLength', () => {
+    const h = buildProxyHeaders({ 'content-type': 'application/json' }, 42);
+    expect(h['content-length']).toBe(42);
   });
 });

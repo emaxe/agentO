@@ -6,17 +6,11 @@ import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
 import { resolveCustomApiUrl } from '../config/schema.js';
+import { DEFAULT_BASE_URLS } from '../config/defaults.js';
 
 export interface CopilotConfig {
   [key: string]: unknown;
 }
-
-const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
-  'anthropic-compatible': 'https://api.anthropic.com',
-  fireworks: 'https://api.fireworks.ai/inference/v1',
-  openrouter: 'https://openrouter.ai/api/v1',
-  'openai-compatible': 'https://api.openai.com/v1',
-};
 
 /** Map AgentO provider types to Copilot CLI COPILOT_PROVIDER_TYPE values. */
 const PROVIDER_TYPE_MAP: Record<ProviderType, string> = {
@@ -93,7 +87,7 @@ export class CopilotAdapter implements AgentAdapter<CopilotConfig> {
       COPILOT_PROVIDER_BASE_URL: resolvedUrl,
     };
 
-    if (base.model.startsWith('gpt-5') || provider.type === 'responses-compatible' || (provider.type === 'custom-api' && provider.customApiModes?.responses)) {
+    if (provider.type === 'responses-compatible' || (provider.type === 'custom-api' && provider.customApiModes?.responses)) {
       env.COPILOT_PROVIDER_WIRE_API = 'responses';
     }
 

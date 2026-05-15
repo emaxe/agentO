@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-05-16
+
+### Added
+
+- **Unified `DEFAULT_BASE_URLS` constant** (`src/config/defaults.ts`): single source of truth for default API base URLs across all adapters and TUI model-fetching. Includes `DEFAULT_ANTHROPIC_BASE_URLS` for Claude Code (without `/v1` path) and `DEFAULT_BASE_URLS` for OpenAI-compatible agents (with `/v1`).
+
+- **Proxy request normalization** (`src/proxy/proxy-utils.ts`): `normalizeProxyUpstream()` strips trailing `/v1/` from URL before passing to local proxy, preventing double-versioned paths. `buildProxyHeaders()` cleans hop-by-hop headers (`proxy-connection`, `keep-alive`, `transfer-encoding`), injects `anthropic-version`, and maps `x-api-key` to `Authorization`. Full unit test coverage added.
+
+### Changed
+
+- **Refactored adapter constants**: removed duplicate `DEFAULT_BASE_URLS` declarations from `claude-code.ts`, `codex.ts`, `copilot.ts`, `qwen.ts`, `opencode.ts`, `goose.ts`, `tui/provider-api.ts`. All now import from `src/config/defaults.ts`.
+
+- **Qwen `buildConfig` check order**: `!resolvedBaseUrl` validation moved inside the `custom-api` branch (after `resolveCustomApiUrl`), since known provider types always resolve via `DEFAULT_BASE_URLS`.
+
+- **Copilot `buildEnv`**: removed model-name-based `gpt-5` wire_api detection; `responses-compatible` provider type and `custom-api` responses mode remain the only triggers.
+
+- **Claude Code proxy detection**: `maybeStartProxy` now reads `ANTHROPIC_BASE_URL` directly from the generated config object instead of re-computing it.
+
 ## [0.4.4] - 2026-05-15
 
 ### Added

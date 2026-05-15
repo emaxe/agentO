@@ -203,21 +203,7 @@ describe('CopilotAdapter', () => {
       expect(env.COPILOT_PROVIDER_API_KEY).toBe('sk-ant-test123');
     });
 
-    it('sets COPILOT_PROVIDER_WIRE_API to responses for gpt-5 models', () => {
-      const gptProvider: Provider = {
-        ...openaiCompatibleProvider,
-        models: [{ name: 'gpt-5.2', capabilities: { image: false, video: false, audio: false } }],
-      };
-      const profile: Profile = {
-        id: '00000000-0000-0000-0000-000000000019',
-        name: 'GPT5',
-        models: [{ providerId: gptProvider.id, model: 'gpt-5.2' }],
-      };
-      const env = adapter.buildEnv(profile, [gptProvider]);
-      expect(env.COPILOT_PROVIDER_WIRE_API).toBe('responses');
-    });
-
-    it('does not set wire_api for non-gpt-5 models', () => {
+    it('does not set wire_api by default', () => {
       const env = adapter.buildEnv(testProfile, [anthropicProvider]);
       expect(env.COPILOT_PROVIDER_WIRE_API).toBeUndefined();
     });

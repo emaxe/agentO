@@ -32,12 +32,7 @@ export interface OpenCodeConfig {
   [key: string]: unknown;
 }
 
-/** Default API base URLs for provider types that need them. */
-const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
-  'openai-compatible': 'https://api.openai.com/v1',
-  fireworks: 'https://api.fireworks.ai/inference/v1',
-  openrouter: 'https://openrouter.ai/api/v1',
-};
+import { DEFAULT_BASE_URLS } from '../config/defaults.js';
 
 /** Adapter for the OpenCode CLI agent. */
 export class OpenCodeAdapter implements AgentAdapter<OpenCodeConfig> {

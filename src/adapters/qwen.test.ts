@@ -117,9 +117,9 @@ describe('QwenAdapter', () => {
       expect(() => adapter.buildConfig(testProfile, [anthropicProvider])).toThrow('does not support Anthropic');
     });
 
-    it('throws when provider has no baseUrl', () => {
-      const providerNoUrl: Provider = { ...testProvider, baseUrl: undefined };
-      expect(() => adapter.buildConfig(testProfile, [providerNoUrl])).toThrow('requires a baseUrl');
+    it('throws when custom-api provider lacks openai mode', () => {
+      const providerNoMode: Provider = { ...testProvider, type: 'custom-api', baseUrl: undefined, customApiModes: { openai: false, anthropic: false, responses: false } };
+      expect(() => adapter.buildConfig(testProfile, [providerNoMode])).toThrow('requires openai mode');
     });
 
     it('passes model capabilities to generationConfig.modalities', () => {

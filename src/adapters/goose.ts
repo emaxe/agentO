@@ -6,20 +6,17 @@ import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
 import { resolveCustomApiUrl } from '../config/schema.js';
+import { DEFAULT_BASE_URLS } from '../config/defaults.js';
 
 export interface GooseConfig {
   raw?: string;
   [key: string]: unknown;
 }
 
-/**
- * Default base URLs for providers that Goose accesses via OpenAI-compatible protocol.
- * Used only for `fireworks` (Goose has no native fireworks provider).
+/** Default OpenRouter host (without path). Goose's openrouter provider appends its own path.
+ *  Only set OPENROUTER_HOST when the user configured a non-default endpoint.
  */
-const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1';
-
-/** Default OpenAI-compatible endpoint used when the user omits baseUrl. */
-const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+const OPENROUTER_DEFAULT_HOST = 'https://openrouter.ai';
 
 /**
  * Converts a full API base URL (which may include a versioned path like `/v1`) into
@@ -35,12 +32,6 @@ const OPENAI_DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 function toGooseOpenAIHost(url: string): string {
   return url.replace(/\/v\d+\/?$/, '');
 }
-
-/**
- * Default OpenRouter host (without path). Goose's openrouter provider appends its own path.
- * Only set OPENROUTER_HOST when the user configured a non-default endpoint.
- */
-const OPENROUTER_DEFAULT_HOST = 'https://openrouter.ai';
 
 export class GooseAdapter implements AgentAdapter<GooseConfig> {
   readonly id = 'goose';
@@ -110,7 +101,7 @@ export class GooseAdapter implements AgentAdapter<GooseConfig> {
       // Goose has no native fireworks provider; route via openai-compatible protocol.
       env.GOOSE_PROVIDER = 'openai';
       env.OPENAI_API_KEY = provider.apiKey;
-      env.OPENAI_HOST = toGooseOpenAIHost(provider.baseUrl ?? FIREWORKS_BASE_URL);
+      env.OPENAI_HOST = toGooseOpenAIHost(provider.baseUrl ?? DEFAULT_BASE_URLS.fireworks!);
     } else if (provider.type === 'responses-compatible') {
       if (!provider.baseUrl) {
         throw new Error('baseUrl required for responses-compatible provider in Goose');
@@ -141,7 +132,7 @@ export class GooseAdapter implements AgentAdapter<GooseConfig> {
       // openai-compatible — baseUrl is optional; falls back to https://api.openai.com/v1
       env.GOOSE_PROVIDER = 'openai';
       env.OPENAI_API_KEY = provider.apiKey;
-      env.OPENAI_HOST = toGooseOpenAIHost(provider.baseUrl ?? OPENAI_DEFAULT_BASE_URL);
+      env.OPENAI_HOST = toGooseOpenAIHost(provider.baseUrl ?? DEFAULT_BASE_URLS['openai-compatible']!);
     }
 
     return env;

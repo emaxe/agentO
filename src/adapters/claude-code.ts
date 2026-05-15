@@ -8,6 +8,7 @@ import type { LaunchScope } from './base.js';
 import type { ModelTier, Profile, ProfileModel, Provider, ProviderType } from '../config/schema.js';
 import { resolveCustomApiUrl } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
+import { DEFAULT_ANTHROPIC_BASE_URLS } from '../config/defaults.js';
 
 export interface ClaudeCodeConfig {
   $schema?: string;
@@ -16,12 +17,6 @@ export interface ClaudeCodeConfig {
   apiKeyHelper?: string;
   [key: string]: unknown;
 }
-
-const DEFAULT_ANTHROPIC_BASE_URLS: Partial<Record<ProviderType, string>> = {
-  fireworks: 'https://api.fireworks.ai/inference',
-  openrouter: 'https://openrouter.ai/api',
-  'openai-compatible': 'https://api.openai.com/v1',
-};
 
 function escapeForSingleQuoted(value: string): string {
   return value.replace(/'/g, "'\\''");

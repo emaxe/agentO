@@ -2,7 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';
 import { convertRequest, convertResponse, convertError, createStreamState, convertStreamChunk } from './openai-adapter.js';
-import { getOutboundAgent } from './proxy-utils.js';
+import { buildProxyHeaders, getOutboundAgent, normalizeProxyUpstream } from './proxy-utils.js';
 
 /** Options for starting the OpenAI-to-Anthropic proxy server. */
 export interface OpenAIProxyOptions {
@@ -14,30 +14,6 @@ export interface OpenAIProxyOptions {
 export interface ProxyServer {
   url: string;
   stop: () => Promise<void>;
-}
-
-/** Build outgoing proxy headers from the incoming request. */
-function buildProxyHeaders(
-  incomingHeaders: http.IncomingHttpHeaders,
-  bodyLength?: number,
-): http.OutgoingHttpHeaders {
-  const headers: http.OutgoingHttpHeaders = {};
-  for (const [key, value] of Object.entries(incomingHeaders)) {
-    if (value === undefined) continue;
-    const lower = key.toLowerCase();
-    if (lower === 'host' || lower === 'content-length' || lower === 'transfer-encoding') continue;
-    if (lower === 'anthropic-version') continue;
-    headers[key] = value;
-  }
-  const apiKey = incomingHeaders['x-api-key'];
-  if (apiKey) {
-    delete headers['x-api-key'];
-    headers['authorization'] = `Bearer ${Array.isArray(apiKey) ? apiKey[0] : apiKey}`;
-  }
-  if (bodyLength !== undefined) {
-    headers['content-length'] = bodyLength;
-  }
-  return headers;
 }
 
 /** Read the full body of an incoming message into a Buffer. */
@@ -71,7 +47,7 @@ function sseLineToEvent(line: string): Array<Record<string, unknown>> {
 
 /** Start an HTTP proxy that translates Anthropic requests to OpenAI upstream. */
 export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<ProxyServer> {
-  const upstream = new URL(options.upstreamUrl);
+  const upstream = new URL(normalizeProxyUpstream(options.upstreamUrl));
   const upstreamModule = upstream.protocol === 'https:' ? https : http;
 
   const server = http.createServer(async (req, res) => {

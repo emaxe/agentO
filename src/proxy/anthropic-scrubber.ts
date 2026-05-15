@@ -1,7 +1,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';
-import { getOutboundAgent } from './proxy-utils.js';
+import { buildProxyHeaders, getOutboundAgent, normalizeProxyUpstream } from './proxy-utils.js';
 
 export interface ProxyOptions {
   upstreamUrl: string;
@@ -41,28 +41,11 @@ async function readBody(req: http.IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-function buildProxyHeaders(
-  incomingHeaders: http.IncomingHttpHeaders,
-  bodyLength?: number,
-): http.OutgoingHttpHeaders {
-  const headers: http.OutgoingHttpHeaders = {};
-  for (const [key, value] of Object.entries(incomingHeaders)) {
-    if (value === undefined) continue;
-    const lower = key.toLowerCase();
-    if (lower === 'host' || lower === 'content-length' || lower === 'transfer-encoding') continue;
-    headers[key] = value;
-  }
-  if (bodyLength !== undefined) {
-    headers['content-length'] = bodyLength;
-  }
-  return headers;
-}
-
 export async function startAnthropicScrubberProxy(
   options: ProxyOptions,
 ): Promise<ProxyServer> {
   const denyList = new Set(options.denyList ?? DEFAULT_DENYLIST);
-  const upstream = new URL(options.upstreamUrl);
+  const upstream = new URL(normalizeProxyUpstream(options.upstreamUrl));
   const upstreamModule = upstream.protocol === 'https:' ? https : http;
 
   const server = http.createServer(async (req, res) => {

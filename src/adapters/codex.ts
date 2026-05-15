@@ -9,6 +9,7 @@ import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
 import { resolveCustomApiUrl } from '../config/schema.js';
 import type { BackupManifestFile, WriteBackupFile } from '../config/store.js';
+import { DEFAULT_BASE_URLS } from '../config/defaults.js';
 
 export interface CodexModelProvider {
   name: string;
@@ -29,12 +30,6 @@ export interface CodexConfig {
   profiles?: Record<string, CodexProfile>;
   [key: string]: unknown;
 }
-
-const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
-  'openai-compatible': 'https://api.openai.com/v1',
-  fireworks: 'https://api.fireworks.ai/inference/v1',
-  openrouter: 'https://openrouter.ai/api/v1',
-};
 
 /** Нормализует имя провайдера в ключ: "Fireworks AI" → "fireworks-ai" */
 function deriveProviderKey(name: string): string {

@@ -1,4 +1,5 @@
 import type { ProviderType } from '../config/schema.js';
+import { DEFAULT_BASE_URLS } from '../config/defaults.js';
 
 /** Provider types that expose an OpenAI-compatible /v1/models endpoint. */
 const OPENAI_COMPATIBLE_TYPES = new Set<ProviderType>([
@@ -15,13 +16,6 @@ const OPENAI_COMPATIBLE_TYPES = new Set<ProviderType>([
 export function isOpenAICompatible(type: ProviderType): boolean {
   return OPENAI_COMPATIBLE_TYPES.has(type);
 }
-
-/** Default base URLs for known OpenAI-compatible provider types. */
-const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
-  'openai-compatible': 'https://api.openai.com/v1',
-  'fireworks': 'https://api.fireworks.ai/inference/v1',
-  'openrouter': 'https://openrouter.ai/api/v1',
-};
 
 /**
  * Resolves the effective base URL for the /models request.
