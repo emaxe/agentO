@@ -117,6 +117,7 @@ agento provider add \
 agento profile add -n "default" -m "provider-id:claude-sonnet-4-20250514"
 
 # Multi-tier profile (requires tiers: small/base/smart)
+# All models in a profile must belong to the same provider
 agento profile add -n "multi" -m "provider-id:claude-3-5-haiku-20241022:small,provider-id:claude-sonnet-4-20250514:base,provider-id:claude-opus-4-20250514:smart"
 ```
 

@@ -56,14 +56,18 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
     }
 
     if (step === 'select-provider') {
+      const firstProviderId = formModels[0]?.providerId;
+      const availableProviders = firstProviderId
+        ? providers.filter((p) => p.id === firstProviderId)
+        : providers;
       if (key.escape) {
         if (formModels.length > 0) { setStep('review'); return; }
         setStep('name'); return;
       }
       if (key.upArrow) { setProviderCursor((i) => Math.max(0, i - 1)); return; }
-      if (key.downArrow) { setProviderCursor((i) => Math.min(providers.length - 1, i + 1)); return; }
-      if (key.return && providers[providerCursor]) {
-        setPendingProviderId(providers[providerCursor].id);
+      if (key.downArrow) { setProviderCursor((i) => Math.min(availableProviders.length - 1, i + 1)); return; }
+      if (key.return && availableProviders[providerCursor]) {
+        setPendingProviderId(availableProviders[providerCursor].id);
         setModelCursor(0);
         setCustomModel('');
         setStep('select-model');
@@ -123,8 +127,16 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
       if (key.downArrow) { setReviewCursor(1); return; }
       if (key.return) {
         if (reviewCursor === 0) {
-          setProviderCursor(0);
-          setStep('select-provider');
+          if (formModels.length > 0) {
+            // Skip provider selection if provider is already locked
+            setPendingProviderId(formModels[0]!.providerId);
+            setModelCursor(0);
+            setCustomModel('');
+            setStep('select-model');
+          } else {
+            setProviderCursor(0);
+            setStep('select-provider');
+          }
         } else {
           validateAndSubmit();
         }
@@ -150,11 +162,18 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
   }
 
   if (step === 'select-provider') {
+    // If models already added, lock provider to the existing one
+    const firstProviderId = formModels[0]?.providerId;
+    const availableProviders = firstProviderId
+      ? providers.filter((p) => p.id === firstProviderId)
+      : providers;
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>Add Profile</Text>
         <Box flexDirection="column" marginTop={1}>
-          <Text dimColor>↑↓: navigate | Enter: select | {formModels.length > 0 ? 'f: finish | ' : ''}Esc: back</Text>
+          <Text dimColor>
+            ↑↓: navigate | Enter: select | {formModels.length > 0 ? 'f: finish | ' : ''}Esc: back
+          </Text>
           {formModels.length > 0 && (
             <Box flexDirection="column" marginTop={1}>
               <Text dimColor>Already added ({formModels.length}):</Text>
@@ -169,9 +188,9 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
             </Box>
           )}
           <SelectList
-            items={providers}
+            items={availableProviders}
             selected={providerCursor}
-            title="Select provider:"
+            title={firstProviderId ? 'Provider (locked to existing):' : 'Select provider:'}
             renderItem={(p, i, isSelected) => (
               <Text color={isSelected ? 'green' : undefined}>
                 {isSelected ? '▶ ' : '  '}{p.name} ({p.type}, {p.models.length} models)

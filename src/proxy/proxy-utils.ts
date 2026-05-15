@@ -1,5 +1,4 @@
 import http from 'node:http';
-import https from 'node:https';
 import { URL } from 'node:url';
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';

@@ -111,6 +111,20 @@ export function validateProfile(
     }
   }
 
+  // all models in a profile must belong to the same provider
+  const firstProviderId = data.models[0]?.providerId;
+  for (const m of data.models) {
+    if (m.providerId !== firstProviderId) {
+      const firstProvider = existingProviders.find((p) => p.id === firstProviderId);
+      const otherProvider = existingProviders.find((p) => p.id === m.providerId);
+      throw new Error(
+        `Profile models must all belong to the same provider. ` +
+        `Current provider: "${firstProvider?.name ?? firstProviderId}", ` +
+        `conflicting model "${m.model}" belongs to "${otherProvider?.name ?? m.providerId}".`,
+      );
+    }
+  }
+
   // multi-model: every model must have a tier
   if (data.models.length > 1) {
     const missingTier = data.models.find((m: ProfileModel) => !m.tier);

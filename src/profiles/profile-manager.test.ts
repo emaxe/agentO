@@ -149,5 +149,45 @@ describe('profile manager', () => {
       });
       expect(await listProfiles()).toHaveLength(1);
     });
+
+    it('addProfile with models from different providers throws', async () => {
+      const { addProvider } = await import('../providers/provider-manager.js');
+      const p1 = await addProvider({
+        name: 'Provider-1',
+        type: 'anthropic-compatible',
+        apiKey: 'k1',
+        models: [{ name: 'm1', capabilities: { image: false, video: false, audio: false } }],
+      });
+      const p2 = await addProvider({
+        name: 'Provider-2',
+        type: 'anthropic-compatible',
+        apiKey: 'k2',
+        models: [{ name: 'm2', capabilities: { image: false, video: false, audio: false } }],
+      });
+      const { addProfile, listProfiles } = await getManager();
+      await expect(
+        addProfile({
+          name: 'CrossProvider',
+          models: [
+            { providerId: p1.id, model: 'm1', tier: 'base' },
+            { providerId: p2.id, model: 'm2', tier: 'small' },
+          ],
+        }),
+      ).rejects.toThrow('same provider');
+      expect(await listProfiles()).toHaveLength(0);
+    });
+
+    it('addProfile with multiple models from same provider succeeds', async () => {
+      const { addProfile, listProfiles } = await getManager();
+      const providerId = await seedProvider();
+      await addProfile({
+        name: 'SameProviderMulti',
+        models: [
+          { providerId, model: 'm1', tier: 'base' },
+          { providerId, model: 'm2', tier: 'small' },
+        ],
+      });
+      expect(await listProfiles()).toHaveLength(1);
+    });
   });
 });

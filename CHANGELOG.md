@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-05-16
+
+### Added
+
+- **Same-provider enforcement for profiles**: validation rule ensures all models in a profile belong to the same provider. This aligns with agent limitations (Claude Code, Codex, OpenCode, Copilot, Goose support only a single provider per session).
+- **TUI provider lock**: when adding a model to a profile that already contains models, the provider selection step is skipped and the existing provider is used automatically. The model list is filtered to that provider's models.
+- **CLI cross-provider guard**: `agento profile add` now rejects `--models` with different `providerId`s.
+
+### Changed
+
+- **ProfileWizard** (`src/tui/wizards/ProfileWizard.tsx`): `select-provider` step filters providers to the existing one when models are already present; keyboard navigation respects the filtered list length.
+- **ProfileEdit** (`src/tui/screens/ProfileEdit.tsx`): same provider lock when editing profiles; "add model" action skips provider selection and jumps directly to model selection.
+
 ## [0.4.5] - 2026-05-16
 
 ### Added

@@ -31,11 +31,15 @@ export function ProfileEdit({
   const [editModels, setEditModels] = useState<ProfileModel[]>([...profile.models]);
   const [editModelCursor, setEditModelCursor] = useState(startAddingModel ? profile.models.length : 0);
   const [editFocus, setEditFocus] = useState<'name' | 'models'>(startAddingModel ? 'models' : 'name');
-  const [editSubStep, setEditSubStep] = useState<EditSubStep | null>(startAddingModel ? 'select-provider' : null);
+  const [editSubStep, setEditSubStep] = useState<EditSubStep | null>(
+    startAddingModel ? (profile.models.length > 0 ? 'select-model' : 'select-provider') : null,
+  );
+  const [pendingProviderId, setPendingProviderId] = useState<string | null>(
+    startAddingModel && profile.models.length > 0 ? profile.models[0]!.providerId : null,
+  );
   const [providerCursor, setProviderCursor] = useState(0);
   const [modelCursor, setModelCursor] = useState(0);
   const [customModel, setCustomModel] = useState('');
-  const [pendingProviderId, setPendingProviderId] = useState<string | null>(null);
   const [pendingModel, setPendingModel] = useState('');
   const [tierCursor, setTierCursor] = useState(1);
   const [status, setStatus] = useState('');
@@ -63,10 +67,14 @@ export function ProfileEdit({
         return;
       }
       if (editSubStep === 'select-provider') {
+        const firstProviderId = editModels[0]?.providerId;
+        const availableProviders = firstProviderId
+          ? providers.filter((p) => p.id === firstProviderId)
+          : providers;
         if (key.upArrow) { setProviderCursor((i) => Math.max(0, i - 1)); return; }
-        if (key.downArrow) { setProviderCursor((i) => Math.min(providers.length - 1, i + 1)); return; }
-        if (key.return && providers[providerCursor]) {
-          setPendingProviderId(providers[providerCursor].id);
+        if (key.downArrow) { setProviderCursor((i) => Math.min(availableProviders.length - 1, i + 1)); return; }
+        if (key.return && availableProviders[providerCursor]) {
+          setPendingProviderId(availableProviders[providerCursor].id);
           setModelCursor(0);
           setCustomModel('');
           setEditSubStep('select-model');
@@ -148,10 +156,18 @@ export function ProfileEdit({
         setEditModels((prev) => prev.filter((_, i) => i !== editModelCursor));
         setEditModelCursor((i) => Math.max(0, i - 1));
       } else if (key.return && editModelCursor === editModels.length) {
-        setProviderCursor(0);
-        setModelCursor(0);
-        setCustomModel('');
-        setEditSubStep('select-provider');
+        if (editModels.length > 0) {
+          // Skip provider selection if profile already has models
+          setPendingProviderId(editModels[0]!.providerId);
+          setModelCursor(0);
+          setCustomModel('');
+          setEditSubStep('select-model');
+        } else {
+          setProviderCursor(0);
+          setModelCursor(0);
+          setCustomModel('');
+          setEditSubStep('select-provider');
+        }
       }
     }
   });
@@ -165,20 +181,31 @@ export function ProfileEdit({
         <Text bold>Edit Profile — {subTitle}</Text>
         <Text dimColor>Esc: back</Text>
 
-        {editSubStep === 'select-provider' && (
-          <Box flexDirection="column" marginTop={1}>
-            <Text dimColor>↑↓: navigate | Enter: select</Text>
-            <SelectList
-              items={providers}
-              selected={providerCursor}
-              renderItem={(p, i, isSelected) => (
-                <Text color={isSelected ? 'green' : undefined}>
-                  {isSelected ? '▶ ' : '  '}{p.name} ({p.type}, {p.models.length} models)
-                </Text>
+        {editSubStep === 'select-provider' && (() => {
+          // Lock provider to the existing one if profile already has models
+          const firstProviderId = editModels[0]?.providerId;
+          const availableProviders = firstProviderId
+            ? providers.filter((p) => p.id === firstProviderId)
+            : providers;
+          return (
+            <Box flexDirection="column" marginTop={1}>
+              <Text dimColor>↑↓: navigate | Enter: select</Text>
+              {firstProviderId && availableProviders.length === 1 && (
+                <Text dimColor>Provider locked to: {availableProviders[0]?.name ?? '?'}</Text>
               )}
-            />
-          </Box>
-        )}
+              <SelectList
+                items={availableProviders}
+                selected={providerCursor}
+                title={firstProviderId ? 'Provider (locked to existing):' : 'Select provider:'}
+                renderItem={(p, i, isSelected) => (
+                  <Text color={isSelected ? 'green' : undefined}>
+                    {isSelected ? '▶ ' : '  '}{p.name} ({p.type}, {p.models.length} models)
+                  </Text>
+                )}
+              />
+            </Box>
+          );
+        })()}
 
         {editSubStep === 'select-model' && (() => {
           const provider = providers.find((p) => p.id === pendingProviderId);

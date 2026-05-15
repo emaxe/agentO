@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { writeJsonAtomic } from '../config/atomic-write.js';
 import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
-import type { ModelTier, Profile, ProfileModel, Provider, ProviderType } from '../config/schema.js';
+import type { ModelTier, Profile, ProfileModel, Provider } from '../config/schema.js';
 import { resolveCustomApiUrl } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
 import { DEFAULT_ANTHROPIC_BASE_URLS } from '../config/defaults.js';

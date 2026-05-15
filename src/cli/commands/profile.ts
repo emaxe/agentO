@@ -71,6 +71,18 @@ export function createProfileCommand(): Command {
           process.exit(1);
         }
 
+        // All models in a profile must belong to the same provider
+        const firstProviderId = models[0]!.providerId;
+        for (const m of models) {
+          if (m.providerId !== firstProviderId) {
+            console.error(
+              `Error: all models in a profile must belong to the same provider. ` +
+              `Conflicting model "${m.model}" uses provider "${m.providerId}" instead of "${firstProviderId}".`,
+            );
+            process.exit(1);
+          }
+        }
+
         if (models.length > 1) {
           if (models.some((m) => !m.tier)) {
             console.error('Error: with multiple models every entry must include a tier (small|base|smart)');
