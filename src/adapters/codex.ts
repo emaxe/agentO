@@ -31,6 +31,7 @@ export interface CodexConfig {
 }
 
 const DEFAULT_BASE_URLS: Partial<Record<ProviderType, string>> = {
+  'openai-compatible': 'https://api.openai.com/v1',
   fireworks: 'https://api.fireworks.ai/inference/v1',
   openrouter: 'https://openrouter.ai/api/v1',
 };

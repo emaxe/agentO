@@ -97,12 +97,12 @@ describe('CodexAdapter', () => {
       expect('my-custom-provider' in providers).toBe(true);
     });
 
-    it('sets empty base_url when provider has no baseUrl', () => {
+    it('uses default OpenAI base_url when openai-compatible provider has no baseUrl', () => {
       const providerNoUrl: Provider = { ...testProvider, type: 'openai-compatible', baseUrl: undefined };
       const config = adapter.buildConfig(testProfile, [providerNoUrl]);
       const providers = config.model_providers as Record<string, unknown>;
       const entry = providers['fireworks-ai'] as Record<string, unknown>;
-      expect(entry.base_url).toBe('');
+      expect(entry.base_url).toBe('https://api.openai.com/v1');
     });
   });
 
