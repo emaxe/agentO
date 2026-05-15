@@ -124,7 +124,7 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
         }
         baseUrl = resolved;
       } else if (provider.customApiModes?.openai) {
-        wireApi = 'openai';
+        wireApi = 'responses';
         const resolved = resolveCustomApiUrl(provider, 'openai');
         if (!resolved) {
           throw new Error(`Codex CLI requires a baseUrl for custom-api provider "${provider.name}"`);
@@ -135,7 +135,7 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
       }
     } else {
       baseUrl = provider.baseUrl ?? DEFAULT_BASE_URLS[provider.type] ?? '';
-      wireApi = provider.type === 'openai-compatible' ? 'openai' : 'responses';
+      wireApi = 'responses';
     }
 
     return {

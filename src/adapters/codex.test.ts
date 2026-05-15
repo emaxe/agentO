@@ -150,7 +150,7 @@ describe('CodexAdapter', () => {
       expect(entry.base_url).toBe('https://proxy.example.com/v1/responses');
     });
 
-    it('uses openai wire_api and base URL when openai mode enabled', () => {
+    it('uses responses wire_api and base URL when openai mode enabled (Codex dropped openai wire_api)', () => {
       const customProvider: Provider = {
         id: '00000000-0000-0000-0000-0000000000e3',
         name: 'Custom',
@@ -168,7 +168,7 @@ describe('CodexAdapter', () => {
       const config = adapter.buildConfig(profile, [customProvider]);
       const providers = config.model_providers as Record<string, unknown>;
       const entry = providers['custom'] as Record<string, unknown>;
-      expect(entry.wire_api).toBe('openai');
+      expect(entry.wire_api).toBe('responses');
       expect(entry.base_url).toBe('https://proxy.example.com');
     });
 
