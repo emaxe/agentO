@@ -2,6 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';
 import { convertRequest, convertResponse, convertError, createStreamState, convertStreamChunk } from './openai-adapter.js';
+import { getOutboundAgent } from './proxy-utils.js';
 
 /** Options for starting the OpenAI-to-Anthropic proxy server. */
 export interface OpenAIProxyOptions {
@@ -77,13 +78,18 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
     try {
       const reqUrl = new URL(req.url ?? '/', 'http://localhost');
       const targetUrl = new URL(upstream);
-      const upstreamPath = upstream.pathname.replace(/\/+$/, '');
+      let upstreamPath = upstream.pathname.replace(/\/+$/, '');
       const reqPath = reqUrl.pathname;
 
       const isMessagesEndpoint = reqPath === '/v1/messages' || reqPath === '/v1/messages/';
       let resolvedPath = reqPath;
       if (isMessagesEndpoint) {
         resolvedPath = '/v1/chat/completions';
+      }
+
+      // Avoid double /v1 when upstream already ends with /v1 and resolvedPath starts with /v1/
+      if (resolvedPath.startsWith('/v1/') && upstreamPath.endsWith('/v1')) {
+        upstreamPath = upstreamPath.slice(0, -3);
       }
 
       targetUrl.pathname = upstreamPath + resolvedPath;
@@ -109,7 +115,7 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
 
       const proxyReq = upstreamModule.request(
         targetUrl,
-        { method: req.method, headers },
+        { method: req.method, headers, agent: getOutboundAgent(upstream) },
         (proxyRes) => {
           const contentType = proxyRes.headers['content-type'];
           const ct = Array.isArray(contentType) ? contentType[0] : contentType;

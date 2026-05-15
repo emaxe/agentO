@@ -1,6 +1,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';
+import { getOutboundAgent } from './proxy-utils.js';
 
 export interface ProxyOptions {
   upstreamUrl: string;
@@ -99,6 +100,7 @@ export async function startAnthropicScrubberProxy(
         {
           method: req.method,
           headers,
+          agent: getOutboundAgent(upstream),
         },
         (proxyRes) => {
           res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);

@@ -41,6 +41,27 @@ function cleanProcessEnv(): Record<string, string> {
   );
 }
 
+/** Loopback addresses that must never be routed through an external proxy. */
+const LOOPBACK_NO_PROXY = '127.0.0.1,localhost,::1';
+
+/**
+ * When any proxy env var is active, extends NO_PROXY / no_proxy to include
+ * loopback addresses so that child processes (e.g. claude-code) do not route
+ * requests to agento's local proxy servers through the external proxy.
+ */
+function withNoProxyLoopback(env: Record<string, string>): Record<string, string> {
+  const hasProxy =
+    env['HTTP_PROXY'] ?? env['http_proxy'] ?? env['HTTPS_PROXY'] ?? env['https_proxy'] ?? env['ALL_PROXY'] ?? env['all_proxy'];
+  if (!hasProxy) return env;
+
+  const patch: Record<string, string> = {};
+  for (const key of ['NO_PROXY', 'no_proxy'] as const) {
+    const existing = env[key];
+    patch[key] = existing ? `${existing},${LOOPBACK_NO_PROXY}` : LOOPBACK_NO_PROXY;
+  }
+  return { ...env, ...patch };
+}
+
 async function buildExecRequest(options: LaunchTransactionOptions & { args: string[] }): Promise<ExecRequest> {
   const { adapter, profile, providers, command, args } = options;
   const resolvedPath = await shellPathResolver.resolve();
@@ -49,7 +70,7 @@ async function buildExecRequest(options: LaunchTransactionOptions & { args: stri
   return {
     command,
     args,
-    env: { ...cleanProcessEnv(), PATH: resolvedPath, ...adapterEnv },
+    env: withNoProxyLoopback({ ...cleanProcessEnv(), PATH: resolvedPath, ...adapterEnv }),
     agentId: adapter.id,
     profileId: profile.id,
   };
