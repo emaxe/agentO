@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-05-17
+
+### Added
+
+- **Focus mode indicator in help text**: ProfileEdit now displays current focus mode (name/models/save) in the navigation help line, making it clear which section is active.
+- **Enhanced confirmation dialog**: Profile deletion confirmation now includes warning symbol (⚠) and clarifies that deletion is permanent.
+
+### Fixed
+
+- **ProfileEdit Save button visibility**: Moved Save button outside Models section to prevent it from being cut off on small terminals.
+- **Model deletion workflow**: Allow deletion of all models from a profile to enable provider changes. Users can delete all models, then cancel the "delete profile permanently?" dialog to add new models from a different provider.
+- **Status message persistence**: Status messages now clear properly when changing focus (Tab) or successfully deleting a model, reducing visual clutter.
+
 ## [0.4.6] - 2026-05-16
 
 ### Added
