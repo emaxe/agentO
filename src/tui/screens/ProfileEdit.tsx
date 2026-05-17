@@ -152,7 +152,7 @@ export function ProfileEdit({
           return arr;
         });
         setEditModelCursor((i) => i + 1);
-      } else if (input === 'd' && editModels[editModelCursor]) {
+      } else if (input === 'd' && editFocus === 'models' && editModelCursor < editModels.length) {
         setEditModels((prev) => prev.filter((_, i) => i !== editModelCursor));
         setEditModelCursor((i) => Math.max(0, i - 1));
       } else if (key.return && editModelCursor === editModels.length) {
@@ -285,7 +285,7 @@ export function ProfileEdit({
       </Box>
       <Box flexDirection="column" marginTop={1}>
         <Text dimColor>
-          Models{editFocus === 'models' ? ' (↑↓ navigate | Shift+↑↓ reorder | d: delete | Enter on [+]: add)' : ''}:
+          Models{editFocus === 'models' ? ' (↑↓ navigate | Shift+↑↓ reorder | d: delete model | Enter on [+]: add)' : ''}:
         </Text>
         {editModels.map((m, i) => {
           const p = providers.find((pr) => pr.id === m.providerId);
