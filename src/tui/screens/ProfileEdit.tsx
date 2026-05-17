@@ -186,8 +186,13 @@ export function ProfileEdit({
         });
         setEditModelCursor((i) => i + 1);
       } else if (input === 'd' && editFocus === 'models' && editModelCursor < editModels.length) {
+        if (editModels.length === 1) {
+          setStatus('Cannot delete last model. Use Tab to Save and confirm deletion instead.');
+          return;
+        }
         setEditModels((prev) => prev.filter((_, i) => i !== editModelCursor));
         setEditModelCursor((i) => Math.max(0, i - 1));
+        setStatus('');
       } else if (key.return && editModelCursor === editModels.length) {
         if (editModels.length > 0) {
           // Skip provider selection if profile already has models
