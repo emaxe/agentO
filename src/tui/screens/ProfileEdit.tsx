@@ -209,8 +209,12 @@ export function ProfileEdit({
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold color="yellow">Profile has no models</Text>
-        <Text marginTop={1}>Cannot save profile without at least one model.</Text>
-        <Text marginTop={1}>Delete this profile? (y/n)</Text>
+        <Box marginTop={1}>
+          <Text>Cannot save profile without at least one model.</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text>Delete this profile? (y/n)</Text>
+        </Box>
         {status && <Text color="yellow">{status}</Text>}
       </Box>
     );
