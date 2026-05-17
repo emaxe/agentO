@@ -151,6 +151,7 @@ export function ProfileEdit({
       const currentIdx = focusOrder.indexOf(editFocus);
       const nextFocus = focusOrder[(currentIdx + 1) % focusOrder.length]!;
       setEditFocus(nextFocus);
+      setStatus('');
       return;
     }
     if (input === 's') {
