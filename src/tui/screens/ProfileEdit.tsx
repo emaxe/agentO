@@ -350,14 +350,14 @@ export function ProfileEdit({
         >
           {editFocus === 'models' && editModelCursor === editModels.length ? '▶ ' : '  '}[+ add model]
         </Text>
-        <Box marginTop={1}>
-          <Text
-            color="cyan"
-            bold={editFocus === 'save'}
-          >
-            {editFocus === 'save' ? '▶ ' : '  '}[S] Save Profile
-          </Text>
-        </Box>
+      </Box>
+      <Box marginTop={1}>
+        <Text
+          color="cyan"
+          bold={editFocus === 'save'}
+        >
+          {editFocus === 'save' ? '▶ ' : '  '}[S] Save Profile
+        </Text>
       </Box>
       {status && <Text color="yellow">{status}</Text>}
     </Box>
