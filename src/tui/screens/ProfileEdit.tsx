@@ -43,14 +43,22 @@ export function ProfileEdit({
   const [pendingModel, setPendingModel] = useState('');
   const [tierCursor, setTierCursor] = useState(1);
   const [status, setStatus] = useState('');
+  const [confirmEmptyModels, setConfirmEmptyModels] = useState(false);
 
   const doSave = useCallback(() => {
+    const trimmedName = editName.trim();
+    const modelsToSave: ProfileModel[] =
+      editModels.length === 1
+        ? [{ providerId: editModels[0]!.providerId, model: editModels[0]!.model }]
+        : editModels;
+
+    // Check for empty models
+    if (modelsToSave.length === 0) {
+      setConfirmEmptyModels(true);
+      return;
+    }
+
     try {
-      const trimmedName = editName.trim();
-      const modelsToSave: ProfileModel[] =
-        editModels.length === 1
-          ? [{ providerId: editModels[0]!.providerId, model: editModels[0]!.model }]
-          : editModels;
       validateProfile({ name: trimmedName, models: modelsToSave }, profiles, providers, profile.id);
       onSave({ name: trimmedName, models: modelsToSave });
     } catch (err) {
@@ -59,6 +67,20 @@ export function ProfileEdit({
   }, [editName, editModels, profiles, providers, profile, onSave]);
 
   useKeyInput((input, key) => {
+    if (confirmEmptyModels) {
+      if (input === 'y') {
+        setConfirmEmptyModels(false);
+        // Signal to parent that profile should be deleted
+        onSave({ name: editName.trim(), models: [], _deleteProfile: true } as any);
+        return;
+      }
+      if (input === 'n' || key.escape) {
+        setConfirmEmptyModels(false);
+        return;
+      }
+      return;
+    }
+
     if (editSubStep !== null) {
       if (key.escape) {
         if (editSubStep === 'select-provider') { setEditSubStep(null); return; }
@@ -182,6 +204,17 @@ export function ProfileEdit({
       }
     }
   });
+
+  if (confirmEmptyModels) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text bold color="yellow">Profile has no models</Text>
+        <Text marginTop={1}>Cannot save profile without at least one model.</Text>
+        <Text marginTop={1}>Delete this profile? (y/n)</Text>
+        {status && <Text color="yellow">{status}</Text>}
+      </Box>
+    );
+  }
 
   if (editSubStep !== null) {
     const subTitle = editSubStep === 'select-provider' ? 'Select provider'
