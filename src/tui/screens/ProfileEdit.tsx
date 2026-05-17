@@ -214,14 +214,14 @@ export function ProfileEdit({
   if (confirmEmptyModels) {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold color="yellow">Profile has no models</Text>
+        <Text bold color="yellow">⚠ Profile has no models</Text>
         <Box marginTop={1}>
-          <Text>Cannot save profile without at least one model.</Text>
+          <Text dimColor>Cannot save profile without at least one model.</Text>
         </Box>
         <Box marginTop={1}>
-          <Text>Delete this profile? (y/n)</Text>
+          <Text>Delete this profile permanently? (y/n)</Text>
         </Box>
-        {status && <Text color="yellow">{status}</Text>}
+        {status && <Box marginTop={1}><Text color="yellow">{status}</Text></Box>}
       </Box>
     );
   }
