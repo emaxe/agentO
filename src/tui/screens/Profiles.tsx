@@ -71,8 +71,8 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
     if (mode === 'detail' && detailProfile) {
       if (key.escape || input === 'q') { setMode('list'); return; }
       if (input === 'd') {
-        if (detailProfile.models.length <= 1) {
-          setStatus('Cannot delete the last model');
+        if (detailProfile.models.length === 0) {
+          setStatus('No models to delete');
           return;
         }
         const newModels = detailProfile.models.filter((_, i) => i !== detailModelIndex);
