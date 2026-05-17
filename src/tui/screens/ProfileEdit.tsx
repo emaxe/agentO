@@ -71,6 +71,7 @@ export function ProfileEdit({
       if (input === 'y') {
         setConfirmEmptyModels(false);
         // Signal to parent that profile should be deleted
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onSave({ name: editName.trim(), models: [], _deleteProfile: true } as any);
         return;
       }

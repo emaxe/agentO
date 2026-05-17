@@ -136,6 +136,7 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
         profile={detailProfile}
         providers={providers}
         profiles={profiles}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onSave={(result: any) => {
           if (result._deleteProfile) {
             removeProfile(detailProfile.id)
