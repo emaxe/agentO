@@ -136,7 +136,13 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
         profile={detailProfile}
         providers={providers}
         profiles={profiles}
-        onSave={(result) => {
+        onSave={(result: any) => {
+          if (result._deleteProfile) {
+            removeProfile(detailProfile.id)
+              .then(() => { setStatus(`Profile deleted`); reload(); setMode('list'); })
+              .catch((err) => setStatus(`Error: ${String(err)}`));
+            return;
+          }
           updateProfile(detailProfile.id, { name: result.name, models: result.models })
             .then((updated) => { setDetailProfile(updated); reload(); setMode('detail'); })
             .catch((err) => setStatus(`Error: ${String(err)}`));
