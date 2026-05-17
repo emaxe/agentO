@@ -30,7 +30,7 @@ export function ProfileEdit({
   const [editName, setEditName] = useState(profile.name);
   const [editModels, setEditModels] = useState<ProfileModel[]>([...profile.models]);
   const [editModelCursor, setEditModelCursor] = useState(startAddingModel ? profile.models.length : 0);
-  const [editFocus, setEditFocus] = useState<'name' | 'models'>(startAddingModel ? 'models' : 'name');
+  const [editFocus, setEditFocus] = useState<'name' | 'models' | 'save'>(startAddingModel ? 'models' : 'name');
   const [editSubStep, setEditSubStep] = useState<EditSubStep | null>(
     startAddingModel ? (profile.models.length > 0 ? 'select-model' : 'select-provider') : null,
   );
@@ -124,8 +124,19 @@ export function ProfileEdit({
     }
 
     if (key.escape) { onCancel(); return; }
-    if (key.tab) { setEditFocus((f) => f === 'name' ? 'models' : 'name'); return; }
-    if (input === 's') { doSave(); return; }
+    if (key.tab) {
+      const focusOrder: ('name' | 'models' | 'save')[] = ['name', 'models', 'save'];
+      const currentIdx = focusOrder.indexOf(editFocus);
+      const nextFocus = focusOrder[(currentIdx + 1) % focusOrder.length]!;
+      setEditFocus(nextFocus);
+      return;
+    }
+    if (input === 's') {
+      if (editFocus === 'save') { doSave(); return; }
+      setEditFocus('save');
+      return;
+    }
+    if (key.return && editFocus === 'save') { doSave(); return; }
 
     if (editFocus === 'name') {
       if (key.return) { setEditFocus('models'); return; }
@@ -271,7 +282,7 @@ export function ProfileEdit({
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold>Edit Profile</Text>
-      <Text dimColor>Tab: name/models focus | s: save | Esc: cancel</Text>
+      <Text dimColor>Tab: navigate | Esc: cancel</Text>
       <Box marginTop={1}>
         <Text color={editFocus === 'name' ? 'green' : undefined}>
           {editFocus === 'name' ? '▶ ' : '  '}Name:{' '}
@@ -302,6 +313,14 @@ export function ProfileEdit({
         >
           {editFocus === 'models' && editModelCursor === editModels.length ? '▶ ' : '  '}[+ add model]
         </Text>
+        <Box marginTop={1}>
+          <Text
+            color="cyan"
+            bold={editFocus === 'save'}
+          >
+            {editFocus === 'save' ? '▶ ' : '  '}[S] Save Profile
+          </Text>
+        </Box>
       </Box>
       {status && <Text color="yellow">{status}</Text>}
     </Box>
