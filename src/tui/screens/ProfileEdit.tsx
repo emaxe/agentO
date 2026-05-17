@@ -324,7 +324,9 @@ export function ProfileEdit({
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold>Edit Profile</Text>
-      <Text dimColor>Tab: navigate | Esc: cancel</Text>
+      <Text dimColor>
+        Tab: navigate (now: {editFocus}) | Esc: cancel
+      </Text>
       <Box marginTop={1}>
         <Text color={editFocus === 'name' ? 'green' : undefined}>
           {editFocus === 'name' ? '▶ ' : '  '}Name:{' '}
