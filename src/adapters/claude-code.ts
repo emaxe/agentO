@@ -33,7 +33,7 @@ function pickByTier(
 export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
   readonly id = 'claude-code';
   readonly displayName = 'Claude Code';
-  readonly supportedProviderTypes = ['anthropic-compatible', 'fireworks', 'openrouter', 'custom-api', 'openai-compatible'] as const;
+  readonly supportedProviderTypes = ['anthropic-compatible', 'fireworks', 'openrouter', 'custom-api', 'openai-compatible', 'responses-compatible'] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -85,9 +85,15 @@ export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
         anthropicBase = resolveCustomApiUrl(baseProvider, 'anthropic');
       } else if (baseProvider.customApiModes?.openai) {
         anthropicBase = resolveCustomApiUrl(baseProvider, 'openai');
+      } else if (baseProvider.customApiModes?.responses) {
+        // Responses mode: proxy will rewrite /v1/messages → /v1/responses at runtime
+        anthropicBase = baseProvider.baseUrl;
       } else {
-        throw new Error(`Claude Code requires anthropic or openai mode for custom-api provider "${baseProvider.name}"`);
+        throw new Error(`Claude Code requires anthropic, openai, or responses mode for custom-api provider "${baseProvider.name}"`);
       }
+    } else if (baseProvider.type === 'responses-compatible') {
+      // Responses-compatible provider: proxy intercepts at URL level
+      anthropicBase = baseProvider.baseUrl;
     } else {
       anthropicBase = baseProvider.baseUrl ?? DEFAULT_ANTHROPIC_BASE_URLS[baseProvider.type];
     }

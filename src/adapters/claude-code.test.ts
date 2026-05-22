@@ -115,8 +115,13 @@ describe('ClaudeCodeAdapter', () => {
     );
   });
 
-  it('supportedProviderTypes includes anthropic, fireworks, openrouter, custom-api, and openai-compatible', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['anthropic-compatible', 'fireworks', 'openrouter', 'custom-api', 'openai-compatible']);
+  it('supportedProviderTypes includes anthropic, fireworks, openrouter, custom-api, openai-compatible, and responses-compatible', () => {
+    expect(adapter.supportedProviderTypes).toContain('anthropic-compatible');
+    expect(adapter.supportedProviderTypes).toContain('fireworks');
+    expect(adapter.supportedProviderTypes).toContain('openrouter');
+    expect(adapter.supportedProviderTypes).toContain('custom-api');
+    expect(adapter.supportedProviderTypes).toContain('openai-compatible');
+    expect(adapter.supportedProviderTypes).toContain('responses-compatible');
   });
 
   it('openrouter uses ANTHROPIC_AUTH_TOKEN and empty ANTHROPIC_API_KEY, no apiKeyHelper', () => {
@@ -198,7 +203,7 @@ describe('ClaudeCodeAdapter', () => {
     expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com/v1');
   });
 
-  it('throws for custom-api provider without anthropic or openai mode', () => {
+  it('throws for custom-api provider without anthropic, openai, or responses mode', () => {
     const customProvider: Provider = {
       id: '00000000-0000-0000-0000-0000000000e3',
       name: 'Custom Bad',
@@ -213,7 +218,7 @@ describe('ClaudeCodeAdapter', () => {
       name: 'Custom',
       models: [{ providerId: customProvider.id, model: 'gpt-4', tier: 'base' }],
     };
-    expect(() => adapter.buildConfig(profile, [customProvider])).toThrow('requires anthropic or openai mode');
+    expect(() => adapter.buildConfig(profile, [customProvider])).toThrow('requires anthropic, openai, or responses mode');
   });
 
   it('custom-api provider with openai mode uses resolveCustomApiUrl for ANTHROPIC_BASE_URL', () => {
@@ -308,6 +313,49 @@ describe('ClaudeCodeAdapter', () => {
       models: [{ providerId: openaiProvider.id, model: 'gpt-4', tier: 'base' }],
     };
     const config = adapter.buildConfig(profile, [openaiProvider]);
+    const env = config.env as Record<string, string>;
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com');
+  });
+
+  it('supportedProviderTypes includes responses-compatible', () => {
+    expect(adapter.supportedProviderTypes).toContain('responses-compatible');
+  });
+
+  it('responses-compatible provider sets ANTHROPIC_BASE_URL to baseUrl', () => {
+    const responsesProvider: Provider = {
+      id: '00000000-0000-0000-0000-000000000010',
+      name: 'OpenAI Responses',
+      type: 'responses-compatible',
+      apiKey: 'sk-resp',
+      baseUrl: 'https://api.openai.com',
+      models: [{ name: 'gpt-4o', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-000000000011',
+      name: 'Responses Profile',
+      models: [{ providerId: responsesProvider.id, model: 'gpt-4o' }],
+    };
+    const config = adapter.buildConfig(profile, [responsesProvider]);
+    const env = config.env as Record<string, string>;
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://api.openai.com');
+  });
+
+  it('custom-api provider with responses mode sets ANTHROPIC_BASE_URL to baseUrl', () => {
+    const customProvider: Provider = {
+      id: '00000000-0000-0000-0000-000000000012',
+      name: 'Custom Responses',
+      type: 'custom-api',
+      apiKey: 'sk-custom',
+      baseUrl: 'https://proxy.example.com',
+      customApiModes: { openai: false, anthropic: false, responses: true },
+      models: [{ name: 'gpt-4o', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-000000000013',
+      name: 'Custom Responses Profile',
+      models: [{ providerId: customProvider.id, model: 'gpt-4o' }],
+    };
+    const config = adapter.buildConfig(profile, [customProvider]);
     const env = config.env as Record<string, string>;
     expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com');
   });

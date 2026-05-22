@@ -4,6 +4,7 @@ import type { Profile, Provider } from '../config/schema.js';
 import { deleteBackup, inferBackupFileFormat, readBackup, readConfig, writeBackup } from '../config/store.js';
 import { startAnthropicScrubberProxy } from '../proxy/anthropic-scrubber.js';
 import { startOpenAIProxy } from '../proxy/openai-proxy.js';
+import { startResponsesProxy } from '../proxy/responses-proxy.js';
 import { shellPathResolver } from './shell-path-resolver.js';
 
 /**
@@ -139,11 +140,17 @@ async function maybeStartProxy(
   const upstream = env?.['ANTHROPIC_BASE_URL'];
   if (!upstream || typeof upstream !== 'string') return;
 
-  const needsOpenAIProxy = provider.type === 'openai-compatible'
-    || (provider.type === 'custom-api' && provider.customApiModes?.openai && !provider.customApiModes?.anthropic);
-  const proxy = needsOpenAIProxy
-    ? await startOpenAIProxy({ upstreamUrl: upstream })
-    : await startAnthropicScrubberProxy({ upstreamUrl: upstream });
+  const needsResponsesProxy = provider.type === 'responses-compatible'
+    || (provider.type === 'custom-api' && !!provider.customApiModes?.responses && !provider.customApiModes?.anthropic && !provider.customApiModes?.openai);
+  const needsOpenAIProxy = !needsResponsesProxy && (
+    provider.type === 'openai-compatible'
+    || (provider.type === 'custom-api' && !!provider.customApiModes?.openai && !provider.customApiModes?.anthropic)
+  );
+  const proxy = needsResponsesProxy
+    ? await startResponsesProxy({ upstreamUrl: upstream })
+    : needsOpenAIProxy
+      ? await startOpenAIProxy({ upstreamUrl: upstream })
+      : await startAnthropicScrubberProxy({ upstreamUrl: upstream });
 
   const newConfig = { ...writtenConfig, env: { ...env, ANTHROPIC_BASE_URL: proxy.url } };
   await adapter.writeConfig(newConfig, scope, cwd, false);

@@ -29,9 +29,14 @@ vi.mock('../proxy/anthropic-scrubber.js', () => ({
   startAnthropicScrubberProxy: vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:9998', stop: vi.fn() }),
 }));
 
+vi.mock('../proxy/responses-proxy.js', () => ({
+  startResponsesProxy: vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:19999', stop: vi.fn() }),
+}));
+
 import { deleteBackup, readBackup, writeBackup } from '../config/store.js';
 import { startOpenAIProxy } from '../proxy/openai-proxy.js';
 import { startAnthropicScrubberProxy } from '../proxy/anthropic-scrubber.js';
+import { startResponsesProxy } from '../proxy/responses-proxy.js';
 import { prepareLaunchTransaction } from './transaction.js';
 
 const mockWriteBackup = vi.mocked(writeBackup);
@@ -40,6 +45,7 @@ const mockDeleteBackup = vi.mocked(deleteBackup);
 const mockUnlink = vi.mocked(unlink);
 const mockStartOpenAIProxy = vi.mocked(startOpenAIProxy);
 const mockStartAnthropicScrubberProxy = vi.mocked(startAnthropicScrubberProxy);
+const mockStartResponsesProxy = vi.mocked(startResponsesProxy);
 
 const testProvider: Provider = {
   id: 'p1',
@@ -78,6 +84,7 @@ describe('prepareLaunchTransaction', () => {
     mockUnlink.mockResolvedValue(undefined);
     mockStartOpenAIProxy.mockResolvedValue({ url: 'http://127.0.0.1:9999', stop: vi.fn() });
     mockStartAnthropicScrubberProxy.mockResolvedValue({ url: 'http://127.0.0.1:9998', stop: vi.fn() });
+    mockStartResponsesProxy.mockResolvedValue({ url: 'http://127.0.0.1:19999', stop: vi.fn() });
   });
 
   it('writes a v2 backup manifest with cwd, path, format, hadFile, and content', async () => {
@@ -389,5 +396,76 @@ describe('prepareLaunchTransaction', () => {
 
     expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://proxy.example.com/v1' });
     expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
+  });
+
+  it('starts responses proxy for responses-compatible provider with claude-code adapter', async () => {
+    const responsesProvider: Provider = {
+      id: 'p-responses',
+      name: 'OpenAI Responses',
+      type: 'responses-compatible',
+      apiKey: 'sk-resp',
+      baseUrl: 'https://api.openai.com',
+      models: [{ name: 'gpt-4o', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const responsesProfile: Profile = {
+      id: 'prof-responses',
+      name: 'Responses Profile',
+      models: [{ providerId: responsesProvider.id, model: 'gpt-4o' }],
+    };
+    const adapter = makeAdapter(null);
+    adapter.id = 'claude-code';
+    adapter.displayName = 'Claude Code';
+    adapter.supportedProviderTypes = ['responses-compatible'];
+    adapter.buildConfig = vi.fn().mockReturnValue({
+      env: { ANTHROPIC_BASE_URL: 'https://api.openai.com' },
+    });
+
+    await prepareLaunchTransaction({
+      adapter,
+      profile: responsesProfile,
+      providers: [responsesProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+
+    expect(mockStartResponsesProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://api.openai.com' });
+    expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
+    expect(mockStartAnthropicScrubberProxy).not.toHaveBeenCalled();
+  });
+
+  it('starts responses proxy for custom-api provider with responses mode', async () => {
+    const customProvider: Provider = {
+      id: 'p-custom-resp',
+      name: 'Custom Responses',
+      type: 'custom-api',
+      apiKey: 'sk-custom',
+      baseUrl: 'https://proxy.example.com',
+      customApiModes: { openai: false, anthropic: false, responses: true },
+      models: [{ name: 'gpt-4o', capabilities: { image: true, video: false, audio: false } }],
+    };
+    const customProfile: Profile = {
+      id: 'prof-custom-resp',
+      name: 'Custom Responses Profile',
+      models: [{ providerId: customProvider.id, model: 'gpt-4o' }],
+    };
+    const adapter = makeAdapter(null);
+    adapter.id = 'claude-code';
+    adapter.displayName = 'Claude Code';
+    adapter.supportedProviderTypes = ['custom-api'];
+    adapter.buildConfig = vi.fn().mockReturnValue({
+      env: { ANTHROPIC_BASE_URL: 'https://proxy.example.com' },
+    });
+
+    await prepareLaunchTransaction({
+      adapter,
+      profile: customProfile,
+      providers: [customProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+
+    expect(mockStartResponsesProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://proxy.example.com' });
+    expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
+    expect(mockStartAnthropicScrubberProxy).not.toHaveBeenCalled();
   });
 });
