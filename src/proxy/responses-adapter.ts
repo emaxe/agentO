@@ -185,10 +185,141 @@ export interface StreamState {
 
 /** Create a fresh StreamState for a new streaming session. */
 export function createStreamState(id: string, model: string): StreamState {
-  throw new Error('not implemented');
+  return {
+    id,
+    model,
+    initialized: false,
+    itemIndexMap: new Map(),
+    nextBlockIndex: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+  };
 }
 
-/** Convert one Responses API SSE event into zero or more Anthropic SSE event objects. */
+/** Convert one Responses API SSE event into zero or more Anthropic SSE event objects. Mutates state. */
 export function convertStreamChunk(event: Record<string, unknown>, state: StreamState): Array<Record<string, unknown>> {
-  throw new Error('not implemented');
+  const out: Array<Record<string, unknown>> = [];
+  const type = String(event.type ?? '');
+
+  if (!state.initialized) {
+    state.initialized = true;
+    out.push({
+      type: 'message_start',
+      message: {
+        id: state.id,
+        type: 'message',
+        role: 'assistant',
+        model: state.model,
+        content: [],
+        stop_reason: null,
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+    });
+  }
+
+  switch (type) {
+    case 'response.output_item.added': {
+      const item = isRecord(event.item) ? event.item : {};
+      const outputIndex = typeof event.output_index === 'number' ? event.output_index : state.nextBlockIndex;
+      const itemType = String(item.type ?? '');
+      const blockIndex = state.nextBlockIndex++;
+      state.itemIndexMap.set(outputIndex, blockIndex);
+
+      if (itemType === 'message') {
+        out.push({ type: 'content_block_start', index: blockIndex, content_block: { type: 'text', text: '' } });
+      } else if (itemType === 'function_call') {
+        out.push({
+          type: 'content_block_start',
+          index: blockIndex,
+          content_block: {
+            type: 'tool_use',
+            id: String(item.call_id ?? item.id ?? ''),
+            name: String(item.name ?? ''),
+            input: {},
+          },
+        });
+      }
+      break;
+    }
+
+    case 'response.output_text.delta': {
+      const outputIndex = typeof event.output_index === 'number' ? event.output_index : -1;
+      const blockIndex = state.itemIndexMap.get(outputIndex);
+      if (blockIndex !== undefined) {
+        out.push({
+          type: 'content_block_delta',
+          index: blockIndex,
+          delta: { type: 'text_delta', text: String(event.delta ?? '') },
+        });
+        state.outputTokens += 1;
+      }
+      break;
+    }
+
+    case 'response.function_call_arguments.delta': {
+      const outputIndex = typeof event.output_index === 'number' ? event.output_index : -1;
+      const blockIndex = state.itemIndexMap.get(outputIndex);
+      if (blockIndex !== undefined) {
+        out.push({
+          type: 'content_block_delta',
+          index: blockIndex,
+          delta: { type: 'input_json_delta', partial_json: String(event.delta ?? '') },
+        });
+        state.outputTokens += 1;
+      }
+      break;
+    }
+
+    case 'response.reasoning_summary_text.delta': {
+      const REASONING_KEY = '__reasoning__';
+      let blockIndex = state.itemIndexMap.get(REASONING_KEY);
+      if (blockIndex === undefined) {
+        blockIndex = state.nextBlockIndex++;
+        state.itemIndexMap.set(REASONING_KEY, blockIndex);
+        out.push({ type: 'content_block_start', index: blockIndex, content_block: { type: 'thinking', thinking: '' } });
+      }
+      out.push({
+        type: 'content_block_delta',
+        index: blockIndex,
+        delta: { type: 'thinking_delta', thinking: String(event.delta ?? '') },
+      });
+      break;
+    }
+
+    case 'response.output_item.done': {
+      const outputIndex = typeof event.output_index === 'number' ? event.output_index : -1;
+      const blockIndex = state.itemIndexMap.get(outputIndex);
+      if (blockIndex !== undefined) {
+        out.push({ type: 'content_block_stop', index: blockIndex });
+      }
+      break;
+    }
+
+    case 'response.completed': {
+      const reasoningBlockIndex = state.itemIndexMap.get('__reasoning__');
+      if (reasoningBlockIndex !== undefined) {
+        out.push({ type: 'content_block_stop', index: reasoningBlockIndex });
+      }
+
+      const response = isRecord(event.response) ? event.response : {};
+      const rawUsage = isRecord(response.usage) ? response.usage : undefined;
+      if (rawUsage) {
+        if (typeof rawUsage.input_tokens === 'number') state.inputTokens = rawUsage.input_tokens;
+        if (typeof rawUsage.output_tokens === 'number') state.outputTokens = rawUsage.output_tokens;
+      }
+
+      const responseOutput = Array.isArray(response.output) ? response.output : [];
+      const hasToolUse = responseOutput.some((item: unknown) => isRecord(item) && item.type === 'function_call');
+
+      out.push({
+        type: 'message_delta',
+        delta: { stop_reason: hasToolUse ? 'tool_use' : 'end_turn', stop_sequence: null },
+        usage: { output_tokens: state.outputTokens },
+      });
+      out.push({ type: 'message_stop' });
+      break;
+    }
+  }
+
+  return out;
 }
