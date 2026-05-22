@@ -82,7 +82,7 @@ export function convertRequest(req: Record<string, unknown>): Record<string, unk
   const result: Record<string, unknown> = {
     model: String(req.model ?? ''),
     input,
-    stream: req.stream,
+    stream: req.stream ?? false,
   };
 
   if (typeof req.max_tokens === 'number') result.max_output_tokens = req.max_tokens;
@@ -202,6 +202,11 @@ export function createStreamState(id: string, model: string): StreamState {
 export function convertStreamChunk(event: Record<string, unknown>, state: StreamState): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = [];
   const type = String(event.type ?? '');
+
+  if (!state.initialized && type === 'response.created') {
+    const responseObj = isRecord(event.response) ? event.response : {};
+    if (typeof responseObj.model === 'string') state.model = responseObj.model;
+  }
 
   if (!state.initialized) {
     state.initialized = true;
