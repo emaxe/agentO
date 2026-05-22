@@ -7,6 +7,8 @@ export interface ProxyOptions {
   upstreamUrl: string;
   port?: number;
   denyList?: string[];
+  /** Milliseconds before destroying a stalled upstream request. Default: 120_000. */
+  timeoutMs?: number;
 }
 
 export interface ProxyServer {
@@ -45,6 +47,7 @@ export async function startAnthropicScrubberProxy(
   options: ProxyOptions,
 ): Promise<ProxyServer> {
   const denyList = new Set(options.denyList ?? DEFAULT_DENYLIST);
+  const timeoutMs = options.timeoutMs ?? 120_000;
   const upstream = new URL(normalizeProxyUpstream(options.upstreamUrl));
   const upstreamModule = upstream.protocol === 'https:' ? https : http;
 
@@ -88,8 +91,18 @@ export async function startAnthropicScrubberProxy(
         (proxyRes) => {
           res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
           proxyRes.pipe(res);
+          proxyRes.on('error', () => {
+            if (!res.headersSent) {
+              res.writeHead(502, { 'content-type': 'application/json' });
+            }
+            res.end(JSON.stringify({ error: 'Bad Gateway', message: 'upstream stream error' }));
+          });
         },
       );
+
+      proxyReq.setTimeout(timeoutMs, () => {
+        proxyReq.destroy(new Error('upstream timeout'));
+      });
 
       proxyReq.on('error', (err) => {
         if (!res.headersSent) {
@@ -101,6 +114,7 @@ export async function startAnthropicScrubberProxy(
       if (body !== undefined) {
         proxyReq.end(body);
       } else {
+        req.on('error', () => proxyReq.destroy());
         req.pipe(proxyReq);
       }
     } catch (err) {

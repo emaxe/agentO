@@ -281,4 +281,42 @@ describe('startAnthropicScrubberProxy', () => {
     const body = await res.json() as { receivedUrl: string };
     expect(body.receivedUrl).toBe('/inference/v1/messages');
   });
+
+  it('returns 502 when upstream times out', async () => {
+    // upstream accepts the connection but never responds
+    upstream.on('request', () => { /* intentionally hang */ });
+
+    proxy = await startAnthropicScrubberProxy({ upstreamUrl, timeoutMs: 50 });
+    const res = await fetch(`${proxy.url}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-3', messages: [], max_tokens: 1 }),
+    });
+    expect(res.status).toBe(502);
+  });
+
+  it('does not crash when upstream stream errors mid-response', async () => {
+    upstream.on('request', (_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.write('partial');
+      // Destroy the socket to simulate a mid-stream connection drop
+      res.socket?.destroy();
+    });
+
+    proxy = await startAnthropicScrubberProxy({ upstreamUrl });
+    // The request may error or return a partial response — what matters is no unhandled crash
+    try {
+      await fetch(`${proxy.url}/v1/messages`);
+    } catch {
+      // fetch may throw due to broken connection — that is acceptable
+    }
+    // Verify proxy is still alive by making another request
+    upstream.removeAllListeners('request');
+    upstream.on('request', (_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    });
+    const healthRes = await fetch(`${proxy.url}/v1/models`);
+    expect(healthRes.status).toBe(200);
+  });
 });

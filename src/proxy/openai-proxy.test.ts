@@ -212,6 +212,42 @@ describe('startOpenAIProxy', () => {
     expect(text).toBe('Bad Gateway HTML');
   });
 
+  it('returns 502 when upstream times out', async () => {
+    upstream.on('request', () => { /* intentionally hang */ });
+
+    proxy = await startOpenAIProxy({ upstreamUrl, timeoutMs: 50 });
+    const res = await fetch(`${proxy.url}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-3', messages: [], max_tokens: 1 }),
+    });
+    expect(res.status).toBe(502);
+  });
+
+  it('handles SSE blocks with event: prefix lines', async () => {
+    upstream.on('request', (_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      // Some providers prefix SSE blocks with an event: line
+      res.write('event: message_start\ndata: {"id":"c","choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n\n');
+      res.write('event: content_delta\ndata: {"id":"c","choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}\n\n');
+      res.write('event: message_stop\ndata: {"id":"c","choices":[{"delta":{},"finish_reason":"stop"}]}\n\n');
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+
+    proxy = await startOpenAIProxy({ upstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-3', messages: [{ role: 'user', content: 'Hello' }], max_tokens: 100, stream: true }),
+    });
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).toContain('event: message_start');
+    expect(text).toContain('event: content_block_delta');
+    expect(text).toContain('event: message_stop');
+  });
+
   it('rewrites /v1/messages/ with trailing slash', async () => {
     let receivedUrl = '';
     upstream.on('request', (req, res) => {

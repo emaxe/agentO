@@ -72,7 +72,7 @@ export function buildProxyHeaders(
     if (value === undefined) continue;
     const lower = key.toLowerCase();
     if (lower === 'host' || lower === 'content-length' || lower === 'transfer-encoding') continue;
-    if (lower === 'anthropic-version') continue;
+    if (lower === 'anthropic-version' || lower === 'anthropic-beta') continue;
     headers[key] = value;
   }
   const apiKey = incomingHeaders['x-api-key'];

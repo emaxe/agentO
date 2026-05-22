@@ -284,8 +284,10 @@ export interface StreamState {
   currentBlockIndex: number | null;
   toolCalls: Map<number, { id: string; name: string; arguments: string; blockIndex: number | null }>;
   nextBlockIndex: number;
-  /** Approximate output token count (chunk count, not actual tokens) because OpenAI SSE does not provide per-chunk token counts. */
+  /** Output token count: real value when provider includes usage in SSE, otherwise chunk count approximation. */
   outputTokens: number;
+  /** Input token count from provider usage data; 0 until received. */
+  inputTokens: number;
 }
 
 /** Create a fresh {@link StreamState} for a single streaming session. */
@@ -299,6 +301,7 @@ export function createStreamState(id: string, model: string): StreamState {
     toolCalls: new Map(),
     nextBlockIndex: 0,
     outputTokens: 0,
+    inputTokens: 0,
   };
 }
 
@@ -310,7 +313,15 @@ export function createStreamState(id: string, model: string): StreamState {
 export function convertStreamChunk(chunk: unknown, state: StreamState): Array<Record<string, unknown>> {
   if (!isRecord(chunk)) return [];
   const choices = chunk.choices;
-  if (!Array.isArray(choices) || choices.length === 0) return [];
+  if (!Array.isArray(choices) || choices.length === 0) {
+    // Capture usage data that some providers send in a trailing chunk after message_stop.
+    const lateUsage = isRecord(chunk.usage) ? chunk.usage : undefined;
+    if (lateUsage) {
+      if (typeof lateUsage.prompt_tokens === 'number') state.inputTokens = lateUsage.prompt_tokens;
+      if (typeof lateUsage.completion_tokens === 'number') state.outputTokens = lateUsage.completion_tokens;
+    }
+    return [];
+  }
   const choice = isRecord(choices[0]) ? choices[0] : {};
   const delta = isRecord(choice.delta) ? choice.delta : {};
   const finishReason = typeof choice.finish_reason === 'string' ? choice.finish_reason : null;
@@ -404,6 +415,13 @@ export function convertStreamChunk(chunk: unknown, state: StreamState): Array<Re
   }
 
   if (finishReason !== null) {
+    // Some providers (Groq, OpenRouter) include usage in the finish chunk itself.
+    const finishUsage = isRecord(chunk.usage) ? chunk.usage : undefined;
+    if (finishUsage) {
+      if (typeof finishUsage.prompt_tokens === 'number') state.inputTokens = finishUsage.prompt_tokens;
+      if (typeof finishUsage.completion_tokens === 'number') state.outputTokens = finishUsage.completion_tokens;
+    }
+
     if (state.currentBlockType !== null && state.currentBlockIndex !== null) {
       events.push({ type: 'content_block_stop', index: state.currentBlockIndex });
       state.currentBlockType = null;

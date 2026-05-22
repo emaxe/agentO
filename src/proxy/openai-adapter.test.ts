@@ -497,6 +497,33 @@ describe('convertStreamChunk', () => {
     expect(convertStreamChunk({ choices: [] }, createStreamState('id', 'm'))).toEqual([]);
   });
 
+  it('captures usage from trailing chunk with empty choices (post-message_stop)', () => {
+    const state = createStreamState('msg-1', 'gpt-4');
+    // Simulate a complete streaming sequence first
+    convertStreamChunk({ choices: [{ delta: { role: 'assistant' }, finish_reason: null }] }, state);
+    convertStreamChunk({ choices: [{ delta: { content: 'hi' }, finish_reason: null }] }, state);
+    convertStreamChunk({ choices: [{ delta: {}, finish_reason: 'stop' }] }, state);
+    // Trailing usage chunk that arrives after message_stop
+    const events = convertStreamChunk({ choices: [], usage: { prompt_tokens: 20, completion_tokens: 8 } }, state);
+    expect(events).toEqual([]);
+    expect(state.inputTokens).toBe(20);
+    expect(state.outputTokens).toBe(8);
+  });
+
+  it('uses real token counts from usage in finish chunk', () => {
+    const state = createStreamState('msg-2', 'gpt-4');
+    convertStreamChunk({ choices: [{ delta: { role: 'assistant' }, finish_reason: null }] }, state);
+    convertStreamChunk({ choices: [{ delta: { content: 'a' }, finish_reason: null }] }, state);
+    const events = convertStreamChunk({
+      choices: [{ delta: {}, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 15, completion_tokens: 42 },
+    }, state);
+    const delta = events.find((e) => e.type === 'message_delta') as Record<string, unknown> | undefined;
+    expect(delta).toBeDefined();
+    expect((delta!.usage as Record<string, unknown>).output_tokens).toBe(42);
+    expect(state.inputTokens).toBe(15);
+  });
+
   it('skips non-record tool_calls entries', () => {
     const state = createStreamState('msg-123', 'gpt-4');
     convertStreamChunk({ id: 'c', choices: [{ delta: { role: 'assistant' }, finish_reason: null }] }, state);

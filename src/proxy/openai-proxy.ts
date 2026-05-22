@@ -8,6 +8,8 @@ import { buildProxyHeaders, getOutboundAgent, normalizeProxyUpstream } from './p
 export interface OpenAIProxyOptions {
   upstreamUrl: string;
   port?: number;
+  /** Milliseconds before destroying a stalled upstream request. Default: 120_000. */
+  timeoutMs?: number;
 }
 
 /** Running proxy server handle. */
@@ -31,22 +33,25 @@ function isJsonRequest(req: http.IncomingMessage): boolean {
   return typeof ct === 'string' && ct.includes('application/json');
 }
 
-/** Parse a single SSE line into zero or more JSON events. */
-function sseLineToEvent(line: string): Array<Record<string, unknown>> {
-  const trimmed = line.trim();
-  if (!trimmed.startsWith('data: ')) return [];
-  const payload = trimmed.slice(6);
-  if (payload === '[DONE]') return [];
-  try {
-    const parsed = JSON.parse(payload);
-    return [parsed];
-  } catch {
-    return [];
+/** Parse an SSE block (text between \n\n separators) into zero or more JSON events. */
+function sseLineToEvent(block: string): Array<Record<string, unknown>> {
+  for (const line of block.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data: ')) continue;
+    const payload = trimmed.slice(6);
+    if (payload === '[DONE]') return [];
+    try {
+      return [JSON.parse(payload)];
+    } catch {
+      return [];
+    }
   }
+  return [];
 }
 
 /** Start an HTTP proxy that translates Anthropic requests to OpenAI upstream. */
 export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<ProxyServer> {
+  const timeoutMs = options.timeoutMs ?? 120_000;
   const upstream = new URL(normalizeProxyUpstream(options.upstreamUrl));
   const upstreamModule = upstream.protocol === 'https:' ? https : http;
 
@@ -141,6 +146,9 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
                 }
                 res.end();
               });
+              req.on('close', () => {
+                if (!proxyRes.destroyed) proxyRes.destroy();
+              });
             } else if (isJson) {
               const chunks: Buffer[] = [];
               proxyRes.on('data', (chunk) => {
@@ -219,6 +227,10 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
           }
         },
       );
+
+      proxyReq.setTimeout(timeoutMs, () => {
+        proxyReq.destroy(new Error('upstream timeout'));
+      });
 
       proxyReq.on('error', (err) => {
         if (!res.headersSent) {

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-22
+
+### Added
+
+- **`responses-compatible` provider type for Claude Code**: routes requests through a new local **Responses Proxy** (`src/proxy/responses-proxy.ts`) that translates Anthropic API requests to the OpenAI Responses API format. Enables Claude Code to use any provider that speaks the OpenAI Responses API (OpenAI native, etc.).
+- **`custom-api` provider with `responses` mode**: `customApiModes.responses=true` now routes through the responses proxy, complementing the existing `anthropic` and `openai` modes.
+- **Responses Proxy** (`src/proxy/responses-proxy.ts`): local HTTP proxy that translates Anthropic `/v1/messages` requests to OpenAI Responses API format with full streaming SSE support and reasoning token pass-through.
+- **Proxy timeout handling** (`timeoutMs` option): both `openai-proxy` and `anthropic-scrubber` proxies now accept a configurable `timeoutMs` option (default: 120 000 ms). Stalled upstream requests are destroyed and return `502 Bad Gateway` to the client.
+- **Real token counting in streaming**: `StreamState.inputTokens` now captures prompt token counts from provider usage data. Providers that include usage in the finish chunk (Groq, OpenRouter) or in a trailing chunk after `[DONE]` now report accurate token counts instead of chunk-count approximations.
+- **SSE `event:` prefix support**: the OpenAI proxy SSE parser now handles SSE blocks that include a leading `event:` line before `data:` — compatible with providers that emit named SSE events.
+- **Client disconnect cleanup**: when the client disconnects mid-stream, the upstream SSE connection is now properly destroyed to avoid resource leaks.
+- **Stream error recovery in Anthropic Scrubber**: upstream stream errors mid-response no longer crash the proxy server; the remaining connection is closed gracefully and `502` is returned if headers have not been sent yet.
+- **`anthropic-beta` header stripping**: `buildProxyHeaders` now strips the `anthropic-beta` header (in addition to `anthropic-version`) to prevent unsupported headers from being forwarded to OpenAI-compatible upstreams.
+
 ## [0.4.7] - 2026-05-17
 
 ### Added

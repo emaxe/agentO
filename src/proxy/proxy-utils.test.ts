@@ -136,6 +136,12 @@ describe('buildProxyHeaders', () => {
     expect(h).not.toHaveProperty('anthropic-version');
   });
 
+  it('strips anthropic-beta', () => {
+    const h = buildProxyHeaders({ 'anthropic-beta': 'interleaved-thinking-2025-05-14', 'content-type': 'application/json' });
+    expect(h).not.toHaveProperty('anthropic-beta');
+    expect(h['content-type']).toBe('application/json');
+  });
+
   it('converts x-api-key to Authorization: Bearer', () => {
     const h = buildProxyHeaders({ 'x-api-key': 'token123' }, 5);
     expect(h['authorization']).toBe('Bearer token123');
