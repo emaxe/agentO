@@ -160,3 +160,83 @@ describe('convertRequest', () => {
     ]);
   });
 });
+
+describe('convertResponse', () => {
+  it('converts text output to Anthropic message', () => {
+    const result = convertResponse({
+      id: 'resp_abc',
+      model: 'gpt-4o',
+      output: [
+        {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'output_text', text: 'Hello world' }],
+        },
+      ],
+      usage: { input_tokens: 10, output_tokens: 5 },
+    });
+    expect(result.id).toBe('resp_abc');
+    expect(result.type).toBe('message');
+    expect(result.role).toBe('assistant');
+    expect(result.content).toEqual([{ type: 'text', text: 'Hello world' }]);
+    expect(result.stop_reason).toBe('end_turn');
+    expect(result.usage).toEqual({ input_tokens: 10, output_tokens: 5 });
+  });
+
+  it('converts function_call output to tool_use', () => {
+    const result = convertResponse({
+      id: 'resp_xyz',
+      model: 'gpt-4o',
+      output: [
+        {
+          type: 'function_call',
+          call_id: 'call_1',
+          name: 'bash',
+          arguments: '{"cmd":"ls"}',
+        },
+      ],
+      usage: { input_tokens: 8, output_tokens: 3 },
+    });
+    expect(result.stop_reason).toBe('tool_use');
+    expect(result.content).toEqual([
+      { type: 'tool_use', id: 'call_1', name: 'bash', input: { cmd: 'ls' } },
+    ]);
+  });
+
+  it('stop_reason is end_turn when no function_call in output', () => {
+    const result = convertResponse({
+      id: 'r',
+      model: 'm',
+      output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Hi' }] }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    expect(result.stop_reason).toBe('end_turn');
+  });
+
+  it('stop_reason is tool_use when function_call present', () => {
+    const result = convertResponse({
+      id: 'r',
+      model: 'm',
+      output: [{ type: 'function_call', call_id: 'c1', name: 'read', arguments: '{}' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    expect(result.stop_reason).toBe('tool_use');
+  });
+});
+
+describe('convertError', () => {
+  it('wraps string error', () => {
+    const result = convertError('bad input');
+    expect(result).toEqual({ type: 'error', error: { type: 'api_error', message: 'bad input' } });
+  });
+
+  it('extracts error.message from object', () => {
+    const result = convertError({ error: { type: 'invalid_request_error', message: 'No model' } });
+    expect(result).toEqual({ type: 'error', error: { type: 'invalid_request_error', message: 'No model' } });
+  });
+
+  it('handles unknown object', () => {
+    const result = convertError({ message: 'Something failed' });
+    expect(result.type).toBe('error');
+  });
+});
