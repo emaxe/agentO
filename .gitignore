@@ -6,6 +6,9 @@ dist/
 docs/*
 !docs/backlog/
 !docs/backlog/**
+!docs/superpowers/
+!docs/superpowers/**
 .worktrees/
 .claude/
 .qwen/
+.skill-hub.local.json
