@@ -3,6 +3,8 @@ function isRecord(x: unknown): x is Record<string, unknown> {
   return typeof x === 'object' && x !== null;
 }
 
+const REASONING_KEY = '__reasoning__';
+
 /** Converts an Anthropic /v1/messages request body into a Responses API request body. */
 export function convertRequest(req: Record<string, unknown>): Record<string, unknown> {
   const input: Array<Record<string, unknown>> = [];
@@ -271,7 +273,6 @@ export function convertStreamChunk(event: Record<string, unknown>, state: Stream
     }
 
     case 'response.reasoning_summary_text.delta': {
-      const REASONING_KEY = '__reasoning__';
       let blockIndex = state.itemIndexMap.get(REASONING_KEY);
       if (blockIndex === undefined) {
         blockIndex = state.nextBlockIndex++;
@@ -296,7 +297,7 @@ export function convertStreamChunk(event: Record<string, unknown>, state: Stream
     }
 
     case 'response.completed': {
-      const reasoningBlockIndex = state.itemIndexMap.get('__reasoning__');
+      const reasoningBlockIndex = state.itemIndexMap.get(REASONING_KEY);
       if (reasoningBlockIndex !== undefined) {
         out.push({ type: 'content_block_stop', index: reasoningBlockIndex });
       }
