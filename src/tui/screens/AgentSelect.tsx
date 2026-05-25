@@ -68,6 +68,9 @@ export function AgentSelect({
             {!installed && (
               <Text dimColor> (not installed)</Text>
             )}
+            {installed && isSelected && (
+              <Text dimColor> (u update, d delete)</Text>
+            )}
           </Text>
         );
       }}
