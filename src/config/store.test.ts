@@ -34,7 +34,7 @@ describe('config store', () => {
     expect(config.providers).toEqual([]);
     expect(config.profiles).toEqual([]);
     expect(config.settings.defaultLaunchMode).toBe('child');
-    expect(config.settings.defaultConfigScope).toBe('global');
+    expect(config.settings.defaultConfigScope).toBe('project');
     expect(config.settings.mergeAgentConfigs).toBe(true);
   });
 
@@ -203,7 +203,7 @@ describe('config store', () => {
   it('writeConfig creates file with valid JSON content', async () => {
     const { writeConfig } = await getStore();
     const { readFile: fsReadFile } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
-    const config = { providers: [], profiles: [], settings: { defaultLaunchMode: 'child', defaultConfigScope: 'global' } };
+    const config = { providers: [], profiles: [], settings: { defaultLaunchMode: 'child', defaultConfigScope: 'project' } };
     await writeConfig(config as Parameters<typeof writeConfig>[0]);
     const content = JSON.parse(await fsReadFile(join(testDir, '.agento', 'config.json'), 'utf-8')) as unknown;
     expect(content).toMatchObject({ providers: [], profiles: [] });

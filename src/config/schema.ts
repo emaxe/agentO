@@ -102,7 +102,7 @@ export const ProfileSchema = z.object({
 export type Profile = z.infer<typeof ProfileSchema>;
 
 // Поддерживаемые агенты (REQ-8)
-export const AgentIdSchema = z.enum(['claude-code', 'opencode', 'qwen', 'codex', 'copilot', 'goose']);
+export const AgentIdSchema = z.enum(['claude-code', 'opencode', 'qwen', 'codex', 'copilot', 'goose', 'pi']);
 export type AgentId = z.infer<typeof AgentIdSchema>;
 
 // Scope конфига (REQ-5)
@@ -116,7 +116,7 @@ export type LaunchMode = z.infer<typeof LaunchModeSchema>;
 // Настройки AgentO (REQ-3, REQ-11)
 export const SettingsSchema = z.object({
   defaultLaunchMode: LaunchModeSchema.default('child'),
-  defaultConfigScope: LaunchScopeSchema.default('global'),
+  defaultConfigScope: LaunchScopeSchema.default('project'),
   mergeAgentConfigs: z.boolean().default(true),
 });
 export type Settings = z.infer<typeof SettingsSchema>;

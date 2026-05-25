@@ -31,7 +31,7 @@ interface SettingsProps {
 /** Renders the settings screen with toggles for default launch mode and config scope. */
 export function Settings({ onBack }: SettingsProps): React.JSX.Element {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [values, setValues] = useState({ defaultLaunchMode: 'child', defaultConfigScope: 'global' });
+  const [values, setValues] = useState({ defaultLaunchMode: 'child', defaultConfigScope: 'project' });
   const [status, setStatus] = useState('');
 
   const load = useCallback(() => {

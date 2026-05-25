@@ -17,6 +17,7 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 | [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Full function calling support via Vercel AI SDK |
 | [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter` | OpenAI-compatible API structure |
 | [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `openai-compatible`, `fireworks`, `openrouter` | `wire_api: responses`. Stable (no `--dev` required). |
+| [PI](https://github.com/withpi/pi) | `pi` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | Reads `defaultProvider`/`defaultModel` from `~/.pi/agent/settings.json`. Custom `baseUrl` from `~/.pi/agent/models.json`. |
 | [Copilot](https://github.com/github/gh-copilot) | `copilot` | env vars only | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Config delivered entirely via env vars — no settings file patched. |
 | [Goose](https://goose-docs.ai) | `goose` | env vars only | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Config delivered entirely via env vars (`GOOSE_PROVIDER`, `GOOSE_MODEL`). |
 

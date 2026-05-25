@@ -4,12 +4,14 @@ import { qwenAdapter } from '../adapters/qwen.js';
 import { codexAdapter } from '../adapters/codex.js';
 import { copilotAdapter } from '../adapters/copilot.js';
 import { gooseAdapter } from '../adapters/goose.js';
+import { piAdapter } from '../adapters/pi.js';
 import { claudeCodeInstaller } from '../installers/claude-code.js';
 import { openCodeInstaller } from '../installers/opencode.js';
 import { qwenInstaller } from '../installers/qwen.js';
 import { codexInstaller } from '../installers/codex.js';
 import { copilotInstaller } from '../installers/copilot.js';
 import { gooseInstaller } from '../installers/goose.js';
+import { piInstaller } from '../installers/pi.js';
 import type { AgentAdapter } from '../adapters/base.js';
 import type { AgentId } from '../config/schema.js';
 import type { AgentInstaller } from '../installers/base.js';
@@ -77,6 +79,13 @@ const AGENTS: readonly AgentRegistryEntry[] = [
     command: 'goose',
     args: ['session'],
     installer: gooseInstaller,
+  },
+  {
+    id: 'pi',
+    label: 'PI',
+    adapter: piAdapter,
+    command: 'pi',
+    installer: piInstaller,
   },
 ];
 

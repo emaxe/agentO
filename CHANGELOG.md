@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **PI adapter** (`pi`): full support for the [PI CLI agent](https://github.com/withpi/pi). Writes `defaultProvider`/`defaultModel` to `~/.pi/agent/settings.json` and custom `baseUrl` + model overrides to `~/.pi/agent/models.json`. Env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `FIREWORKS_API_KEY`, `OPENROUTER_API_KEY`.
+
+### Fixed
+
+- **Restore crash on empty backup manifests**: `restorePrimaryBackupFile` and `restoreBackupManifest` now gracefully handle manifests with zero files (e.g. from an earlier `snapshotConfigFiles` hook that returned `[]`). Previously they threw `Error: Backup for ... has no files`.
+
 ## [0.5.0] - 2026-05-22
 
 ### Added

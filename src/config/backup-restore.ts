@@ -15,12 +15,8 @@ async function removeIfExists(path: string): Promise<void> {
   }
 }
 
-function firstBackupFile(manifest: BackupManifest): BackupManifestFile {
-  const file = manifest.files[0];
-  if (!file) {
-    throw new Error(`Backup for ${manifest.agentId} (${manifest.scope}) has no files`);
-  }
-  return file;
+function firstBackupFile(manifest: BackupManifest): BackupManifestFile | undefined {
+  return manifest.files[0];
 }
 
 /**
@@ -35,6 +31,9 @@ export async function restorePrimaryBackupFile(
 ): Promise<void> {
   const file = firstBackupFile(manifest);
   const restoreCwd = cwd ?? manifest.cwd;
+
+  // Gracefully handle manifest with zero files (e.g. from a previous snapshot that returned []).
+  if (!file) return;
 
   if (file.hadFile) {
     await adapter.writeConfig(file.content as Record<string, unknown>, scope, restoreCwd);
@@ -58,8 +57,9 @@ export async function restoreBackupManifest(
   scope: LaunchScope,
   cwd?: string,
 ): Promise<void> {
+  // Gracefully handle manifest with zero files (e.g. from a previous snapshot that returned []).
   if (manifest.files.length === 0) {
-    throw new Error(`Backup for ${manifest.agentId} (${manifest.scope}) has no files`);
+    return;
   }
 
   const restoreCwd = cwd ?? manifest.cwd;
