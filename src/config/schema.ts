@@ -102,7 +102,7 @@ export const ProfileSchema = z.object({
 export type Profile = z.infer<typeof ProfileSchema>;
 
 // Поддерживаемые агенты (REQ-8)
-export const AgentIdSchema = z.enum(['claude-code', 'opencode', 'qwen', 'codex', 'copilot', 'goose', 'pi']);
+export const AgentIdSchema = z.enum(['claude-code', 'opencode', 'qwen', 'codex', 'copilot', 'goose', 'pi', 'kilo']);
 export type AgentId = z.infer<typeof AgentIdSchema>;
 
 // Scope конфига (REQ-5)

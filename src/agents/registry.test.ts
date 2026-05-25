@@ -11,7 +11,7 @@ describe('agent registry', () => {
   it('listAgents() returns all stable agents in registry order', () => {
     const ids = listAgents().map((agent) => agent.id);
 
-    expect(ids).toEqual(['claude-code', 'opencode', 'qwen', 'codex', 'copilot', 'goose', 'pi']);
+    expect(ids).toEqual(['claude-code', 'opencode', 'qwen', 'codex', 'copilot', 'goose', 'pi', 'kilo']);
   });
 
   it('getAgentCommand("codex") returns command and default args', () => {
@@ -31,5 +31,12 @@ describe('agent registry', () => {
     expect(getAgent('pi')?.id).toBe('pi');
     expect(getAgent('pi')?.command).toBe('pi');
     expect(getAgent('pi')?.args).toBeUndefined();
+  });
+
+  it('getAgent("kilo") returns kilo agent', () => {
+    expect(getAgent('kilo')).toBeDefined();
+    expect(getAgent('kilo')?.id).toBe('kilo');
+    expect(getAgent('kilo')?.command).toBe('kilo');
+    expect(getAgent('kilo')?.args).toBeUndefined();
   });
 });
