@@ -8,8 +8,9 @@ import { launchIndependent } from '../../launcher/independent.js';
 import type { AgentId, Profile, Provider, ProviderType, Settings } from '../../config/schema.js';
 import type { AgentRegistryEntry } from '../../agents/registry.js';
 import type { ExecRequest } from '../../launcher/independent.js';
+import type { InstallResult } from '../../installers/base.js';
 
-type Step = 'profile' | 'agent' | 'install' | 'launching';
+type Step = 'profile' | 'agent' | 'install' | 'action' | 'launching';
 
 interface LaunchWizardProps {
   dev?: boolean;
@@ -33,6 +34,8 @@ export interface LaunchWizardState {
   statusChecking: boolean;
   errorChoice: number;
   installAgentId: AgentId | null;
+  actionAgentId: AgentId | null;
+  actionMode: 'update' | 'uninstall' | null;
 }
 
 function getCompatibleAgents(
@@ -79,6 +82,8 @@ export function useLaunchWizard({
   const installStatusesRef = useRef(installStatuses);
   installStatusesRef.current = installStatuses;
   const [installAgentId, setInstallAgentId] = useState<AgentId | null>(null);
+  const [actionAgentId, setActionAgentId] = useState<AgentId | null>(null);
+  const [actionMode, setActionMode] = useState<'update' | 'uninstall' | null>(null);
   const [statusChecking, setStatusChecking] = useState(false);
   const [checkProgress, setCheckProgress] = useState<Record<string, 'pending' | 'checking' | 'done'>>({});
   const [errorChoice, setErrorChoice] = useState(0);
@@ -286,6 +291,7 @@ export function useLaunchWizard({
 
     if (step === 'launching' && !error) return;
     if (step === 'install') return;
+    if (step === 'action') return;
     if (step === 'agent' && statusChecking) return;
 
     if (key.escape || input === 'q') {
@@ -307,6 +313,20 @@ export function useLaunchWizard({
       setSelected(Math.max(0, selected - 1));
     } else if (key.downArrow) {
       setSelected(Math.min(items.length - 1, selected + 1));
+    } else if (input === 'u' || input === 'd') {
+      if (step !== 'agent') return;
+      const agentEntry = visibleAgents[selectedAgent];
+      if (
+        agentEntry &&
+        agentEntry.installer &&
+        installStatuses[agentEntry.id] !== false &&
+        (input === 'u' ? agentEntry.installer.update : agentEntry.installer.uninstall)
+      ) {
+        setActionAgentId(agentEntry.id);
+        setActionMode(input === 'u' ? 'update' : 'uninstall');
+        setStep('action');
+      }
+      return;
     } else if (key.return) {
       if (step === 'profile' && profiles.length === 0) {
         setError('No profiles configured. Add one first.');
@@ -320,7 +340,7 @@ export function useLaunchWizard({
         setStep('agent');
       }
     }
-  }, [step, error, errorChoice, statusChecking, onBack, profiles, visibleAgents, selectedProfile, selectedAgent, doLaunch, overwriteAndLaunch]);
+  }, [step, error, errorChoice, statusChecking, onBack, profiles, visibleAgents, selectedProfile, selectedAgent, doLaunch, overwriteAndLaunch, installStatuses]);
 
   const completeInstall = useCallback(() => {
     if (!installAgentId) return;
@@ -331,6 +351,29 @@ export function useLaunchWizard({
 
   const cancelInstall = useCallback(() => {
     setInstallAgentId(null);
+    setStep('agent');
+  }, []);
+
+  const completeAction = useCallback((agentId: AgentId, mode: 'update' | 'uninstall', result: InstallResult) => {
+    if (result.success) {
+      setInstallStatuses((prev) => {
+        const next = { ...prev };
+        if (mode === 'update') {
+          next[agentId] = true;
+        } else {
+          next[agentId] = false;
+        }
+        return next;
+      });
+    }
+    setActionAgentId(null);
+    setActionMode(null);
+    setStep('agent');
+  }, []);
+
+  const cancelAction = useCallback(() => {
+    setActionAgentId(null);
+    setActionMode(null);
     setStep('agent');
   }, []);
 
@@ -349,6 +392,8 @@ export function useLaunchWizard({
       statusChecking,
       errorChoice,
       installAgentId,
+      actionAgentId,
+      actionMode,
     },
     actions: {
       handleKey,
@@ -356,6 +401,8 @@ export function useLaunchWizard({
       setSelectedAgent,
       completeInstall,
       cancelInstall,
+      completeAction,
+      cancelAction,
     },
     computed: {
       currentProfile,
