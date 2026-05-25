@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createNpmInstaller } from './npm.js';
 
 vi.mock('node:child_process', () => ({
-  spawnSync: vi.fn(),
   spawn: vi.fn(),
 }));
 
@@ -68,6 +67,20 @@ describe('createNpmInstaller', () => {
         stdio: ['ignore', 'inherit', 'pipe'],
         shell: false,
       });
+    });
+
+    it('resolves failure on non-zero exit', async () => {
+      const mockChild = {
+        stderr: { on: vi.fn((event: string, cb: (chunk: Buffer) => void) => cb(Buffer.from('npm err'))) },
+        on: vi.fn((event: string, cb: (code: number) => void) => {
+          if (event === 'exit') cb(1);
+        }),
+      };
+      vi.mocked(spawn).mockReturnValue(mockChild as unknown as ReturnType<typeof spawn>);
+
+      const result = await installer.uninstall();
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('npm err');
     });
   });
 });
