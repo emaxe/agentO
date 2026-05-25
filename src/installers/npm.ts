@@ -69,5 +69,61 @@ export function createNpmInstaller(config: NpmInstallerConfig): AgentInstaller {
         });
       });
     },
+
+    async update(): Promise<InstallResult> {
+      return new Promise<InstallResult>((resolve) => {
+        const stderrChunks: Buffer[] = [];
+
+        const child = spawn('npm', ['update', '-g', config.packageName], {
+          stdio: ['ignore', 'inherit', 'pipe'],
+          shell: false,
+        });
+
+        child.stderr.on('data', (chunk: Buffer) => {
+          stderrChunks.push(chunk);
+        });
+
+        child.on('exit', (code) => {
+          if (code === 0) {
+            resolve({ success: true });
+          } else {
+            const error = Buffer.concat(stderrChunks).toString('utf8').trim();
+            resolve({ success: false, error: error || `npm exited with code ${code}` });
+          }
+        });
+
+        child.on('error', (err) => {
+          resolve({ success: false, error: err.message });
+        });
+      });
+    },
+
+    async uninstall(): Promise<InstallResult> {
+      return new Promise<InstallResult>((resolve) => {
+        const stderrChunks: Buffer[] = [];
+
+        const child = spawn('npm', ['uninstall', '-g', config.packageName], {
+          stdio: ['ignore', 'inherit', 'pipe'],
+          shell: false,
+        });
+
+        child.stderr.on('data', (chunk: Buffer) => {
+          stderrChunks.push(chunk);
+        });
+
+        child.on('exit', (code) => {
+          if (code === 0) {
+            resolve({ success: true });
+          } else {
+            const error = Buffer.concat(stderrChunks).toString('utf8').trim();
+            resolve({ success: false, error: error || `npm exited with code ${code}` });
+          }
+        });
+
+        child.on('error', (err) => {
+          resolve({ success: false, error: err.message });
+        });
+      });
+    },
   };
 }
