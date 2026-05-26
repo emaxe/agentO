@@ -57,7 +57,7 @@ export function AgentSelect({
       items={agents}
       selected={selected}
       title="Select Agent"
-      hint="↑↓ navigate, Enter select, Esc back"
+      hint="↑↓ navigate, Enter select, Esc back, u update, d delete"
       emptyMessage="No items available"
       renderItem={(item, index, isSelected) => {
         const installed = installStatuses[item.id] !== false;
