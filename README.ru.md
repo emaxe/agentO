@@ -17,6 +17,8 @@ AgentO — это CLI-инструмент для централизованно
 | [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Полная поддержка function calling через Vercel AI SDK; пробрасывает модальности |
 | [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter` | Структура OpenAI-совместимого API; пробрасывает модальности |
 | [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `openai-compatible`, `fireworks`, `openrouter` | `wire_api: responses`. Стабильный (флаг `--dev` не требуется). |
+| [Kimi Code](https://www.kimi.com/code) | `kimi` | JSON | `openai-compatible`, `fireworks`, `openrouter` | Конфиг через `~/.kimi-cli/.env` (`DEFAULT_PROVIDER`, `DEFAULT_MODEL`, `BASE_URL`). |
+| [Kilo Code](https://github.com/Kilo-Org/kilo-code) | `kilo` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Читает `defaultProvider`/`defaultModel` из `~/.kilocode/settings.json`. Кастомный `baseUrl` из `~/.kilocode/models.json`. |
 | [PI](https://github.com/withpi/pi) | `pi` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | Читает `defaultProvider`/`defaultModel` из `~/.pi/agent/settings.json`. Кастомный `baseUrl` из `~/.pi/agent/models.json`. |
 | [Copilot](https://github.com/github/gh-copilot) | `copilot` | только env-переменные | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Весь конфиг передаётся через переменные окружения — файл настроек не изменяется. |
 | [Goose](https://goose-docs.ai) | `goose` | только env-переменные | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Весь конфиг через env vars (`GOOSE_PROVIDER`, `GOOSE_MODEL`). |
@@ -145,7 +147,7 @@ agento launch -p default -a qwen -m child -s project
 
 | Экран | Возможности | Горячие клавиши |
 |-------|-------------|-----------------|
-| **Запуск агента** | Выбор профиля → агента → запуск; статус установки кешируется на диск; при ENOENT — перезапуск TUI с ошибкой | **Enter** выбор, **Esc** назад |
+| **Запуск агента** | Выбор профиля → агента → запуск; статус установки кешируется на диск; при ENOENT — перезапуск TUI с ошибкой. На установленном агенте: `u` — обновить, `d` — удалить | **Enter** выбор, **Esc** назад, **u** обновить, **d** удалить |
 | **Провайдеры** | Просмотр, добавление, редактирование, удаление провайдеров; переключение возможностей моделей | **Enter** детали / добавить модель, **a** добавить провайдер, **e** редактировать, **d** удалить, **i/v/a** переключить флаг, **Esc** назад |
 | **Профили** | Просмотр, добавление, удаление профилей. В деталях: добавление/удаление/редактирование моделей | **Enter** детали, **a** добавить, **d** удалить, **Esc** назад |
 | **Агенты** | Проверка статуса конфигов (global/project), наличие бэкапов | **Enter** детали, **Esc** назад |
@@ -154,11 +156,19 @@ agento launch -p default -a qwen -m child -s project
 ### Сценарий запуска агента
 
 1. **Выбор профиля** — выберите один из сохранённых профилей
-2. **Выбор агента** — AgentO проверяет статус установки всех агентов (спиннер). Незаконченные агенты отмечены `(not installed)`. Статусы кешируются в `~/.agento/agent-status.json` — при следующем открытии уже известные агенты не перепроверяются.
-   - Агент **установлен** → переходим к запуску
+2. **Выбор агента** — AgentO проверяет статус установки всех агентов (спиннер). Неустановленные агенты отмечены `(not installed)`. Установленные агенты при выделении показывают `(u update, d delete)`. Статусы кешируются в `~/.agento/agent-status.json` — при следующем открытии уже известные агенты не перепроверяются.
+   - Агент **установлен** → нажмите **Enter** для запуска, **u** для обновления или **d** для удаления
    - Агент **не установлен** → открывается **Мастер установки**
    - Команда не найдена при запуске (ENOENT) → TUI перезапускается с ошибкой, агент помечается как не установленный
-3. **Запуск** — AgentO применяет конфиг агента и запускает его
+3. **Мастер установки** (при необходимости):
+   - **Автоустановка** — проверка окружения (требуется npm/brew/uv), затем установка через нативный пакетный менеджер агента
+   - **Ручная установка** — показывает точную команду и URL документации
+4. **Обновление / Удаление агента** (если нажали `u`/`d` на установленном агенте):
+   - Диалог подтверждения (`Да`/`Нет`)
+   - Выполнение команды (`npm update -g`, `brew upgrade`, `uv tool uninstall` и т.д.) с живым спиннером
+   - При успехе → возврат к списку агентов с обновлённым статусом
+   - При ошибке → показ stderr; возможность повторить или вернуться назад
+5. **Запуск** — AgentO применяет конфиг агента и запускает его
 
 ```
 Profile: default

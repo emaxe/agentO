@@ -11,7 +11,7 @@ describe('agent registry', () => {
   it('listAgents() returns all stable agents in registry order', () => {
     const ids = listAgents().map((agent) => agent.id);
 
-    expect(ids).toEqual(['claude-code', 'opencode', 'qwen', 'codex', 'copilot', 'goose', 'pi', 'kilo']);
+    expect(ids).toEqual(['claude-code', 'opencode', 'qwen', 'codex', 'copilot', 'goose', 'pi', 'kilo', 'kimi']);
   });
 
   it('getAgentCommand("codex") returns command and default args', () => {

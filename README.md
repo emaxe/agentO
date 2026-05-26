@@ -17,6 +17,8 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 | [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Full function calling support via Vercel AI SDK |
 | [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter` | OpenAI-compatible API structure |
 | [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `openai-compatible`, `fireworks`, `openrouter` | `wire_api: responses`. Stable (no `--dev` required). |
+| [Kimi Code](https://www.kimi.com/code) | `kimi` | JSON | `openai-compatible`, `fireworks`, `openrouter` | Config delivered via `~/.kimi-cli/.env` (`DEFAULT_PROVIDER`, `DEFAULT_MODEL`, `BASE_URL`). |
+| [Kilo Code](https://github.com/Kilo-Org/kilo-code) | `kilo` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Reads `defaultProvider`/`defaultModel` from `~/.kilocode/settings.json`. Custom `baseUrl` from `~/.kilocode/models.json`. |
 | [PI](https://github.com/withpi/pi) | `pi` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | Reads `defaultProvider`/`defaultModel` from `~/.pi/agent/settings.json`. Custom `baseUrl` from `~/.pi/agent/models.json`. |
 | [Copilot](https://github.com/github/gh-copilot) | `copilot` | env vars only | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Config delivered entirely via env vars — no settings file patched. |
 | [Goose](https://goose-docs.ai) | `goose` | env vars only | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Config delivered entirely via env vars (`GOOSE_PROVIDER`, `GOOSE_MODEL`). |
@@ -163,7 +165,7 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 
 | Screen | What You Can Do | Key Shortcuts |
 |--------|----------------|---------------|
-| **Launch Agent** | Select profile → select agent (with install hints) → launch; opens Install Wizard for uninstalled agents; install statuses cached on disk | **Enter** select, **Esc** back |
+| **Launch Agent** | Select profile → select agent (with install hints) → launch; opens Install Wizard for uninstalled agents; install statuses cached on disk. On installed agents: `u` to update, `d` to delete | **Enter** select, **Esc** back, **u** update, **d** delete |
 | **Providers** | View, add, edit, delete API providers; toggle model capabilities | **Enter** details / add model, **a** add provider, **e** edit, **d** delete, **i/v/a** toggle capability, **Esc** back |
 | **Profiles** | View, add, delete profiles. In profile details: add/remove/edit models | **Enter** details, **a** add, **d** delete, **Esc** back |
 | **Agents** | Check config status (global/project), backup availability | **Enter** details, **Esc** back |
@@ -172,14 +174,19 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 ### Launch Agent Workflow
 
 1. **Select Profile** — Choose from your saved profiles
-2. **Select Agent** — AgentO checks install status of all agents (spinner while checking). Uninstalled agents show a `(not installed)` hint. Statuses are cached to `~/.agento/agent-status.json` so already-known-installed agents are skipped on the next launch.
-   - If the selected agent **is installed** → proceeds to launch
+2. **Select Agent** — AgentO checks install status of all agents (spinner while checking). Uninstalled agents show a `(not installed)` hint. Installed agents show `(u update, d delete)` when selected. Statuses are cached to `~/.agento/agent-status.json` so already-known-installed agents are skipped on the next launch.
+   - If the selected agent **is installed** → press **Enter** to launch, **u** to update, or **d** to delete
    - If the selected agent **is not installed** → opens the **Install Wizard**
    - If the command is not found at launch time (ENOENT) → TUI relaunches with the error shown and the agent marked as not installed
 3. **Install Wizard** (if needed):
-   - **Auto-install** — checks environment (requires npm), then installs via `npm install -g <package>`
+   - **Auto-install** — checks environment (requires npm/brew/uv), then installs via the agent's native package manager
    - **Manual install** — shows the exact command and a docs URL
-4. **Launch** — AgentO patches the agent config and starts the agent
+4. **Update / Delete Agent** (if triggered with `u`/`d` on an installed agent):
+   - Confirmation prompt (`Да`/`Нет`)
+   - Runs the appropriate command (`npm update -g`, `brew upgrade`, `uv tool uninstall`, etc.) with live spinner
+   - On success → returns to agent list with updated install status
+   - On error → shows stderr; options to retry or go back
+5. **Launch** — AgentO patches the agent config and starts the agent
 
 ```
 Profile: default

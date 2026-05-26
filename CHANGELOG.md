@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-26
+
 ### Added
 
+- **Agent update & uninstall from TUI**: on the Select Agent screen, press `u` to update or `d` to uninstall the currently highlighted installed agent. Supported for all agents via their native package managers (`npm`, `brew`, `uv`).
+- **Kimi Code adapter** (`kimi`): full support for the [Kimi CLI agent](https://www.kimi.com/code). Writes `DEFAULT_PROVIDER` and `DEFAULT_MODEL` to `~/.kimi-cli/.env`. Custom `baseUrl` from `~/.kimi-cli/.env`.
+- **Kilo Code adapter** (`kilo`): full support for the [Kilo Code CLI agent](https://github.com/Kilo-Org/kilo-code). Writes `defaultProvider`/`defaultModel` to `~/.kilocode/settings.json` and custom `baseUrl` + model overrides to `~/.kilocode/models.json`.
 - **PI adapter** (`pi`): full support for the [PI CLI agent](https://github.com/withpi/pi). Writes `defaultProvider`/`defaultModel` to `~/.pi/agent/settings.json` and custom `baseUrl` + model overrides to `~/.pi/agent/models.json`. Env vars: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `FIREWORKS_API_KEY`, `OPENROUTER_API_KEY`.
 
 ### Fixed

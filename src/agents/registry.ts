@@ -6,6 +6,7 @@ import { copilotAdapter } from '../adapters/copilot.js';
 import { gooseAdapter } from '../adapters/goose.js';
 import { piAdapter } from '../adapters/pi.js';
 import { kiloAdapter } from '../adapters/kilo.js';
+import { kimiAdapter } from '../adapters/kimi.js';
 import { claudeCodeInstaller } from '../installers/claude-code.js';
 import { openCodeInstaller } from '../installers/opencode.js';
 import { qwenInstaller } from '../installers/qwen.js';
@@ -14,6 +15,7 @@ import { copilotInstaller } from '../installers/copilot.js';
 import { gooseInstaller } from '../installers/goose.js';
 import { piInstaller } from '../installers/pi.js';
 import { kiloInstaller } from '../installers/kilo.js';
+import { kimiInstaller } from '../installers/kimi.js';
 import type { AgentAdapter } from '../adapters/base.js';
 import type { AgentId } from '../config/schema.js';
 import type { AgentInstaller } from '../installers/base.js';
@@ -95,6 +97,13 @@ const AGENTS: readonly AgentRegistryEntry[] = [
     adapter: kiloAdapter,
     command: 'kilo',
     installer: kiloInstaller,
+  },
+  {
+    id: 'kimi',
+    label: 'Kimi Code',
+    adapter: kimiAdapter,
+    command: 'kimi',
+    installer: kimiInstaller,
   },
 ];
 
