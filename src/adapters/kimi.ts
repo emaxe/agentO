@@ -16,7 +16,6 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
-import { writeJsonAtomic } from '../config/atomic-write.js';
 import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
@@ -128,7 +127,7 @@ export class KimiAdapter implements AgentAdapter<KimiConfig> {
     return { global: p, project: p };
   }
 
-  async readConfig(scope: LaunchScope, cwd?: string): Promise<KimiConfig | null> {
+  async readConfig(_scope: LaunchScope, _cwd?: string): Promise<KimiConfig | null> {
     // Try TOML first (canonical), fall back to legacy JSON
     const tomlPath = this.getConfigPath();
     if (existsSync(tomlPath)) {
