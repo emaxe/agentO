@@ -34,10 +34,24 @@ class CopilotInstaller implements AgentInstaller {
 
   /** Runs `brew install --cask copilot-cli` and reports the result. */
   async install(): Promise<InstallResult> {
+    return this._runBrew(['install', '--cask', 'copilot-cli']);
+  }
+
+  /** Runs `brew upgrade --cask copilot-cli` and reports the result. */
+  async update(): Promise<InstallResult> {
+    return this._runBrew(['upgrade', '--cask', 'copilot-cli']);
+  }
+
+  /** Runs `brew uninstall --cask copilot-cli` and reports the result. */
+  async uninstall(): Promise<InstallResult> {
+    return this._runBrew(['uninstall', '--cask', 'copilot-cli']);
+  }
+
+  private _runBrew(args: string[]): Promise<InstallResult> {
     return new Promise<InstallResult>((resolve) => {
       const stderrChunks: Buffer[] = [];
 
-      const child = spawn('brew', ['install', '--cask', 'copilot-cli'], {
+      const child = spawn('brew', args, {
         stdio: ['ignore', 'inherit', 'pipe'],
         shell: false,
       });

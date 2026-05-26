@@ -22,8 +22,8 @@ export interface AgentInstaller {
   checkInstalled(): Promise<InstallCheckResult>;
   checkEnvironment(): Promise<EnvCheckResult>;
   install(): Promise<InstallResult>;
-  update(): Promise<InstallResult>;
-  uninstall(): Promise<InstallResult>;
+  update?(): Promise<InstallResult>;
+  uninstall?(): Promise<InstallResult>;
   readonly manualInstructions: {
     commands: string[];
     docsUrl: string;

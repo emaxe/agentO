@@ -34,10 +34,24 @@ class GooseInstaller implements AgentInstaller {
 
   /** Runs `brew install block-goose-cli` and reports the result. */
   async install(): Promise<InstallResult> {
+    return this._runBrew(['install', 'block-goose-cli']);
+  }
+
+  /** Runs `brew upgrade block-goose-cli` and reports the result. */
+  async update(): Promise<InstallResult> {
+    return this._runBrew(['upgrade', 'block-goose-cli']);
+  }
+
+  /** Runs `brew uninstall block-goose-cli` and reports the result. */
+  async uninstall(): Promise<InstallResult> {
+    return this._runBrew(['uninstall', 'block-goose-cli']);
+  }
+
+  private _runBrew(args: string[]): Promise<InstallResult> {
     return new Promise<InstallResult>((resolve) => {
       const stderrChunks: Buffer[] = [];
 
-      const child = spawn('brew', ['install', 'block-goose-cli'], {
+      const child = spawn('brew', args, {
         stdio: ['ignore', 'inherit', 'pipe'],
         shell: false,
       });

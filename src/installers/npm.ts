@@ -12,6 +12,10 @@ export interface NpmInstallerConfig {
 
 const defaultVersionRegex = /(\d+\.\d+\.\d+[^\s]*)/;
 
+function cleanPackageName(packageName: string): string {
+  return packageName.replace(/@[^@/]+$/, '');
+}
+
 export function createNpmInstaller(config: NpmInstallerConfig): AgentInstaller {
   const versionRegex = config.versionRegex ?? defaultVersionRegex;
 
@@ -74,7 +78,7 @@ export function createNpmInstaller(config: NpmInstallerConfig): AgentInstaller {
       return new Promise<InstallResult>((resolve) => {
         const stderrChunks: Buffer[] = [];
 
-        const child = spawn('npm', ['update', '-g', config.packageName], {
+        const child = spawn('npm', ['update', '-g', cleanPackageName(config.packageName)], {
           stdio: ['ignore', 'inherit', 'pipe'],
           shell: false,
         });
