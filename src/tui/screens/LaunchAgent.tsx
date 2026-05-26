@@ -5,6 +5,7 @@ import { useLaunchWizard } from '../hooks/useLaunchWizard.js';
 import { ProfileSelect } from './ProfileSelect.js';
 import { AgentSelect } from './AgentSelect.js';
 import { AgentInstall } from './AgentInstall.js';
+import { AgentAction } from './AgentAction.js';
 import type { ExecRequest } from '../../launcher/independent.js';
 
 interface LaunchAgentProps {
@@ -75,6 +76,17 @@ export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache
         agentId={state.installAgentId}
         onBack={actions.cancelInstall}
         onDone={actions.completeInstall}
+      />
+    );
+  }
+
+  if (state.step === 'action' && state.actionAgentId && state.actionMode) {
+    return (
+      <AgentAction
+        agentId={state.actionAgentId}
+        mode={state.actionMode}
+        onBack={actions.cancelAction}
+        onDone={(result) => actions.completeAction(state.actionAgentId!, state.actionMode!, result)}
       />
     );
   }
