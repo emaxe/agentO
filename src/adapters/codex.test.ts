@@ -1,4 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, rm, readFile, mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import { CodexAdapter } from './codex.js';
 import type { Profile, Provider } from '../config/schema.js';
 
@@ -202,18 +206,6 @@ describe('CodexAdapter', () => {
     });
 
     it('writeConfig serializes to TOML format', async () => {
-      const writtenFiles: Record<string, string> = {};
-      vi.mock('node:fs/promises', async (importOriginal) => {
-        const actual = await importOriginal<typeof import('node:fs/promises')>();
-        return {
-          ...actual,
-          mkdir: vi.fn().mockResolvedValue(undefined),
-          writeFile: vi.fn().mockImplementation((path: string, content: string) => {
-            writtenFiles[path] = content;
-          }),
-        };
-      });
-
       const config = adapter.buildConfig(testProfile, [testProvider]);
       // Just verify the config is TOML-serializable (no throws)
       const { stringify } = await import('smol-toml');
@@ -271,6 +263,93 @@ describe('CodexAdapter', () => {
       };
       const env = adapter.buildEnv(profile, [openrouterProvider]);
       expect(env['CODEX_OPENROUTER_API_KEY']).toBe('sk-or-v1-test');
+    });
+  });
+
+  describe('writeConfig profile file separation', () => {
+    let tmpDir = '';
+    const originalHome = process.env.HOME;
+
+    beforeEach(async () => {
+      tmpDir = await mkdtemp(join(tmpdir(), 'agento-codex-test-'));
+      process.env.HOME = tmpDir;
+    });
+
+    afterEach(async () => {
+      if (tmpDir) {
+        await rm(tmpDir, { recursive: true, force: true });
+      }
+      if (originalHome !== undefined) {
+        process.env.HOME = originalHome;
+      } else {
+        delete process.env.HOME;
+      }
+    });
+
+    it('project scope creates default.config.toml with model and model_provider', async () => {
+      const config = adapter.buildConfig(testProfile, [testProvider]);
+      const projectDir = join(tmpDir, 'project');
+      await adapter.writeConfig(config, 'project', projectDir);
+
+      const profilePath = join(tmpDir, '.codex', 'default.config.toml');
+      const raw = await readFile(profilePath, 'utf-8');
+      const parsed = parseToml(raw) as Record<string, unknown>;
+      expect(parsed.model).toBe('accounts/fireworks/models/kimi-k2');
+      expect(parsed.model_provider).toBe('fireworks-ai');
+      // Ensure no legacy profile table
+      expect(parsed.profiles).toBeUndefined();
+      expect(parsed.default_profile).toBeUndefined();
+    });
+
+    it('project scope does NOT write default_profile or profiles into config.toml', async () => {
+      await mkdir(join(tmpDir, '.codex'), { recursive: true });
+      await writeFile(join(tmpDir, '.codex', 'config.toml'), stringifyToml({ existing: 'value' }), 'utf-8');
+
+      const config = adapter.buildConfig(testProfile, [testProvider]);
+      await adapter.writeConfig(config, 'project', join(tmpDir, 'project'));
+
+      const globalPath = join(tmpDir, '.codex', 'config.toml');
+      const raw = await readFile(globalPath, 'utf-8');
+      const parsed = parseToml(raw) as Record<string, unknown>;
+      expect(parsed.default_profile).toBeUndefined();
+      expect(parsed.profiles).toBeUndefined();
+      expect(parsed.model_providers).toBeDefined();
+      expect(parsed.existing).toBe('value');
+    });
+
+    it('project scope writes model into project config.toml', async () => {
+      const config = adapter.buildConfig(testProfile, [testProvider]);
+      const projectDir = join(tmpDir, 'project');
+      await adapter.writeConfig(config, 'project', projectDir);
+
+      const projectPath = join(projectDir, '.codex', 'config.toml');
+      const raw = await readFile(projectPath, 'utf-8');
+      const parsed = parseToml(raw) as Record<string, unknown>;
+      expect(parsed.model).toBe('accounts/fireworks/models/kimi-k2');
+    });
+
+    it('global scope creates default.config.toml', async () => {
+      const config = adapter.buildConfig(testProfile, [testProvider]);
+      await adapter.writeConfig(config, 'global', join(tmpDir, 'project'));
+
+      const profilePath = join(tmpDir, '.codex', 'default.config.toml');
+      const raw = await readFile(profilePath, 'utf-8');
+      const parsed = parseToml(raw) as Record<string, unknown>;
+      expect(parsed.model).toBe('accounts/fireworks/models/kimi-k2');
+      expect(parsed.model_provider).toBe('fireworks-ai');
+    });
+
+    it('global scope writes model and model_providers into config.toml without legacy profile keys', async () => {
+      const config = adapter.buildConfig(testProfile, [testProvider]);
+      await adapter.writeConfig(config, 'global', join(tmpDir, 'project'));
+
+      const globalPath = join(tmpDir, '.codex', 'config.toml');
+      const raw = await readFile(globalPath, 'utf-8');
+      const parsed = parseToml(raw) as Record<string, unknown>;
+      expect(parsed.model).toBe('accounts/fireworks/models/kimi-k2');
+      expect(parsed.model_providers).toBeDefined();
+      expect(parsed.default_profile).toBeUndefined();
+      expect(parsed.profiles).toBeUndefined();
     });
   });
 

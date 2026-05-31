@@ -53,6 +53,11 @@ async function removeIfExists(path: string): Promise<void> {
   }
 }
 
+/** Возвращает путь к профиль-файлу Codex CLI: ~/.codex/<name>.config.toml */
+function profileConfigPath(name: string): string {
+  return join(process.env.HOME ?? homedir(), '.codex', `${name}.config.toml`);
+}
+
 async function readTomlFile(path: string): Promise<CodexConfig | null> {
   if (!existsSync(path)) return null;
   const raw = await readFile(path, 'utf-8');
@@ -71,7 +76,7 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
-      global: join(homedir(), '.codex', 'config.toml'),
+      global: join(process.env.HOME ?? homedir(), '.codex', 'config.toml'),
       project: join(cwd ?? process.cwd(), '.codex', 'config.toml'),
     };
   }
@@ -84,8 +89,8 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
   async snapshotConfigFiles(scope: LaunchScope, cwd?: string): Promise<WriteBackupFile[]> {
     const paths = this.configPaths(cwd);
     const filePaths = scope === 'project'
-      ? [paths.global, paths.project]
-      : [paths[scope]];
+      ? [paths.global, paths.project, profileConfigPath('default')]
+      : [paths.global, profileConfigPath('default')];
 
     return Promise.all(filePaths.map(async (path) => {
       const content = await readTomlFile(path);
@@ -168,36 +173,59 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
   }
 
   async writeConfig(config: CodexConfig, scope: LaunchScope, cwd?: string): Promise<void> {
+    // Extract profile data for the separate profile file (new Codex CLI format)
+    const defaultProfilePath = profileConfigPath('default');
+    const profileConfig: CodexConfig = {};
+
+    if (config.profiles?.default) {
+      profileConfig.model = config.profiles.default.model;
+      profileConfig.model_provider = config.profiles.default.model_provider;
+    } else if (config.default_profile === 'default' && config.model) {
+      // Fallback: derive model_provider from the single model_providers entry if available
+      const providerKeys = config.model_providers ? Object.keys(config.model_providers) : [];
+      profileConfig.model = config.model;
+      profileConfig.model_provider = providerKeys.length === 1 ? providerKeys[0] : '';
+    }
+
+    // Write profile file if we have profile data
+    if (profileConfig.model !== undefined) {
+      await writeTomlFile(defaultProfilePath, profileConfig);
+    }
+
     if (scope === 'project') {
       const paths = this.configPaths(cwd);
-      const hasGlobalOwnedConfig = ['model_providers', 'default_profile', 'profiles']
-        .some((key) => config[key as keyof CodexConfig] !== undefined);
 
-      if (hasGlobalOwnedConfig) {
-        const globalConfig = await readTomlFile(paths.global) ?? {};
-        if (config.model_providers !== undefined) {
-          globalConfig.model_providers = config.model_providers;
+      // 1. Global config: only model_providers, never default_profile/profiles
+      if (config.model_providers !== undefined) {
+        const existingGlobal = await readTomlFile(paths.global) ?? {};
+        const globalConfig: CodexConfig = {};
+        // Copy everything from existing except legacy profile keys
+        for (const key of Object.keys(existingGlobal)) {
+          if (key !== 'default_profile' && key !== 'profiles') {
+            globalConfig[key as keyof CodexConfig] = existingGlobal[key];
+          }
         }
-        if (config.default_profile !== undefined) {
-          globalConfig.default_profile = config.default_profile;
-        }
-        if (config.profiles !== undefined) {
-          globalConfig.profiles = config.profiles;
-        }
+        globalConfig.model_providers = config.model_providers;
         await writeTomlFile(paths.global, globalConfig);
       }
 
-      // 2. Управляем project конфигом (model)
-      const projectPath = paths.project;
+      // 2. Project config (model only)
       const projectConfig: CodexConfig = {};
       if (config.model) {
         projectConfig.model = config.model;
       }
-      await writeTomlFile(projectPath, projectConfig);
+      await writeTomlFile(paths.project, projectConfig);
     } else {
-      // scope === 'global' — пишем всё в global config как раньше
+      // scope === 'global'
       const path = this.configPaths(cwd)[scope];
-      await writeTomlFile(path, config);
+      const globalConfig: CodexConfig = {};
+      if (config.model) {
+        globalConfig.model = config.model;
+      }
+      if (config.model_providers) {
+        globalConfig.model_providers = config.model_providers;
+      }
+      await writeTomlFile(path, globalConfig);
     }
   }
 

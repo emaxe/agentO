@@ -1,6 +1,6 @@
 {
   "name": "@emaxe/agento",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Manage AI agent configurations with profiles and providers",
   "author": "emaxe",
   "license": "MIT",

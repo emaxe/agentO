@@ -34,10 +34,12 @@ beforeEach(async () => {
   mockStartAnthropicScrubberProxy.mockClear();
   const { tmpdir } = await vi.importActual<typeof import('node:os')>('node:os');
   testDir = await mkdtemp(join(tmpdir(), 'agento-int-test-'));
+  process.env.HOME = testDir;
 });
 
 afterEach(async () => {
   await rm(testDir, { recursive: true, force: true });
+  delete process.env.HOME;
 });
 
 const provider: Provider = {
@@ -332,12 +334,15 @@ describe('launch/restore integration', () => {
 
     const globalToml = join(testDir, '.codex', 'config.toml');
     const projectToml = join(cwd, '.codex', 'config.toml');
+    const profileToml = join(testDir, '.codex', 'default.config.toml');
     expect(existsSync(globalToml)).toBe(true);
     expect(existsSync(projectToml)).toBe(true);
+    expect(existsSync(profileToml)).toBe(true);
 
     await cleanup();
 
     expect(existsSync(globalToml)).toBe(false);
     expect(existsSync(projectToml)).toBe(false);
+    expect(existsSync(profileToml)).toBe(false);
   });
 });

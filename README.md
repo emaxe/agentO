@@ -16,7 +16,7 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 | [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic`, `fireworks`, `openrouter`, `openai-compatible`, `responses-compatible` | Multi-tier support (small/base/smart). Uses local proxy for non-Anthropic providers. |
 | [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Full function calling support via Vercel AI SDK |
 | [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter` | OpenAI-compatible API structure |
-| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `openai-compatible`, `fireworks`, `openrouter` | `wire_api: responses`. Stable (no `--dev` required). |
+| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `openai-compatible`, `fireworks`, `openrouter` | `wire_api: responses`. Profile stored in separate `default.config.toml`. |
 | [Kimi Code](https://www.kimi.com/code) | `kimi` | JSON | `openai-compatible`, `fireworks`, `openrouter` | Config delivered via `~/.kimi-cli/.env` (`DEFAULT_PROVIDER`, `DEFAULT_MODEL`, `BASE_URL`). |
 | [Kilo Code](https://github.com/Kilo-Org/kilo-code) | `kilo` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Reads `defaultProvider`/`defaultModel` from `~/.kilocode/settings.json`. Custom `baseUrl` from `~/.kilocode/models.json`. |
 | [PI](https://github.com/withpi/pi) | `pi` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | Reads `defaultProvider`/`defaultModel` from `~/.pi/agent/settings.json`. Custom `baseUrl` from `~/.pi/agent/models.json`. |
@@ -426,7 +426,7 @@ Each supported agent has a dedicated adapter that translates AgentO's generic co
   
 - **Qwen CLI** (supports `openai-compatible`, `fireworks`): Generates `~/.qwen/settings.json` with OpenAI-compatible provider structure. Requires `baseUrl` for all providers. Auto-defaults for `fireworks` type. Passes capability flags via `generationConfig.modalities`.
   
-- **Codex CLI** (`--dev` to show): Generates `~/.codex/config.toml` with `wire_api: responses`, profiles, and environment variable references. In project scope, splits config between global (`model_providers`) and project (`model`) configs. Supports all provider types. Capability flags are not propagated (Codex `responses` API has no modality config).
+- **Codex CLI**: Generates `~/.codex/config.toml` with `wire_api: responses` and `model_providers`, plus a separate `~/.codex/default.config.toml` (flat `model` + `model_provider`) for the active profile. In project scope, splits config between global (`model_providers` + base `model`) and project (`model`) configs. Supports all provider types. Capability flags are not propagated (Codex `responses` API has no modality config).
 
 - **Copilot** (supports all 4 provider types): No settings file is written. All config is delivered at launch via `COPILOT_MODEL`, `COPILOT_PROVIDER_TYPE`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_PROVIDER_BASE_URL`. Provider types `fireworks` and `openrouter` map to `COPILOT_PROVIDER_TYPE=openai`. Auto-enables `COPILOT_PROVIDER_WIRE_API=responses` for gpt-5 family models.
 

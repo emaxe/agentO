@@ -16,10 +16,11 @@ vi.mock('node:os', async (importOriginal) => {
   };
 });
 
-function codexPaths(): { global: string; project: string } {
+function codexPaths(): { global: string; project: string; defaultProfile: string } {
   return {
     global: join(homeDir, '.codex', 'config.toml'),
     project: join(projectDir, '.codex', 'config.toml'),
+    defaultProfile: join(homeDir, '.codex', 'default.config.toml'),
   };
 }
 
@@ -58,7 +59,7 @@ describe('restore command Codex multi-file backup', () => {
     await rm(projectDir, { recursive: true, force: true });
   });
 
-  it('restores both Codex project files from a crash-like manifest', async () => {
+  it('restores all three Codex project files from a crash-like manifest', async () => {
     const paths = codexPaths();
     const originalGlobal = {
       theme: 'light',
@@ -67,28 +68,32 @@ describe('restore command Codex multi-file backup', () => {
       profiles: { old: { model: 'old-model', model_provider: 'old' } },
     };
     const originalProject = { model: 'old-project-model' };
+    const originalProfile = { model: 'old-profile-model', model_provider: 'old' };
     const { writeBackup, backupExists } = await import('../../config/store.js');
     await writeBackup('codex', 'project', {
       cwd: projectDir,
       files: [
         { path: paths.global, format: 'toml', hadFile: true, content: originalGlobal },
         { path: paths.project, format: 'toml', hadFile: true, content: originalProject },
+        { path: paths.defaultProfile, format: 'toml', hadFile: true, content: originalProfile },
       ],
     });
     await writeToml(paths.global, { theme: 'light', model_providers: { new: { name: 'New' } } });
     await writeToml(paths.project, { model: 'new-project-model' });
+    await writeToml(paths.defaultProfile, { model: 'new-profile-model', model_provider: 'new' });
 
     await runRestore();
 
     expect(await readToml(paths.global)).toEqual(originalGlobal);
     expect(await readToml(paths.project)).toEqual(originalProject);
+    expect(await readToml(paths.defaultProfile)).toEqual(originalProfile);
     expect(backupExists('codex', 'project')).toBe(false);
     expect(logSpy).toHaveBeenCalledWith('Restored codex config (project)');
     expect(exitSpy).toHaveBeenCalledWith(0);
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
-  it('deletes both Codex project files when the manifest says they did not exist', async () => {
+  it('deletes all three Codex project files when the manifest says they did not exist', async () => {
     const paths = codexPaths();
     const { writeBackup, backupExists } = await import('../../config/store.js');
     await writeBackup('codex', 'project', {
@@ -96,15 +101,18 @@ describe('restore command Codex multi-file backup', () => {
       files: [
         { path: paths.global, format: 'toml', hadFile: false, content: null },
         { path: paths.project, format: 'toml', hadFile: false, content: null },
+        { path: paths.defaultProfile, format: 'toml', hadFile: false, content: null },
       ],
     });
     await writeToml(paths.global, { model_providers: { new: { name: 'New' } } });
     await writeToml(paths.project, { model: 'new-project-model' });
+    await writeToml(paths.defaultProfile, { model: 'new-profile-model', model_provider: 'new' });
 
     await runRestore();
 
     expect(existsSync(paths.global)).toBe(false);
     expect(existsSync(paths.project)).toBe(false);
+    expect(existsSync(paths.defaultProfile)).toBe(false);
     expect(backupExists('codex', 'project')).toBe(false);
     expect(exitSpy).toHaveBeenCalledWith(0);
     expect(errorSpy).not.toHaveBeenCalled();

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-31
+
+### Changed
+
+- **Codex CLI adapter**: поддержка нового формата профилей Codex CLI v0.134.0+. Профиль `default` теперь записывается в отдельный файл `~/.codex/default.config.toml` (flat `model` + `model_provider`) вместо inline `default_profile` и `[profiles.default]` в `~/.codex/config.toml`. `config.toml` содержит только `model_providers` и `model`. Бэкап и restore работают для всех трёх файлов (global, project, profile).
+
+### Fixed
+
+- **Codex CLI launch**: устранена ошибка `legacy profile selector/table` при запуске через `agento launch -p <name> -a codex` после обновления Codex CLI.
+
 ## [0.6.0] - 2026-05-26
 
 ### Added
