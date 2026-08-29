@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ClaudeCodeAdapter } from './claude-code.js';
+import { ClaudeCodeAdapter, CLAUDE_API_KEY_ENV } from './claude-code.js';
 import type { Profile, Provider } from '../config/schema.js';
 
 const adapter = new ClaudeCodeAdapter();
+
+const API_KEY_HELPER = `sh -c 'printf %s "$${CLAUDE_API_KEY_ENV}"'`;
 
 const testProvider: Provider = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -26,7 +28,7 @@ describe('ClaudeCodeAdapter', () => {
   it('single-model profile applies one model to all tiers', () => {
     const config = adapter.buildConfig(singleModelProfile, [testProvider]);
     const env = config.env as Record<string, string>;
-    expect(config.apiKeyHelper).toBe("bash -c 'echo sk-ant-test123'");
+    expect(config.apiKeyHelper).toBe(API_KEY_HELPER);
     expect(env.ANTHROPIC_BASE_URL).toBe('https://api.test.com');
     expect(env.ANTHROPIC_MODEL).toBe('claude-3-opus');
     expect(env.ANTHROPIC_SMALL_FAST_MODEL).toBe('claude-3-opus');
@@ -74,14 +76,17 @@ describe('ClaudeCodeAdapter', () => {
     const providerNoUrl = { ...testProvider, baseUrl: undefined };
     const config = adapter.buildConfig(singleModelProfile, [providerNoUrl]);
     const env = config.env as Record<string, string>;
-    expect(config.apiKeyHelper).toBe("bash -c 'echo sk-ant-test123'");
+    expect(config.apiKeyHelper).toBe(API_KEY_HELPER);
     expect('ANTHROPIC_BASE_URL' in env).toBe(false);
   });
 
-  it('apiKeyHelper escapes single quotes in apiKey', () => {
+  it('never writes the API key into the config, whatever it contains', () => {
     const tricky = { ...testProvider, apiKey: "abc'def" };
     const config = adapter.buildConfig(singleModelProfile, [tricky]);
-    expect(config.apiKeyHelper).toBe("bash -c 'echo abc'\\''def'");
+    // The helper reads the key from the environment, so no shell escaping is
+    // needed and the secret cannot leak into a committed settings.json.
+    expect(config.apiKeyHelper).toBe(API_KEY_HELPER);
+    expect(JSON.stringify(config)).not.toContain("abc'def");
   });
 
   it('buildConfig throws if provider not found', () => {
@@ -140,9 +145,13 @@ describe('ClaudeCodeAdapter', () => {
     const config = adapter.buildConfig(profile, [openrouterProvider]);
     const env = config.env as Record<string, string>;
     expect(env.ANTHROPIC_BASE_URL).toBe('https://openrouter.ai/api');
-    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('sk-or-v1-test');
     expect(env.ANTHROPIC_API_KEY).toBe('');
     expect(config.apiKeyHelper).toBeUndefined();
+    // The Bearer token is delivered through the process env, never the config.
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+    expect(adapter.buildEnv(profile, [openrouterProvider])).toEqual({
+      ANTHROPIC_AUTH_TOKEN: 'sk-or-v1-test',
+    });
     expect(config.model).toBe('anthropic/claude-sonnet-4.6');
   });
 
@@ -240,7 +249,7 @@ describe('ClaudeCodeAdapter', () => {
     const env = config.env as Record<string, string>;
     expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com/v1');
     expect(env.ANTHROPIC_MODEL).toBe('gpt-4');
-    expect(config.apiKeyHelper).toBe("bash -c 'echo sk-custom'");
+    expect(config.apiKeyHelper).toBe(API_KEY_HELPER);
   });
 
   it('custom-api provider prefers anthropic when both modes are enabled', () => {
@@ -295,7 +304,7 @@ describe('ClaudeCodeAdapter', () => {
     const config = adapter.buildConfig(profile, [openaiProvider]);
     const env = config.env as Record<string, string>;
     expect(env.ANTHROPIC_BASE_URL).toBe('https://api.openai.com/v1');
-    expect(config.apiKeyHelper).toBe("bash -c 'echo sk-openai-test'");
+    expect(config.apiKeyHelper).toBe(API_KEY_HELPER);
   });
 
   it('openai-compatible provider respects user baseUrl override', () => {

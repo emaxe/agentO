@@ -71,6 +71,11 @@ program.action(() => {
       while (execReq) {
         // Ink may leave stdin in "flowing" state — pause before handing fd to child
         process.stdin.pause();
+        // Printed here rather than inside the TUI: writing to stdout while Ink
+        // renders would corrupt the frame.
+        for (const warning of execReq.warnings ?? []) {
+          console.warn(`Warning: ${warning}`);
+        }
         try {
           await spawnAsync(execReq.command, execReq.args, execReq.env);
         } catch (err) {

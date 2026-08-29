@@ -1,5 +1,6 @@
 import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
 import { restoreBackupManifest } from '../config/backup-restore.js';
+import { addToGitExclude } from '../config/git-exclude.js';
 import type { Profile, Provider } from '../config/schema.js';
 import { deleteBackup, inferBackupFileFormat, readBackup, readConfig, writeBackup } from '../config/store.js';
 import { startAnthropicScrubberProxy } from '../proxy/anthropic-scrubber.js';
@@ -19,6 +20,8 @@ export interface ExecRequest {
   cleanup?: () => Promise<void>;
   agentId?: string;
   profileId?: string;
+  /** Non-fatal notices raised while preparing the launch, for the caller to print. */
+  warnings?: string[];
 }
 
 export interface LaunchTransactionOptions {
@@ -34,6 +37,8 @@ export interface LaunchTransactionOptions {
 export interface LaunchTransactionResult {
   execReq: ExecRequest;
   cleanup: () => Promise<void>;
+  /** Non-fatal notices raised while preparing the launch, for the caller to print. */
+  warnings: string[];
 }
 
 function cleanProcessEnv(): Record<string, string> {
@@ -77,11 +82,12 @@ async function buildExecRequest(options: LaunchTransactionOptions & { args: stri
   };
 }
 
+/** Backs up every config file the launch is about to touch, returning their paths. */
 async function backupCurrentConfig(
   adapter: AgentAdapter,
   scope: LaunchScope,
   cwd?: string,
-): Promise<void> {
+): Promise<string[]> {
   const files = adapter.snapshotConfigFiles
     ? await adapter.snapshotConfigFiles(scope, cwd)
     : await snapshotPrimaryConfigFile(adapter, scope, cwd);
@@ -93,6 +99,37 @@ async function backupCurrentConfig(
       format: file.format ?? inferBackupFileFormat(file.path),
     })),
   });
+
+  return files.map((file) => file.path).filter(Boolean);
+}
+
+/**
+ * Keeps project-scope agent configs out of git.
+ *
+ * Several adapters embed the provider API key in the config they generate, and
+ * in `project` scope that config lands inside the user's repository — often at a
+ * path that is conventionally committed. Excluding it locally turns a silent
+ * secret leak into a no-op. Paths outside the repo are ignored by
+ * {@link addToGitExclude}, so passing the whole snapshot list is safe.
+ */
+async function excludeProjectConfigsFromGit(
+  paths: string[],
+  scope: LaunchScope,
+  cwd: string | undefined,
+): Promise<string[]> {
+  if (scope !== 'project' || !cwd || paths.length === 0) return [];
+
+  const { added, error } = await addToGitExclude(cwd, paths);
+  if (error) {
+    return [
+      `Could not update .git/info/exclude (${error}). The generated agent config may contain your API key — do not commit it.`,
+    ];
+  }
+  if (added.length === 0) return [];
+
+  return [
+    `Generated agent config may contain your API key; added to .git/info/exclude so it is not committed: ${added.join(', ')}`,
+  ];
 }
 
 async function snapshotPrimaryConfigFile(
@@ -182,11 +219,13 @@ export async function prepareLaunchTransaction(options: LaunchTransactionOptions
   const { adapter, profile, providers, scope, cwd } = options;
   const args = options.args ?? [];
 
-  await backupCurrentConfig(adapter, scope, cwd);
+  const configPaths = await backupCurrentConfig(adapter, scope, cwd);
 
   const newConfig = adapter.buildConfig(profile, providers);
   const agentoConfig = await readConfig();
   await adapter.writeConfig(newConfig, scope, cwd, agentoConfig.settings.mergeAgentConfigs);
+
+  const warnings = await excludeProjectConfigsFromGit(configPaths, scope, cwd);
 
   const execReq = await buildExecRequest({ ...options, args });
   const stopProxy = await maybeStartProxy(adapter, profile, providers, scope, cwd, newConfig);
@@ -199,5 +238,5 @@ export async function prepareLaunchTransaction(options: LaunchTransactionOptions
     await baseCleanup();
   };
 
-  return { execReq, cleanup };
+  return { execReq: { ...execReq, warnings }, cleanup, warnings };
 }

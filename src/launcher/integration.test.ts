@@ -345,4 +345,56 @@ describe('launch/restore integration', () => {
     expect(existsSync(projectToml)).toBe(false);
     expect(existsSync(profileToml)).toBe(false);
   });
+
+  it('7. Project scope: generated config is git-excluded and holds no plaintext key', async () => {
+    const { prepareLaunchTransaction } = await import('./transaction.js');
+    const { claudeCodeAdapter, CLAUDE_API_KEY_ENV } = await import('../adapters/claude-code.js');
+
+    // Minimal repo layout — enough for findGitRoot/resolveGitCommonDir.
+    const cwd = join(testDir, 'repo');
+    await mkdir(join(cwd, '.git', 'info'), { recursive: true });
+
+    const { cleanup, warnings, execReq } = await prepareLaunchTransaction({
+      adapter: claudeCodeAdapter,
+      profile,
+      providers: [provider],
+      scope: 'project',
+      command: 'claude',
+      cwd,
+    });
+
+    const configPath = join(cwd, '.claude', 'settings.json');
+    const written = await readFile(configPath, 'utf-8');
+    // The credential travels in the environment, never in the committed file.
+    expect(written).not.toContain(provider.apiKey);
+    expect(execReq.env[CLAUDE_API_KEY_ENV]).toBe(provider.apiKey);
+
+    const exclude = await readFile(join(cwd, '.git', 'info', 'exclude'), 'utf-8');
+    expect(exclude).toContain('/.claude/settings.json');
+    expect(warnings.join(' ')).toContain('.git/info/exclude');
+
+    await cleanup();
+  });
+
+  it('8. Global scope leaves git exclude untouched', async () => {
+    const { prepareLaunchTransaction } = await import('./transaction.js');
+    const { claudeCodeAdapter } = await import('../adapters/claude-code.js');
+
+    const cwd = join(testDir, 'repo');
+    await mkdir(join(cwd, '.git', 'info'), { recursive: true });
+
+    const { cleanup, warnings } = await prepareLaunchTransaction({
+      adapter: claudeCodeAdapter,
+      profile,
+      providers: [provider],
+      scope: 'global',
+      command: 'claude',
+      cwd,
+    });
+
+    expect(warnings).toEqual([]);
+    expect(existsSync(join(cwd, '.git', 'info', 'exclude'))).toBe(false);
+
+    await cleanup();
+  });
 });

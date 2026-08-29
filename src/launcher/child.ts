@@ -16,6 +16,8 @@ export interface ChildLaunchOptions {
 export interface ChildPrepareResult {
   execReq: ExecRequest;
   cleanup: () => Promise<void>;
+  /** Non-fatal notices raised while preparing the launch, for the caller to print. */
+  warnings: string[];
 }
 
 /**
@@ -34,7 +36,10 @@ export async function prepareChild(options: ChildLaunchOptions): Promise<ChildPr
  * SIGTERM/SIGINT: cleanup-хук восстанавливает конфиг.
  */
 export async function launchChild(options: ChildLaunchOptions): Promise<number> {
-  const { execReq, cleanup } = await prepareChild(options);
+  const { execReq, cleanup, warnings } = await prepareChild(options);
+  for (const warning of warnings) {
+    console.warn(`Warning: ${warning}`);
+  }
 
   return new Promise<number>((resolve) => {
     const child = spawn(execReq.command, execReq.args, {

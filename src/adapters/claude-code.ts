@@ -18,9 +18,25 @@ export interface ClaudeCodeConfig {
   [key: string]: unknown;
 }
 
-function escapeForSingleQuoted(value: string): string {
-  return value.replace(/'/g, "'\\''");
-}
+/**
+ * Env var carrying the provider API key into the Claude Code process.
+ *
+ * The key is passed through the environment instead of being inlined into
+ * `settings.json`: in `project` scope that file lives inside the user's
+ * repository and is conventionally committed (Claude Code gitignores
+ * `settings.local.json`, not this one), so an inlined key leaks on the next
+ * commit. `apiKeyHelper` still resolves it at runtime — the helper runs as a
+ * child of Claude Code and therefore inherits this variable — which keeps the
+ * original credential flow (and its lack of an approval prompt) intact.
+ */
+export const CLAUDE_API_KEY_ENV = 'AGENTO_ANTHROPIC_API_KEY';
+
+/**
+ * Reads {@link CLAUDE_API_KEY_ENV} without a trailing newline.
+ * `sh` rather than `bash` — it is the one shell guaranteed to exist on POSIX
+ * systems, and nothing here needs bash syntax.
+ */
+const API_KEY_HELPER = `sh -c 'printf %s "$${CLAUDE_API_KEY_ENV}"'`;
 
 function pickByTier(
   models: ProfileModel[],
@@ -104,8 +120,8 @@ export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
     // OpenRouter Anthropic Skin принимает Bearer-токен (ANTHROPIC_AUTH_TOKEN),
     // а не x-api-key (apiKeyHelper). ANTHROPIC_API_KEY должен быть пустым,
     // иначе Claude Code fallback'нется на нативный Anthropic endpoint.
+    // Сам токен приходит через buildEnv, а не пишется в settings.json.
     if (baseProvider.type === 'openrouter') {
-      env['ANTHROPIC_AUTH_TOKEN'] = baseProvider.apiKey;
       env['ANTHROPIC_API_KEY'] = '';
       return {
         $schema: 'https://json.schemastore.org/claude-code-settings.json',
@@ -116,12 +132,32 @@ export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
 
     const config: ClaudeCodeConfig = {
       $schema: 'https://json.schemastore.org/claude-code-settings.json',
-      apiKeyHelper: `bash -c 'echo ${escapeForSingleQuoted(baseProvider.apiKey)}'`,
+      apiKeyHelper: API_KEY_HELPER,
       env,
       model: base.model,
     };
 
     return config;
+  }
+
+  /**
+   * Supplies the provider credential through the environment so it never lands
+   * in `settings.json`. See {@link CLAUDE_API_KEY_ENV}.
+   *
+   * OpenRouter's Anthropic Skin authenticates with a Bearer token, so it gets
+   * `ANTHROPIC_AUTH_TOKEN`; every other provider is read back by the
+   * `apiKeyHelper` written into the config.
+   */
+  buildEnv(profile: Profile, providers: Provider[]): Record<string, string> {
+    const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
+    if (!base) return {};
+
+    const provider = providers.find((p) => p.id === base.providerId);
+    if (!provider) return {};
+
+    return provider.type === 'openrouter'
+      ? { ANTHROPIC_AUTH_TOKEN: provider.apiKey }
+      : { [CLAUDE_API_KEY_ENV]: provider.apiKey };
   }
 
   /**

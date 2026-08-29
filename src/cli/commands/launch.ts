@@ -124,6 +124,9 @@ export function createLaunchCommand(): Command {
             args,
             cwd: launchCwd,
           });
+          for (const warning of execReq.warnings ?? []) {
+            console.warn(`Warning: ${warning}`);
+          }
           spawnSync(execReq.command, execReq.args, { stdio: 'inherit', env: execReq.env });
           process.exit(0);
         }
