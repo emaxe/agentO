@@ -34,6 +34,7 @@ export interface KiloConfig {
 }
 
 import { DEFAULT_BASE_URLS } from '../config/defaults.js';
+import { resolveBaseModel } from './resolve-base-model.js';
 
 /** Adapter for the Kilo Code CLI agent. */
 export class KiloAdapter implements AgentAdapter<KiloConfig> {
@@ -56,11 +57,7 @@ export class KiloAdapter implements AgentAdapter<KiloConfig> {
   }
 
   buildConfig(profile: Profile, providers: Provider[]): KiloConfig {
-    const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
-    if (!base) throw new Error(`Profile "${profile.name}" has no models`);
-
-    const provider = providers.find((p) => p.id === base.providerId);
-    if (!provider) throw new Error(`Provider not found for id: ${base.providerId}`);
+    const { model: base, provider } = resolveBaseModel(profile, providers);
 
     const modelConfig = provider.models.find((m) => m.name === base.model);
     const caps = modelConfig?.capabilities ?? { image: true, video: false, audio: false };

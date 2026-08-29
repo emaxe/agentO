@@ -1,4 +1,5 @@
 import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
+import { resolveBaseModel } from '../adapters/resolve-base-model.js';
 import { restoreBackupManifest } from '../config/backup-restore.js';
 import { addToGitExclude } from '../config/git-exclude.js';
 import type { Profile, Provider } from '../config/schema.js';
@@ -163,11 +164,8 @@ async function maybeStartProxy(
 ): Promise<(() => Promise<void>) | undefined> {
   if (adapter.id !== 'claude-code') return;
 
-  const baseModel = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
-  if (!baseModel) return;
-
-  const provider = providers.find((p) => p.id === baseModel.providerId);
-  if (!provider || provider.type === 'anthropic-compatible') return;
+  const { provider } = resolveBaseModel(profile, providers);
+  if (provider.type === 'anthropic-compatible') return;
 
   const rawEnv = writtenConfig.env;
   const env =

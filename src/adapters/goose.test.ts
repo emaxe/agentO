@@ -249,9 +249,10 @@ describe('GooseAdapter', () => {
       });
     });
 
-    it('returns empty object when provider not found', () => {
-      const env = adapter.buildEnv(testProfile, []);
-      expect(env).toEqual({});
+    it('throws when the profile references a provider that no longer exists', () => {
+      // Returning {} here used to launch the agent with no provider config at
+      // all, silently falling back to whatever was already in the environment.
+      expect(() => adapter.buildEnv(testProfile, [])).toThrow('Provider not found');
     });
 
     it('uses base tier model when present', () => {

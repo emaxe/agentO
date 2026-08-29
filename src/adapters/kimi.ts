@@ -20,6 +20,7 @@ import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
+import { resolveBaseModel } from './resolve-base-model.js';
 
 /** Known Kimi context sizes for specific models. */
 const KIMI_CONTEXT_SIZES: Record<string, number> = {
@@ -49,7 +50,13 @@ function mapToKimiProviderType(type: string, provider: Provider): KimiProviderTy
     const modes = provider.customApiModes;
     if (modes?.anthropic) return 'anthropic';
     if (modes?.responses) return 'openai_responses';
-    return 'openai_legacy'; // default to openai_legacy if openai is set or unspecified
+    if (modes?.openai) return 'openai_legacy';
+    // With no mode enabled there is no wire protocol to speak. Domain validation
+    // rejects such a provider on creation; throwing here keeps a hand-edited
+    // config from producing a Kimi profile that silently points nowhere.
+    throw new Error(
+      `Kimi Code: custom-api provider "${provider.name}" requires at least one API mode (openai, anthropic, or responses)`,
+    );
   }
   return 'openai_legacy';
 }
@@ -147,11 +154,7 @@ export class KimiAdapter implements AgentAdapter<KimiConfig> {
   }
 
   buildConfig(profile: Profile, providers: Provider[]): KimiConfig {
-    const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
-    if (!base) throw new Error(`Profile "${profile.name}" has no models`);
-
-    const provider = providers.find((p) => p.id === base.providerId);
-    if (!provider) throw new Error(`Provider not found for id: ${base.providerId}`);
+    const { model: base, provider } = resolveBaseModel(profile, providers);
 
     const kimiType = mapToKimiProviderType(provider.type, provider);
     const providerName = provider.name.toLowerCase().replace(/\s+/g, '-');

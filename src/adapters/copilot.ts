@@ -7,6 +7,7 @@ import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
 import { resolveCustomApiUrl } from '../config/schema.js';
 import { DEFAULT_BASE_URLS } from '../config/defaults.js';
+import { resolveBaseModel } from './resolve-base-model.js';
 
 export interface CopilotConfig {
   [key: string]: unknown;
@@ -48,11 +49,7 @@ export class CopilotAdapter implements AgentAdapter<CopilotConfig> {
   }
 
   buildEnv(profile: Profile, providers: Provider[]): Record<string, string> {
-    const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
-    if (!base) return {};
-
-    const provider = providers.find((p) => p.id === base.providerId);
-    if (!provider) return {};
+    const { model: base, provider } = resolveBaseModel(profile, providers);
 
     let copilotProviderType: string;
     let resolvedUrl: string | undefined;

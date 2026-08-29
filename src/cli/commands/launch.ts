@@ -8,9 +8,10 @@ import { Command } from 'commander';
 import { spawnSync } from 'node:child_process';
 import { readConfig } from '../../config/store.js';
 import { getAgentCommand, listAgents } from '../../agents/registry.js';
+import { describeIncompatibility } from '../../agents/compatibility.js';
 import { launchChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
-import { type ProviderType, LaunchModeSchema, LaunchScopeSchema } from '../../config/schema.js';
+import { LaunchModeSchema, LaunchScopeSchema } from '../../config/schema.js';
 
 const SUPPORTED_AGENT_IDS = listAgents({ dev: true }).map((agent) => agent.id).join(', ');
 
@@ -76,29 +77,11 @@ export function createLaunchCommand(): Command {
 
         const { adapter, command, args } = agentEntry;
 
-        // Validate provider compatibility for every model in the profile
-        const unsupported: ProviderType[] = [];
-        for (const model of profile.models) {
-          const provider = config.providers.find((p) => p.id === model.providerId);
-          if (provider && !(adapter.supportedProviderTypes as readonly string[]).includes(provider.type)) {
-            unsupported.push(provider.type);
-          }
-        }
-        if (unsupported.length > 0) {
-          console.error(
-            `Error: ${adapter.displayName} does not support provider type(s): ${[...new Set(unsupported)].join(', ')}. ` +
-            `Supported: ${adapter.supportedProviderTypes.join(', ')}`
-          );
-          process.exit(1);
-        }
-
-        // Deep compatibility check (e.g. custom-api modes)
-        try {
-          adapter.buildConfig(profile, config.providers);
-        } catch (err) {
-          console.error(
-            `Error: ${adapter.displayName} is not compatible with profile "${profile.name}": ${err instanceof Error ? err.message : String(err)}`
-          );
+        // Same gate the TUI wizard uses to decide which agents to offer, so the
+        // two never disagree about what is launchable.
+        const incompatible = describeIncompatibility(adapter, profile, config.providers);
+        if (incompatible) {
+          console.error(`Error: ${incompatible}`);
           process.exit(1);
         }
 

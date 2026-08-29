@@ -9,6 +9,7 @@ import type { ModelTier, Profile, ProfileModel, Provider } from '../config/schem
 import { resolveCustomApiUrl } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
 import { DEFAULT_ANTHROPIC_BASE_URLS } from '../config/defaults.js';
+import { resolveBaseModel } from './resolve-base-model.js';
 
 export interface ClaudeCodeConfig {
   $schema?: string;
@@ -66,15 +67,8 @@ export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
   }
 
   buildConfig(profile: Profile, providers: Provider[]): ClaudeCodeConfig {
-    const first = profile.models[0];
-    if (!first) throw new Error(`Profile "${profile.name}" has no models`);
-
     // Базовая модель: явный tier=base, иначе первая в списке.
-    const base =
-      profile.models.find((m) => m.tier === 'base') ?? first;
-
-    const baseProvider = providers.find((p) => p.id === base.providerId);
-    if (!baseProvider) throw new Error(`Provider not found for id: ${base.providerId}`);
+    const { model: base, provider: baseProvider } = resolveBaseModel(profile, providers);
 
     // Если в профиле одна модель — она применяется ко всем уровням.
     const small = pickByTier(profile.models, 'small', base);
@@ -149,11 +143,7 @@ export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
    * `apiKeyHelper` written into the config.
    */
   buildEnv(profile: Profile, providers: Provider[]): Record<string, string> {
-    const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
-    if (!base) return {};
-
-    const provider = providers.find((p) => p.id === base.providerId);
-    if (!provider) return {};
+    const { provider } = resolveBaseModel(profile, providers);
 
     return provider.type === 'openrouter'
       ? { ANTHROPIC_AUTH_TOKEN: provider.apiKey }

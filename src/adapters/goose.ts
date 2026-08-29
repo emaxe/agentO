@@ -7,6 +7,7 @@ import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
 import { resolveCustomApiUrl } from '../config/schema.js';
 import { DEFAULT_BASE_URLS } from '../config/defaults.js';
+import { resolveBaseModel } from './resolve-base-model.js';
 
 export interface GooseConfig {
   raw?: string;
@@ -73,11 +74,7 @@ export class GooseAdapter implements AgentAdapter<GooseConfig> {
    *   openai-compat  → GOOSE_PROVIDER=openai + OPENAI_API_KEY + OPENAI_HOST (baseUrl optional, defaults to https://api.openai.com/v1)
    */
   buildEnv(profile: Profile, providers: Provider[]): Record<string, string> {
-    const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
-    if (!base) return {};
-
-    const provider = providers.find((p) => p.id === base.providerId);
-    if (!provider) return {};
+    const { model: base, provider } = resolveBaseModel(profile, providers);
 
     const env: Record<string, string> = {
       GOOSE_MODEL: base.model,

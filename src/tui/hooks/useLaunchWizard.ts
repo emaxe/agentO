@@ -3,9 +3,10 @@ import type { Key } from 'ink';
 import { readConfig, readAgentStatusCache, writeAgentStatusCache, readBackup, deleteBackup } from '../../config/store.js';
 import { restoreBackupManifest } from '../../config/backup-restore.js';
 import { listAgents } from '../../agents/registry.js';
+import { canRunProfile } from '../../agents/compatibility.js';
 import { prepareChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
-import type { AgentId, Profile, Provider, ProviderType, Settings } from '../../config/schema.js';
+import type { AgentId, Profile, Provider, Settings } from '../../config/schema.js';
 import type { AgentRegistryEntry } from '../../agents/registry.js';
 import type { ExecRequest } from '../../launcher/independent.js';
 import type { InstallResult } from '../../installers/base.js';
@@ -38,29 +39,19 @@ export interface LaunchWizardState {
   actionMode: 'update' | 'uninstall' | null;
 }
 
-function getCompatibleAgents(
+/**
+ * Filters the agent list down to the ones that can actually run this profile.
+ *
+ * Delegates to {@link canRunProfile} so the wizard and `agento launch` agree on
+ * what "compatible" means. Exported for tests: this is what decides whether an
+ * agent is offered to the user at all.
+ */
+export function getCompatibleAgents(
   agents: readonly AgentRegistryEntry[],
   profile: Profile,
   providers: Provider[],
 ): AgentRegistryEntry[] {
-  const providerTypes = new Set<ProviderType>();
-  for (const model of profile.models) {
-    const provider = providers.find((p) => p.id === model.providerId);
-    if (provider) providerTypes.add(provider.type);
-  }
-  return agents.filter((a) => {
-    const typesOk = [...providerTypes].every((t) =>
-      (a.adapter.supportedProviderTypes as readonly string[]).includes(t),
-    );
-    if (!typesOk) return false;
-    // Final compatibility check: can the adapter actually build a config for this profile?
-    try {
-      a.adapter.buildConfig(profile, providers);
-      return true;
-    } catch {
-      return false;
-    }
-  });
+  return agents.filter((a) => canRunProfile(a.adapter, profile, providers));
 }
 
 export function useLaunchWizard({

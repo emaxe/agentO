@@ -9,6 +9,7 @@ import type { Profile, Provider } from '../config/schema.js';
 import { resolveCustomApiUrl } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
 import { DEFAULT_BASE_URLS } from '../config/defaults.js';
+import { resolveBaseModel } from './resolve-base-model.js';
 
 export interface QwenModelProviderEntry {
   id: string;
@@ -66,7 +67,7 @@ export class QwenAdapter implements AgentAdapter<QwenConfig> {
     }
 
     // Определяем активную модель (base tier или первая)
-    const baseModel = profile.models.find((m) => m.tier === 'base') ?? profile.models[0]!;
+    const { model: baseModel } = resolveBaseModel(profile, providers);
 
     // Строим список всех моделей, группируем по провайдеру
     const envMap: Record<string, string> = {};

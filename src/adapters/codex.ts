@@ -10,6 +10,7 @@ import type { Profile, Provider } from '../config/schema.js';
 import { resolveCustomApiUrl } from '../config/schema.js';
 import type { BackupManifestFile, WriteBackupFile } from '../config/store.js';
 import { DEFAULT_BASE_URLS } from '../config/defaults.js';
+import { resolveBaseModel } from './resolve-base-model.js';
 
 export interface CodexModelProvider {
   name: string;
@@ -104,11 +105,7 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
   }
 
   buildConfig(profile: Profile, providers: Provider[]): CodexConfig {
-    const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
-    if (!base) throw new Error(`Profile "${profile.name}" has no models`);
-
-    const provider = providers.find((p) => p.id === base.providerId);
-    if (!provider) throw new Error(`Provider not found for id: ${base.providerId}`);
+    const { model: base, provider } = resolveBaseModel(profile, providers);
 
     const providerKey = deriveProviderKey(provider.name);
     const envKey = deriveEnvKey(providerKey);
@@ -160,11 +157,7 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
   }
 
   buildEnv(profile: Profile, providers: Provider[]): Record<string, string> {
-    const base = profile.models.find((m) => m.tier === 'base') ?? profile.models[0];
-    if (!base) return {};
-
-    const provider = providers.find((p) => p.id === base.providerId);
-    if (!provider) return {};
+    const { provider } = resolveBaseModel(profile, providers);
 
     const providerKey = deriveProviderKey(provider.name);
     const envKey = deriveEnvKey(providerKey);

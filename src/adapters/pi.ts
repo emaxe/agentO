@@ -7,6 +7,7 @@ import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
+import { resolveBaseModel } from './resolve-base-model.js';
 
 export interface PiConfig {
   defaultProvider?: string;
@@ -155,10 +156,7 @@ export class PiAdapter implements AgentAdapter<PiConfig> {
   }
 
   buildEnv(profile: Profile, providers: Provider[]): Record<string, string> {
-    const provider = providers.find(
-      (p) => p.id === profile.models[0].providerId,
-    );
-    if (!provider) throw new Error('Provider not found');
+    const { provider } = resolveBaseModel(profile, providers);
 
     const env: Record<string, string> = {};
     const type = provider.type;
