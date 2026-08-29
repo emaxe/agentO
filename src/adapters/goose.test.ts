@@ -288,7 +288,7 @@ describe('GooseAdapter', () => {
       const env = adapter.buildEnv(profile, [customProvider]);
       expect(env.GOOSE_PROVIDER).toBe('anthropic');
       expect(env.ANTHROPIC_API_KEY).toBe('sk-custom');
-      expect(env.ANTHROPIC_HOST).toBe('https://proxy.example.com/v1');
+      expect(env.ANTHROPIC_HOST).toBe('https://proxy.example.com');
     });
 
     it('routes to openai when openai mode enabled', () => {

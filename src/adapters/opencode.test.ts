@@ -259,7 +259,7 @@ describe('OpenCodeAdapter', () => {
     expect('anthropic' in provider).toBe(true);
     const anthropic = provider.anthropic as Record<string, unknown>;
     const options = anthropic.options as Record<string, string>;
-    expect(options.baseURL).toBe('https://proxy.example.com/v1');
+    expect(options.baseURL).toBe('https://proxy.example.com');
   });
 
   it('custom-api provider with openai mode returns @ai-sdk/openai-compatible block', () => {
@@ -283,7 +283,7 @@ describe('OpenCodeAdapter', () => {
     const entry = provider['custom-openai'] as Record<string, unknown>;
     expect(entry.npm).toBe('@ai-sdk/openai-compatible');
     const options = entry.options as Record<string, string>;
-    expect(options.baseURL).toBe('https://proxy.example.com');
+    expect(options.baseURL).toBe('https://proxy.example.com/v1');
   });
 
   it('throws for custom-api provider without compatible mode', () => {

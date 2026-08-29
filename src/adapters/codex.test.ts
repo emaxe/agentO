@@ -173,7 +173,7 @@ describe('CodexAdapter', () => {
       const providers = config.model_providers as Record<string, unknown>;
       const entry = providers['custom'] as Record<string, unknown>;
       expect(entry.wire_api).toBe('responses');
-      expect(entry.base_url).toBe('https://proxy.example.com');
+      expect(entry.base_url).toBe('https://proxy.example.com/v1');
     });
 
     it('throws when no compatible custom-api mode enabled', () => {

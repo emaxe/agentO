@@ -62,6 +62,11 @@ export function normalizeProxyUpstream(url: string): string {
  * and Anthropic-specific headers (`anthropic-version`).
  * Converts `x-api-key` to `Authorization: Bearer`.
  * Re-sets `content-length` from the (possibly rewritten) body length.
+ * Forces `accept-encoding: identity` so upstream never compresses the
+ * response — the openai/responses proxies `JSON.parse` the response body to
+ * translate it back to Anthropic shape, and a gzipped body silently fails
+ * that parse, falling back to passing the untranslated (but auto-decompressed
+ * by the client) response through unconverted.
  */
 export function buildProxyHeaders(
   incomingHeaders: http.IncomingHttpHeaders,
@@ -73,8 +78,10 @@ export function buildProxyHeaders(
     const lower = key.toLowerCase();
     if (lower === 'host' || lower === 'content-length' || lower === 'transfer-encoding') continue;
     if (lower === 'anthropic-version' || lower === 'anthropic-beta') continue;
+    if (lower === 'accept-encoding') continue;
     headers[key] = value;
   }
+  headers['accept-encoding'] = 'identity';
   const apiKey = incomingHeaders['x-api-key'];
   if (apiKey) {
     delete headers['x-api-key'];

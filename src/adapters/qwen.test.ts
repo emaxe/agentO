@@ -202,13 +202,13 @@ describe('QwenAdapter', () => {
       expect(modelProviders.openai![0]!.baseUrl).toBe('https://openrouter.ai/api/v1');
     });
 
-  it('custom-api provider with openai mode uses baseUrl directly', () => {
+  it('custom-api provider with openai mode appends /v1 to baseUrl', () => {
     const customProvider: Provider = {
       id: '00000000-0000-0000-0000-0000000000e1',
       name: 'Custom',
       type: 'custom-api',
       apiKey: 'sk-custom',
-      baseUrl: 'https://proxy.example.com/v1',
+      baseUrl: 'https://proxy.example.com',
       customApiModes: { openai: true, anthropic: false, responses: false },
       models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
     };

@@ -299,7 +299,7 @@ describe('launch/restore integration', () => {
     const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
     const env = config.env as Record<string, string>;
     expect(env['ANTHROPIC_BASE_URL']).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-    expect(mockStartOpenAIProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://proxy.example.com' });
+    expect(mockStartOpenAIProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://proxy.example.com/v1' });
     expect(mockStartAnthropicScrubberProxy).not.toHaveBeenCalled();
 
     await cleanup();

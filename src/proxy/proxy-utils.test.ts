@@ -128,7 +128,15 @@ describe('normalizeProxyUpstream', () => {
 describe('buildProxyHeaders', () => {
   it('removes hop-by-hop headers', () => {
     const h = buildProxyHeaders({ host: 'foo', 'content-length': '4', 'transfer-encoding': 'chunked' });
-    expect(h).toEqual({});
+    expect(h).toEqual({ 'accept-encoding': 'identity' });
+  });
+
+  it('forces accept-encoding: identity so upstream never compresses the response', () => {
+    // The openai/responses proxies JSON.parse the upstream response body to translate it
+    // back to Anthropic shape; a gzipped body silently fails that parse and falls back to
+    // passing the response through untranslated. Forcing identity encoding prevents that.
+    const h = buildProxyHeaders({ 'accept-encoding': 'gzip, deflate, br' });
+    expect(h['accept-encoding']).toBe('identity');
   });
 
   it('strips anthropic-version', () => {

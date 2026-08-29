@@ -200,7 +200,7 @@ describe('ClaudeCodeAdapter', () => {
     };
     const config = adapter.buildConfig(profile, [customProvider]);
     const env = config.env as Record<string, string>;
-    expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com/v1');
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com');
   });
 
   it('throws for custom-api provider without anthropic, openai, or responses mode', () => {
@@ -238,7 +238,7 @@ describe('ClaudeCodeAdapter', () => {
     };
     const config = adapter.buildConfig(profile, [customProvider]);
     const env = config.env as Record<string, string>;
-    expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com');
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com/v1');
     expect(env.ANTHROPIC_MODEL).toBe('gpt-4');
     expect(config.apiKeyHelper).toBe("bash -c 'echo sk-custom'");
   });
@@ -260,7 +260,7 @@ describe('ClaudeCodeAdapter', () => {
     };
     const config = adapter.buildConfig(profile, [customProvider]);
     const env = config.env as Record<string, string>;
-    expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com/v1');
+    expect(env.ANTHROPIC_BASE_URL).toBe('https://proxy.example.com');
     expect(config.model).toBe('claude-3-sonnet');
   });
 

@@ -62,9 +62,19 @@ export function capabilityMarker(caps: ModelCapabilities): string {
 /**
  * Resolves the effective API base URL for a provider.
  * For `custom-api`, it appends the endpoint suffix based on the requested mode:
- *   openai       → baseUrl
- *   anthropic    → baseUrl + '/messages'
- *   responses    → baseUrl + '/responses'
+ *   openai       → baseUrl + '/v1'   (client appends only /chat/completions —
+ *                  see DEFAULT_BASE_URLS in defaults.ts, which bakes /v1 into
+ *                  every OpenAI-style default for the same reason)
+ *   anthropic    → baseUrl           (client appends its own /v1/messages —
+ *                  see DEFAULT_ANTHROPIC_BASE_URLS in defaults.ts for the same convention)
+ *   responses    → baseUrl + '/v1/responses'
+ * The two conventions are opposite on purpose: Anthropic-style clients (Claude Code,
+ * the Anthropic SDK, Vercel `@ai-sdk/anthropic`) insert `/v1` themselves before
+ * `/messages`, so adding it here would double it up. OpenAI-style consumers (Qwen,
+ * OpenCode/Kilo/Copilot in openai mode, Codex) do not insert a version segment at
+ * all — they only ever append the endpoint path — so `/v1` must be added here or
+ * requests land on the wrong path entirely (e.g. a bare custom-api host without
+ * `/v1` produced a 404 web-app fallback page for Qwen instead of hitting the API).
  * Returns `undefined` when the provider is not custom-api or the requested mode is not enabled.
  */
 export function resolveCustomApiUrl(
@@ -77,7 +87,7 @@ export function resolveCustomApiUrl(
   if (!provider.customApiModes?.[mode]) {
     return undefined;
   }
-  const suffix = mode === 'openai' ? '' : mode === 'anthropic' ? '/v1' : '/v1/responses';
+  const suffix = mode === 'anthropic' ? '' : mode === 'openai' ? '/v1' : '/v1/responses';
   return provider.baseUrl ? provider.baseUrl + suffix : undefined;
 }
 

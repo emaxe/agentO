@@ -232,7 +232,7 @@ describe('CopilotAdapter', () => {
       };
       const env = adapter.buildEnv(profile, [customProvider]);
       expect(env.COPILOT_PROVIDER_TYPE).toBe('anthropic');
-      expect(env.COPILOT_PROVIDER_BASE_URL).toBe('https://proxy.example.com/v1');
+      expect(env.COPILOT_PROVIDER_BASE_URL).toBe('https://proxy.example.com');
     });
 
     it('sets COPILOT_PROVIDER_TYPE to openai when openai mode enabled', () => {
@@ -252,7 +252,7 @@ describe('CopilotAdapter', () => {
       };
       const env = adapter.buildEnv(profile, [customProvider]);
       expect(env.COPILOT_PROVIDER_TYPE).toBe('openai');
-      expect(env.COPILOT_PROVIDER_BASE_URL).toBe('https://proxy.example.com');
+      expect(env.COPILOT_PROVIDER_BASE_URL).toBe('https://proxy.example.com/v1');
     });
 
     it('sets COPILOT_PROVIDER_WIRE_API to responses for responses mode', () => {
