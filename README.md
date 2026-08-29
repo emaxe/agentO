@@ -13,15 +13,15 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 
 | Agent | Command | Config Format | Supported Providers | Special Features |
 |-------|---------|---------------|---|------------------|
-| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic`, `fireworks`, `openrouter`, `openai-compatible`, `responses-compatible` | Multi-tier support (small/base/smart). Uses local proxy for non-Anthropic providers. |
-| [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Full function calling support via Vercel AI SDK |
-| [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter` | OpenAI-compatible API structure |
-| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `openai-compatible`, `fireworks`, `openrouter` | `wire_api: responses`. Profile stored in separate `default.config.toml`. |
-| [Kimi Code](https://www.kimi.com/code) | `kimi` | JSON | `openai-compatible`, `fireworks`, `openrouter` | Config delivered via `~/.kimi-cli/.env` (`DEFAULT_PROVIDER`, `DEFAULT_MODEL`, `BASE_URL`). |
-| [Kilo Code](https://github.com/Kilo-Org/kilo-code) | `kilo` | JSON | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Reads `defaultProvider`/`defaultModel` from `~/.kilocode/settings.json`. Custom `baseUrl` from `~/.kilocode/models.json`. |
+| [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic-compatible`, `fireworks`, `openrouter`, `custom-api`, `openai-compatible`, `responses-compatible` | Multi-tier support (small/base/smart). Uses local proxy for non-Anthropic providers. |
+| [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Full function calling support via Vercel AI SDK |
+| [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | OpenAI-compatible API structure |
+| [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `openai-compatible`, `responses-compatible`, `fireworks`, `openrouter`, `custom-api` | `wire_api: responses`. Profile stored in separate `default.config.toml`. |
+| [Kimi Code](https://www.kimi.com/code) | `kimi` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Config delivered via `~/.kimi-cli/.env` (`DEFAULT_PROVIDER`, `DEFAULT_MODEL`, `BASE_URL`). |
+| [Kilo Code](https://github.com/Kilo-Org/kilo-code) | `kilo` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Reads `defaultProvider`/`defaultModel` from `~/.kilocode/settings.json`. Custom `baseUrl` from `~/.kilocode/models.json`. |
 | [PI](https://github.com/withpi/pi) | `pi` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | Reads `defaultProvider`/`defaultModel` from `~/.pi/agent/settings.json`. Custom `baseUrl` from `~/.pi/agent/models.json`. |
-| [Copilot](https://github.com/github/gh-copilot) | `copilot` | env vars only | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Config delivered entirely via env vars — no settings file patched. |
-| [Goose](https://goose-docs.ai) | `goose` | env vars only | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | Config delivered entirely via env vars (`GOOSE_PROVIDER`, `GOOSE_MODEL`). |
+| [Copilot](https://github.com/github/gh-copilot) | `copilot` | env vars only | `openai-compatible`, `anthropic-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Config delivered entirely via env vars — no settings file patched. |
+| [Goose](https://goose-docs.ai) | `goose` | env vars only | `openai-compatible`, `anthropic-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Config delivered entirely via env vars (`GOOSE_PROVIDER`, `GOOSE_MODEL`). |
 
 ## Installation
 
@@ -47,16 +47,35 @@ npx @emaxe/agento
 
 | Provider Type | Compatible Agents | Examples |
 |---|---|---|
-| `anthropic` | claude-code, opencode, copilot, goose | Anthropic |
-| `openai-compatible` | opencode, qwen, copilot, goose | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek, etc. |
-| `fireworks` | claude-code, opencode, qwen, codex, copilot, goose | Fireworks AI (supports all 3 API types) |
-| `openrouter` | claude-code, opencode, qwen, codex, copilot, goose | [OpenRouter](https://openrouter.ai) — universal LLM gateway (Anthropic Skin / OpenAI / Responses API) |
-| `responses-compatible` | claude-code | OpenAI and any provider that speaks the OpenAI Responses API |
+| `openai-compatible` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek, etc. |
+| `anthropic-compatible` | claude-code, opencode, copilot, goose, pi, kilo, kimi | Anthropic, and any endpoint speaking the Anthropic Messages API |
+| `fireworks` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi | Fireworks AI (supports all 3 API types) |
+| `openrouter` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi | [OpenRouter](https://openrouter.ai) — universal LLM gateway (Anthropic Skin / OpenAI / Responses API) |
+| `responses-compatible` | claude-code, opencode, codex, copilot, goose, kilo, kimi | OpenAI and any provider that speaks the OpenAI Responses API |
+| `custom-api` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi | Any self-hosted or gateway endpoint; pick the wire protocols it speaks via `customApiModes` |
 
 **Notes:**
-- `claude-code` works with all 5 provider types. For non-`anthropic` providers, a local proxy handles protocol translation: Anthropic Scrubber for `fireworks`/`openrouter`; OpenAI-to-Anthropic proxy for `openai-compatible`; Responses Proxy for `responses-compatible`. For `openrouter` it uses OpenRouter's **Anthropic Skin** with `ANTHROPIC_AUTH_TOKEN` (Bearer auth).
-- `copilot` and `goose` work with all 4 standard provider types; config is delivered entirely via environment variables (no settings file is patched).
-- `openrouter` is the most flexible standard type — works with all 6 agents.
+- `claude-code` works with all 6 provider types. For non-`anthropic-compatible` providers, a local proxy handles protocol translation: Anthropic Scrubber for `fireworks`/`openrouter`; OpenAI-to-Anthropic proxy for `openai-compatible`; Responses Proxy for `responses-compatible`. For `openrouter` it uses OpenRouter's **Anthropic Skin** with `ANTHROPIC_AUTH_TOKEN` (Bearer auth).
+- `copilot` and `goose` work with every provider type; config is delivered entirely via environment variables (no settings file is patched).
+- `custom-api` is the escape hatch for a self-hosted endpoint or gateway: set `baseUrl` and enable the wire protocols it actually speaks via `customApiModes` (`openai`, `anthropic`, `responses`). At least one mode is required. AgentO appends the right suffix per mode — `/v1` for openai, nothing for anthropic (the client adds `/v1/messages` itself), `/v1/responses` for responses.
+- `qwen` and `codex` are the only agents that cannot use `anthropic-compatible`; `qwen` and `pi` are the only ones that cannot use `responses-compatible`.
+
+## API Keys & Git Safety
+
+Provider API keys live in `~/.agento/config.json` (directory mode `0700`, file mode `0600`) and are handed to the launched agent through its environment. They are **never** written into a generated agent config file.
+
+The one thing to know about **project scope**: in that mode AgentO writes the agent's config *inside your repository* (`.claude/settings.json`, `.codex/config.toml`, …), and several of those paths are conventionally committed — Claude Code, for instance, treats `.claude/settings.json` as the shared team file and only gitignores `settings.local.json`.
+
+So on every project-scope launch AgentO appends the generated paths to `.git/info/exclude` and tells you it did:
+
+```
+Warning: Generated agent config may contain your API key; added to .git/info/exclude
+so it is not committed: /.claude/settings.json
+```
+
+`.git/info/exclude` is local-only and never committed, so your project's own `.gitignore` is left untouched. Paths outside the repository are skipped, and repeated launches do not duplicate entries. If AgentO cannot write the file it says so rather than failing the launch — heed that warning before committing.
+
+Prefer `global` scope (`-s global`, or Settings → Default config scope in the TUI) if you would rather agent configs never touch your repositories at all.
 
 ## Model Capability Flags
 
@@ -87,7 +106,7 @@ Defaults when adding a model: `image=true`, `video=false`, `audio=false`.
 # Anthropic provider
 agento provider add \
   -n "Anthropic" \
-  -t anthropic \
+  -t anthropic-compatible \
   -k "sk-ant-your-key" \
   -M "claude-sonnet-4-20250514,claude-3-5-haiku-20241022"
 
@@ -262,8 +281,9 @@ Use **TUI** for exploration and interactive workflows. Use **CLI** for scripting
 | **responses-compatible** | ✅ (via Responses Proxy) | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 **Key Constraints:**
-- `claude-code` works with all 4 provider types; non-`anthropic` providers use a local proxy for protocol translation
+- `claude-code` works with all 6 provider types; non-`anthropic-compatible` providers use a local proxy for protocol translation
 - For `openrouter` Claude Code uses `ANTHROPIC_AUTH_TOKEN` (Bearer) — not `apiKeyHelper`
+- Provider API keys are never written into a generated config file; they are passed to the agent through the environment
 - `copilot` and `goose` deliver all config via env vars — no settings file is ever patched or restored
 - `fireworks` and `openrouter` are the most flexible — work with all 6 agents
 
@@ -315,7 +335,7 @@ agento provider remove <name>                 # Remove a provider
 ```
 
 **Base URL Defaults:**
-- `anthropic`: Uses Anthropic's default endpoint
+- `anthropic-compatible`: Uses Anthropic's default endpoint (`https://api.anthropic.com`)
 - `fireworks`: Auto-defaults to `https://api.fireworks.ai/inference` if not specified
 - `openrouter`: Auto-defaults to `https://openrouter.ai/api/v1` (Claude Code: `https://openrouter.ai/api`) if not specified
 - `openai-compatible`: Auto-defaults to `https://api.openai.com/v1`; for non-standard providers specify explicitly with `-u`
@@ -415,24 +435,24 @@ AgentO stores its configuration in `~/.agento/config.json`:
 
 Each supported agent has a dedicated adapter that translates AgentO's generic config format into the agent's specific configuration:
 
-- **Claude Code** (supports `anthropic`, `fireworks`, `openrouter`, `openai-compatible`, `responses-compatible`): Generates `~/.claude/settings.json` with tier-based model selection and ANTHROPIC_* env vars. Uses Anthropic SDK.
+- **Claude Code** (supports `anthropic-compatible`, `fireworks`, `openrouter`, `custom-api`, `openai-compatible`, `responses-compatible`): Generates `~/.claude/settings.json` with tier-based model selection and ANTHROPIC_* env vars. Uses Anthropic SDK. The API key is **not** written into the file — `apiKeyHelper` reads it from `AGENTO_ANTHROPIC_API_KEY`, which AgentO injects into the agent's environment.
   - For `openrouter` and `fireworks`: automatically starts a local **Anthropic Scrubber proxy** that strips unsupported fields (e.g., `context_management`) from requests before forwarding to the upstream.
   - For `openai-compatible`: automatically starts a local **OpenAI-to-Anthropic proxy** (`src/proxy/openai-proxy.ts`) that translates OpenAI API requests/responses (including SSE streaming) to Anthropic format, then forwards to the upstream.
   - For `responses-compatible`: automatically starts a local **Responses Proxy** (`src/proxy/responses-proxy.ts`) that translates Anthropic requests to the OpenAI Responses API format with streaming support.
   - For `openrouter`: uses OpenRouter's **Anthropic Skin** — sets `ANTHROPIC_AUTH_TOKEN` (Bearer) + empty `ANTHROPIC_API_KEY`, no `apiKeyHelper`. Base URL: `https://openrouter.ai/api`.
   - Capability flags are not propagated (Anthropic SDK doesn't expose modality config)
   
-- **OpenCode** (supports `anthropic`, `openai-compatible`, `fireworks`): Generates `~/.config/opencode/config.json` using Vercel AI SDK with provider-prefixed model names. Full function calling support via `@ai-sdk/openai-compatible`. Emits per-model `modalities: { input: [...], output: ["text"] }` derived from capability flags.
+- **OpenCode** (supports `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api`): Generates `~/.config/opencode/config.json` using Vercel AI SDK with provider-prefixed model names. Full function calling support via `@ai-sdk/openai-compatible`. Emits per-model `modalities: { input: [...], output: ["text"] }` derived from capability flags.
   
-- **Qwen CLI** (supports `openai-compatible`, `fireworks`): Generates `~/.qwen/settings.json` with OpenAI-compatible provider structure. Requires `baseUrl` for all providers. Auto-defaults for `fireworks` type. Passes capability flags via `generationConfig.modalities`.
+- **Qwen CLI** (supports `openai-compatible`, `fireworks`, `openrouter`, `custom-api`): Generates `~/.qwen/settings.json` with OpenAI-compatible provider structure. Requires `baseUrl` for all providers. Auto-defaults for `fireworks` type. Passes capability flags via `generationConfig.modalities`.
   
 - **Codex CLI**: Generates `~/.codex/config.toml` with `wire_api: responses` and `model_providers`, plus a separate `~/.codex/default.config.toml` (flat `model` + `model_provider`) for the active profile. In project scope, splits config between global (`model_providers` + base `model`) and project (`model`) configs. Supports all provider types. Capability flags are not propagated (Codex `responses` API has no modality config).
 
-- **Copilot** (supports all 4 provider types): No settings file is written. All config is delivered at launch via `COPILOT_MODEL`, `COPILOT_PROVIDER_TYPE`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_PROVIDER_BASE_URL`. Provider types `fireworks` and `openrouter` map to `COPILOT_PROVIDER_TYPE=openai`. Auto-enables `COPILOT_PROVIDER_WIRE_API=responses` for gpt-5 family models.
+- **Copilot** (supports every provider type): No settings file is written. All config is delivered at launch via `COPILOT_MODEL`, `COPILOT_PROVIDER_TYPE`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_PROVIDER_BASE_URL`. Provider types `fireworks` and `openrouter` map to `COPILOT_PROVIDER_TYPE=openai`. Auto-enables `COPILOT_PROVIDER_WIRE_API=responses` for gpt-5 family models.
 
 **Conservative Config Merge:** When `mergeAgentConfigs=true` (default), Claude Code, Qwen, and OpenCode adapters preserve unknown top-level keys from the existing config. Only keys generated by AgentO are overwritten. Nested objects are replaced whole, except `env` keys which are merged flat (existing env vars not managed by AgentO are kept). Copilot and Goose are unaffected (env-only, no config file mutation). Codex uses its own split-file merge logic and ignores this flag.
 
-- **Goose** (supports all 4 provider types): No settings file is written. All config is delivered via `GOOSE_PROVIDER` + `GOOSE_MODEL` + provider-specific keys. `anthropic` → `ANTHROPIC_API_KEY`; `openrouter` → `OPENROUTER_API_KEY`; `fireworks` / `openai-compatible` → `OPENAI_API_KEY` + `OPENAI_HOST`. Trailing `/v1` is stripped from `OPENAI_HOST` (Goose appends its own `/v1/chat/completions`).
+- **Goose** (supports every provider type): No settings file is written. All config is delivered via `GOOSE_PROVIDER` + `GOOSE_MODEL` + provider-specific keys. `anthropic-compatible` → `ANTHROPIC_API_KEY`; `openrouter` → `OPENROUTER_API_KEY`; `fireworks` / `openai-compatible` → `OPENAI_API_KEY` + `OPENAI_HOST`. Trailing `/v1` is stripped from `OPENAI_HOST` (Goose appends its own `/v1/chat/completions`).
 
 ### Backup & Restore
 
@@ -483,7 +503,7 @@ src/
 
 ### Qwen CLI with Missing Base URL
 
-**Problem:** Qwen requires `baseUrl` for all providers. Using `anthropic` type without URL will error.
+**Problem:** Qwen requires `baseUrl` for all providers. Qwen does not accept `anthropic-compatible` at all, and any other type without a URL will error.
 
 **Solution:** Always provide `-u` for Qwen with non-standard providers, or use `fireworks` type which auto-defaults.
 
