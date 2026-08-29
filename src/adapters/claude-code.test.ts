@@ -281,7 +281,6 @@ describe('ClaudeCodeAdapter', () => {
       await adapter.writeConfig(config, 'project', dir);
       const filePath = join(dir, '.claude', 'settings.json');
       const info = await stat(filePath);
-      // eslint-disable-next-line no-bitwise
       expect(info.mode & 0o777).toBe(0o600);
     } finally {
       await rm(dir, { recursive: true, force: true });

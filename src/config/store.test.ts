@@ -250,7 +250,6 @@ describe('config store', () => {
     const configPath = join(testDir, '.agento', 'config.json');
     const { stat: fsStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
     const info = await fsStat(configPath);
-    // eslint-disable-next-line no-bitwise
     expect(info.mode & 0o777).toBe(0o600);
   });
 
@@ -264,9 +263,7 @@ describe('config store', () => {
     const { stat: fsStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
     const fileInfo = await fsStat(backupPath);
     const dirInfo = await fsStat(join(testDir, '.agento', 'backups', 'claude-code'));
-    // eslint-disable-next-line no-bitwise
     expect(fileInfo.mode & 0o777).toBe(0o600);
-    // eslint-disable-next-line no-bitwise
     expect(dirInfo.mode & 0o777).toBe(0o700);
   });
 

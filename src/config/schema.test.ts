@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ProviderSchema, resolveCustomApiUrl, type Provider } from './schema.js';
+import { AgentOConfigSchema, ProviderSchema, resolveCustomApiUrl, type Provider } from './schema.js';
 
 // Regression coverage for two related custom-api URL bugs:
 //
@@ -52,5 +52,52 @@ describe('resolveCustomApiUrl', () => {
     const resolved = resolveCustomApiUrl(parsed, 'openai');
     expect(resolved).toBe('https://opencode.ai/zen/v1');
     expect(resolved).not.toMatch(/\/v1\/v1/);
+  });
+});
+
+// zod 4 tightened `.uuid()` to enforce RFC 9562 version/variant bits. Every id in
+// a stored config was produced by randomUUID() and is a valid v4, but configs are
+// hand-edited often enough that silently rejecting a well-formed-but-not-v4 id on
+// read would lock users out of their own providers. `z.guid()` keeps zod 3's
+// permissive 8-4-4-4-12 check.
+describe('id validation stays permissive across the zod 4 upgrade', () => {
+  const provider = {
+    id: '00000000-0000-0000-0000-0000000000e2',
+    name: 'Hand written',
+    type: 'openai-compatible' as const,
+    apiKey: 'sk-x',
+    baseUrl: 'https://api.example.com/v1',
+    models: [{ name: 'm', capabilities: { image: true, video: false, audio: false } }],
+  };
+
+  it('accepts an id that is well-formed but not an RFC v4 UUID', () => {
+    expect(ProviderSchema.parse(provider).id).toBe(provider.id);
+  });
+
+  it('still rejects a malformed id', () => {
+    expect(ProviderSchema.safeParse({ ...provider, id: 'not-an-id' }).success).toBe(false);
+  });
+});
+
+// zod 4 changed `.default()` to short-circuit instead of parsing the fallback;
+// the schemas use `.prefault()` so nested field defaults keep filling in.
+describe('nested defaults survive the zod 4 upgrade', () => {
+  it('fills model capabilities when the object is omitted', () => {
+    const parsed = ProviderSchema.parse({
+      id: '00000000-0000-0000-0000-000000000001',
+      name: 'P',
+      type: 'openai-compatible',
+      apiKey: 'sk-x',
+      models: [{ name: 'm' }],
+    });
+    expect(parsed.models[0]?.capabilities).toEqual({ image: true, video: false, audio: false });
+  });
+
+  it('fills settings defaults for an empty config', () => {
+    expect(AgentOConfigSchema.parse({}).settings).toEqual({
+      defaultLaunchMode: 'child',
+      defaultConfigScope: 'project',
+      mergeAgentConfigs: true,
+    });
   });
 });

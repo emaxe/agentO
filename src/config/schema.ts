@@ -31,14 +31,14 @@ export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
 // Модель провайдера с capabilities
 export const ModelConfigSchema = z.object({
   name: z.string().min(1),
-  capabilities: ModelCapabilitiesSchema.default({}),
+  capabilities: ModelCapabilitiesSchema.prefault({}),
 });
 export type ModelConfig = z.infer<typeof ModelConfigSchema>;
 
 // Провайдер API (REQ-1)
 export const ProviderSchema = z
   .object({
-    id: z.string().uuid(),
+    id: z.guid(),
     name: z.string().min(1),
     type: ProviderTypeSchema,
     apiKey: z.string().min(1),
@@ -97,7 +97,7 @@ export type ModelTier = z.infer<typeof ModelTierSchema>;
 
 // Пара провайдер+модель в профиле
 export const ProfileModelSchema = z.object({
-  providerId: z.string().uuid(),
+  providerId: z.guid(),
   model: z.string().min(1),
   tier: ModelTierSchema.optional(),
 });
@@ -105,7 +105,7 @@ export type ProfileModel = z.infer<typeof ProfileModelSchema>;
 
 // Профиль (REQ-2)
 export const ProfileSchema = z.object({
-  id: z.string().uuid(),
+  id: z.guid(),
   name: z.string().min(1),
   models: z.array(ProfileModelSchema).min(1),
 });
@@ -135,10 +135,10 @@ export type Settings = z.infer<typeof SettingsSchema>;
 export const AgentOConfigSchema = z.object({
   providers: z.array(ProviderSchema).default([]),
   profiles: z.array(ProfileSchema).default([]),
-  settings: SettingsSchema.default({}),
+  settings: SettingsSchema.prefault({}),
 });
 export type AgentOConfig = z.infer<typeof AgentOConfigSchema>;
 
 // Базовый тип конфига агента (REQ-7)
-export const AgentConfigSchema = z.record(z.unknown());
+export const AgentConfigSchema = z.record(z.string(), z.unknown());
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
