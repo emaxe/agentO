@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { spawn } from 'node:child_process';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AgentAdapter } from '../adapters/base.js';
 import type { Profile, Provider } from '../config/schema.js';
 
@@ -66,13 +66,26 @@ function makeFakeChildProcess(): EventEmitter & { kill: ReturnType<typeof vi.fn>
   return Object.assign(new EventEmitter(), { kill: vi.fn(() => true) });
 }
 
+/** Fires the process-level handler agento registered for `signal`. */
+function raise(signal: 'SIGINT' | 'SIGTERM'): void {
+  for (const listener of process.listeners(signal)) {
+    (listener as (s: string) => void)(signal);
+  }
+}
+
 describe('prepareChild', () => {
+  let exitSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     vi.clearAllMocks();
     mockWriteBackup.mockResolvedValue(undefined);
     mockReadBackup.mockResolvedValue(null);
     mockUnlink.mockResolvedValue(undefined);
     mockSpawn.mockReset();
+  });
+
+  afterEach(() => {
   });
 
   it('backs up current config before writing new one', async () => {
@@ -267,5 +280,130 @@ describe('prepareChild', () => {
     expect(consoleError).toHaveBeenCalledWith('Failed to launch claude:', 'boom');
 
     consoleError.mockRestore();
+  });
+  it('forwards a signal to the agent and waits for it to exit before restoring config', async () => {
+    const adapter = makeAdapter(null);
+    const child = makeFakeChildProcess();
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+
+    void launchChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
+
+    raise('SIGINT');
+
+    // The agent is still alive: restoring its config now would race with
+    // whatever it is writing, so nothing may have been read back yet.
+    expect(child.kill).toHaveBeenCalledWith('SIGINT');
+    expect(mockReadBackup).not.toHaveBeenCalled();
+
+    child.emit('exit', 130);
+    await vi.waitFor(() => expect(mockReadBackup).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1));
+
+  });
+
+  it('restores the config only once when a signal is followed by the agent exiting', async () => {
+    const adapter = makeAdapter(null);
+    const child = makeFakeChildProcess();
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+
+    void launchChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
+
+    raise('SIGTERM');
+    child.emit('exit', 143);
+    child.emit('exit', 143);
+
+    await vi.waitFor(() => expect(mockReadBackup).toHaveBeenCalledTimes(1));
+    expect(mockReadBackup).toHaveBeenCalledTimes(1);
+
+  });
+
+  it('escalates to SIGKILL when a second signal arrives', async () => {
+    const adapter = makeAdapter(null);
+    const child = makeFakeChildProcess();
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+
+    void launchChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
+
+    raise('SIGINT');
+    raise('SIGINT');
+
+    expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGINT');
+    expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL');
+
+    child.emit('exit', null);
+    await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1));
+  });
+
+  it('escalates to SIGKILL when the agent ignores the signal past the grace period', async () => {
+    vi.useFakeTimers();
+    try {
+      const adapter = makeAdapter(null);
+      const child = makeFakeChildProcess();
+      mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+
+      void launchChild({
+        adapter,
+        profile: testProfile,
+        providers: [testProvider],
+        scope: 'global',
+        command: 'claude',
+      });
+      await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
+
+      raise('SIGTERM');
+      expect(child.kill).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+
+      // Let the launch settle so its handlers are unregistered.
+      child.emit('exit', null);
+      await vi.waitFor(() => expect(mockReadBackup).toHaveBeenCalled());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('unregisters its signal handlers once the agent has exited', async () => {
+    const adapter = makeAdapter(null);
+    const child = makeFakeChildProcess();
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+
+    const before = process.listenerCount('SIGINT');
+    const launch = launchChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
+    expect(process.listenerCount('SIGINT')).toBe(before + 1);
+
+    child.emit('exit', 0);
+    await launch;
+
+    expect(process.listenerCount('SIGINT')).toBe(before);
   });
 });

@@ -31,11 +31,6 @@ program.addCommand(createProfileCommand());
 program.addCommand(createRestoreCommand());
 program.addCommand(createAgentCommand());
 
-/** Returns true if error looks like ENOENT from spawn/spawnSync. */
-function isEnoent(err: unknown): boolean {
-  return err instanceof Error && 'code' in err && (err as { code: unknown }).code === 'ENOENT';
-}
-
 /** Spawn a child process asynchronously, returning its exit code. */
 function spawnAsync(
   command: string,
@@ -65,39 +60,18 @@ function spawnAsync(
 // Default action: launch interactive TUI
 program.action(() => {
   const opts = program.opts() as { dev?: boolean };
-  import('../src/tui/start.js')
-    .then(async ({ startTui }) => {
-      let execReq = await startTui({ dev: opts.dev });
-      while (execReq) {
-        // Ink may leave stdin in "flowing" state — pause before handing fd to child
-        process.stdin.pause();
-        // Printed here rather than inside the TUI: writing to stdout while Ink
-        // renders would corrupt the frame.
-        for (const warning of execReq.warnings ?? []) {
-          console.warn(`Warning: ${warning}`);
-        }
-        try {
-          await spawnAsync(execReq.command, execReq.args, execReq.env);
-        } catch (err) {
-          if (isEnoent(err)) {
-            await execReq.cleanup?.();
-            execReq = await startTui({
-              dev: opts.dev,
-              launchError: {
-                agentId: execReq.agentId ?? execReq.command,
-                profileId: execReq.profileId,
-                error: `Command "${execReq.command}" not found`,
-              },
-            });
-            continue;
-          }
-          throw err;
-        }
-        await execReq.cleanup?.();
-        if (!execReq.relaunch) break;
-        execReq = await startTui({ dev: opts.dev });
-      }
-    })
+  Promise.all([import('../src/tui/start.js'), import('../src/tui/run-loop.js')])
+    .then(([{ startTui }, { runTuiLoop }]) =>
+      runTuiLoop(
+        {
+          startTui,
+          spawnAgent: spawnAsync,
+          // Ink may leave stdin in "flowing" state — pause before handing fd to child
+          beforeSpawn: () => process.stdin.pause(),
+        },
+        { dev: opts.dev },
+      ),
+    )
     .catch(console.error);
 });
 

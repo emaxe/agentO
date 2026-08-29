@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock child_process before importing the module under test
 vi.mock('node:child_process', () => ({
@@ -109,5 +109,92 @@ describe('ShellPathResolver', () => {
     expect(result).toContain('/opt/homebrew/bin');
     expect(result).toContain('/usr/local/bin');
     expect(result).not.toContain('\x1b');
+  });
+});
+
+describe('ShellPathResolver on Windows', () => {
+  const originalPath = process.env.PATH;
+  const originalWinPath = process.env.Path;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    process.env.PATH = originalPath;
+    if (originalWinPath === undefined) delete process.env.Path;
+    else process.env.Path = originalWinPath;
+  });
+
+  it('never invokes a login shell', async () => {
+    // /bin/zsh does not exist on Windows; probing for it only wasted a timeout
+    // and then fell back to a POSIX path list that CreateProcess cannot use.
+    process.env.Path = 'C:\\Windows\\system32;C:\\Users\\me\\AppData\\Roaming\\npm';
+    const resolver = new ShellPathResolver({ platform: 'win32' });
+
+    const result = await resolver.resolve();
+
+    expect(mockExecFile).not.toHaveBeenCalled();
+    expect(result).toBe('C:\\Windows\\system32;C:\\Users\\me\\AppData\\Roaming\\npm');
+  });
+
+  it('splits on ; so the PATH is not collapsed into one bogus entry', async () => {
+    // Splitting on ':' turned the whole Windows PATH into a single element —
+    // and 'C' plus a drive letter is not a directory.
+    process.env.Path = 'C:\\a;C:\\b;C:\\a';
+    const resolver = new ShellPathResolver({ platform: 'win32' });
+
+    expect((await resolver.resolve()).split(';')).toEqual(['C:\\a', 'C:\\b']);
+  });
+
+  it('adds no POSIX fallback directories', async () => {
+    process.env.Path = 'C:\\Windows\\system32';
+    const resolver = new ShellPathResolver({ platform: 'win32' });
+
+    const result = await resolver.resolve();
+
+    expect(result).not.toContain('/usr/bin');
+    expect(result).not.toContain('/opt/homebrew/bin');
+  });
+
+  it('falls back to PATH when Path is unset', async () => {
+    delete process.env.Path;
+    process.env.PATH = 'C:\\only';
+    const resolver = new ShellPathResolver({ platform: 'win32' });
+
+    expect(await resolver.resolve()).toBe('C:\\only');
+  });
+});
+
+describe('ShellPathResolver shell selection', () => {
+  const originalShell = process.env.SHELL;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (originalShell === undefined) delete process.env.SHELL;
+    else process.env.SHELL = originalShell;
+  });
+
+  it('uses the user login shell', async () => {
+    // Hardcoding /bin/zsh made the probe fail outright on a Linux box where zsh
+    // is not installed, silently degrading every launch to the fallback PATH.
+    process.env.SHELL = '/usr/bin/fish';
+    mockExecFileSuccess('/usr/local/bin');
+
+    await new ShellPathResolver({ platform: 'linux' }).resolve();
+
+    expect(mockExecFile.mock.calls[0]?.[0]).toBe('/usr/bin/fish');
+  });
+
+  it('falls back to /bin/zsh when SHELL is unset', async () => {
+    delete process.env.SHELL;
+    mockExecFileSuccess('/usr/local/bin');
+
+    await new ShellPathResolver({ platform: 'darwin' }).resolve();
+
+    expect(mockExecFile.mock.calls[0]?.[0]).toBe('/bin/zsh');
   });
 });

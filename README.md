@@ -42,6 +42,12 @@ npx @emaxe/agento
 
 - Node.js ≥ 18
 - One or more supported AI agent CLI tools installed
+- **macOS or Linux.** Windows is not supported today: launching an agent and
+  installing one both go through `spawn(..., { shell: false })`, and npm-installed
+  CLIs on Windows are `.cmd` shims that this cannot execute. The TUI opens and
+  config management works, but agents will not start and every agent shows as "not
+  installed". See [docs/windows-cross-platform-report.md](docs/windows-cross-platform-report.md)
+  for the full breakdown and the roadmap.
 
 ## Supported Provider Types
 
