@@ -26,7 +26,10 @@ export function ProfileDetail({
           const p = providers.find((pr) => pr.id === m.providerId);
           return (
             <Text key={i} color={i === selectedModel ? 'green' : undefined}>
-              {i === selectedModel ? '▶ ' : '  '}{m.model}{m.tier ? ` [${m.tier}]` : ''} (provider: {p?.name ?? m.providerId.slice(0, 8) + '...'})
+              {i === selectedModel ? '▶ ' : '  '}
+              {m.model}
+              {m.tier ? ` [${m.tier}]` : ''} (provider:{' '}
+              {p?.name ?? m.providerId.slice(0, 8) + '...'})
             </Text>
           );
         })}

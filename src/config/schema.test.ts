@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { AgentOConfigSchema, ProviderSchema, resolveCustomApiUrl, type Provider } from './schema.js';
+import {
+  AgentOConfigSchema,
+  ProviderSchema,
+  resolveCustomApiUrl,
+  type Provider,
+} from './schema.js';
 
 // Regression coverage for two related custom-api URL bugs:
 //
@@ -33,7 +38,9 @@ describe('resolveCustomApiUrl', () => {
   });
 
   it('responses mode appends /v1/responses', () => {
-    expect(resolveCustomApiUrl(baseProvider, 'responses')).toBe('https://opencode.ai/zen/v1/responses');
+    expect(resolveCustomApiUrl(baseProvider, 'responses')).toBe(
+      'https://opencode.ai/zen/v1/responses',
+    );
   });
 
   it('anthropic mode never re-introduces a doubled /v1/v1 segment when baseUrl already ends in /v1', () => {

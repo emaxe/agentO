@@ -46,7 +46,12 @@ export interface AgentAdapter<TConfig extends AgentConfig = AgentConfig> {
   buildConfig(profile: Profile, providers: Provider[]): TConfig;
 
   /** Записывает конфиг агента для указанного scope */
-  writeConfig(config: TConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void>;
+  writeConfig(
+    config: TConfig,
+    scope: LaunchScope,
+    cwd?: string,
+    mergeEnabled?: boolean,
+  ): Promise<void>;
 
   /**
    * Опционально: восстанавливает конкретный файл из backup manifest.

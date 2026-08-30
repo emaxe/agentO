@@ -14,7 +14,12 @@ const testProvider: Provider = {
   type: 'fireworks',
   apiKey: 'fw_test123',
   baseUrl: 'https://api.fireworks.ai/inference/v1',
-  models: [{ name: 'accounts/fireworks/models/kimi-k2', capabilities: { image: true, video: false, audio: false } }],
+  models: [
+    {
+      name: 'accounts/fireworks/models/kimi-k2',
+      capabilities: { image: true, video: false, audio: false },
+    },
+  ],
 };
 
 const testProfile: Profile = {
@@ -25,7 +30,13 @@ const testProfile: Profile = {
 
 describe('CodexAdapter', () => {
   it('supportedProviderTypes includes fireworks and openrouter', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['openai-compatible', 'responses-compatible', 'fireworks', 'openrouter', 'custom-api']);
+    expect(adapter.supportedProviderTypes).toEqual([
+      'openai-compatible',
+      'responses-compatible',
+      'fireworks',
+      'openrouter',
+      'custom-api',
+    ]);
   });
 
   describe('configPaths', () => {
@@ -102,7 +113,11 @@ describe('CodexAdapter', () => {
     });
 
     it('uses default OpenAI base_url when openai-compatible provider has no baseUrl', () => {
-      const providerNoUrl: Provider = { ...testProvider, type: 'openai-compatible', baseUrl: undefined };
+      const providerNoUrl: Provider = {
+        ...testProvider,
+        type: 'openai-compatible',
+        baseUrl: undefined,
+      };
       const config = adapter.buildConfig(testProfile, [providerNoUrl]);
       const providers = config.model_providers as Record<string, unknown>;
       const entry = providers['fireworks-ai'] as Record<string, unknown>;
@@ -192,7 +207,9 @@ describe('CodexAdapter', () => {
         name: 'Custom',
         models: [{ providerId: customProvider.id, model: 'gpt-4', tier: 'base' }],
       };
-      expect(() => adapter.buildConfig(profile, [customProvider])).toThrow('requires at least one compatible mode');
+      expect(() => adapter.buildConfig(profile, [customProvider])).toThrow(
+        'requires at least one compatible mode',
+      );
     });
   });
 
@@ -202,7 +219,10 @@ describe('CodexAdapter', () => {
     });
 
     it('readConfig returns null for non-existent project file', async () => {
-      const result = await adapter.readConfig('project', '/nonexistent/path-that-does-not-exist-12345');
+      const result = await adapter.readConfig(
+        'project',
+        '/nonexistent/path-that-does-not-exist-12345',
+      );
       expect(result).toBeNull();
     });
 
@@ -222,7 +242,12 @@ describe('CodexAdapter', () => {
         name: 'Fireworks',
         type: 'fireworks' as const,
         apiKey: 'fw-test-key',
-        models: [{ name: 'llama-3.1-70b-instruct', capabilities: { image: true, video: false, audio: false } }],
+        models: [
+          {
+            name: 'llama-3.1-70b-instruct',
+            capabilities: { image: true, video: false, audio: false },
+          },
+        ],
       };
       const config = adapter.buildConfig(testProfile, [fireworksProvider]);
       const modelProviders = config.model_providers as Record<string, Record<string, unknown>>;
@@ -235,12 +260,19 @@ describe('CodexAdapter', () => {
         name: 'OpenRouter',
         type: 'openrouter',
         apiKey: 'sk-or-v1-test',
-        models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+        models: [
+          {
+            name: 'anthropic/claude-sonnet-4.6',
+            capabilities: { image: true, video: false, audio: false },
+          },
+        ],
       };
       const profile: Profile = {
         id: '00000000-0000-0000-0000-0000000000b2',
         name: 'OR Profile',
-        models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+        models: [
+          { providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' },
+        ],
       };
       const config = adapter.buildConfig(profile, [openrouterProvider]);
       const modelProviders = config.model_providers as Record<string, Record<string, unknown>>;
@@ -255,12 +287,19 @@ describe('CodexAdapter', () => {
         name: 'OpenRouter',
         type: 'openrouter',
         apiKey: 'sk-or-v1-test',
-        models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+        models: [
+          {
+            name: 'anthropic/claude-sonnet-4.6',
+            capabilities: { image: true, video: false, audio: false },
+          },
+        ],
       };
       const profile: Profile = {
         id: '00000000-0000-0000-0000-0000000000b4',
         name: 'OR Profile',
-        models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+        models: [
+          { providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' },
+        ],
       };
       const env = adapter.buildEnv(profile, [openrouterProvider]);
       expect(env['CODEX_OPENROUTER_API_KEY']).toBe('sk-or-v1-test');
@@ -304,7 +343,11 @@ describe('CodexAdapter', () => {
 
     it('project scope does NOT write default_profile or profiles into config.toml', async () => {
       await mkdir(join(tmpDir, '.codex'), { recursive: true });
-      await writeFile(join(tmpDir, '.codex', 'config.toml'), stringifyToml({ existing: 'value' }), 'utf-8');
+      await writeFile(
+        join(tmpDir, '.codex', 'config.toml'),
+        stringifyToml({ existing: 'value' }),
+        'utf-8',
+      );
 
       const config = adapter.buildConfig(testProfile, [testProvider]);
       await adapter.writeConfig(config, 'project', join(tmpDir, 'project'));
@@ -353,5 +396,4 @@ describe('CodexAdapter', () => {
       expect(parsed.profiles).toBeUndefined();
     });
   });
-
 });

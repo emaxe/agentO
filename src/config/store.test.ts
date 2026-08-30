@@ -54,12 +54,14 @@ describe('config store', () => {
       cwd: '/tmp/project',
       sessionId: 'session-1',
       createdAt: '2026-05-13T00:00:00.000Z',
-      files: [{
-        path: '/home/user/.claude/settings.json',
-        format: 'json',
-        hadFile: true,
-        content,
-      }],
+      files: [
+        {
+          path: '/home/user/.claude/settings.json',
+          format: 'json',
+          hadFile: true,
+          content,
+        },
+      ],
     });
 
     const result = await readBackup('claude-code', 'global');
@@ -70,16 +72,21 @@ describe('config store', () => {
       scope: 'global',
       cwd: '/tmp/project',
       createdAt: '2026-05-13T00:00:00.000Z',
-      files: [{
-        path: '/home/user/.claude/settings.json',
-        format: 'json',
-        hadFile: true,
-        content,
-      }],
+      files: [
+        {
+          path: '/home/user/.claude/settings.json',
+          format: 'json',
+          hadFile: true,
+          content,
+        },
+      ],
     });
 
-    const { readFile } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
-    const raw = JSON.parse(await readFile(getBackupPath('claude-code', 'global'), 'utf-8')) as Record<string, unknown>;
+    const { readFile } =
+      await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const raw = JSON.parse(
+      await readFile(getBackupPath('claude-code', 'global'), 'utf-8'),
+    ) as Record<string, unknown>;
     expect(raw.version).toBe(2);
     expect(raw.sessionId).toBe('session-1');
     expect(raw.createdAt).toBe('2026-05-13T00:00:00.000Z');
@@ -119,7 +126,8 @@ describe('config store', () => {
 
   it('readBackup normalizes legacy raw backups to v2-like manifests', async () => {
     const { readBackup, getBackupPath } = await getStore();
-    const { writeFile, mkdir } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const { writeFile, mkdir } =
+      await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
     const backupPath = getBackupPath('qwen', 'global');
     await mkdir(dirname(backupPath), { recursive: true });
     await writeFile(backupPath, JSON.stringify({ legacy: true }), 'utf-8');
@@ -131,12 +139,14 @@ describe('config store', () => {
       sessionId: 'legacy',
       agentId: 'qwen',
       scope: 'global',
-      files: [{
-        path: '',
-        format: 'json',
-        hadFile: true,
-        content: { legacy: true },
-      }],
+      files: [
+        {
+          path: '',
+          format: 'json',
+          hadFile: true,
+          content: { legacy: true },
+        },
+      ],
     });
   });
 
@@ -146,9 +156,13 @@ describe('config store', () => {
       files: [{ path: '/project/.qwen/settings.json', hadFile: true, content: { original: true } }],
     });
 
-    await expect(writeBackup('qwen', 'project', {
-      files: [{ path: '/project/.qwen/settings.json', hadFile: true, content: { overwritten: true } }],
-    })).rejects.toThrow('agento restore -a qwen -s project');
+    await expect(
+      writeBackup('qwen', 'project', {
+        files: [
+          { path: '/project/.qwen/settings.json', hadFile: true, content: { overwritten: true } },
+        ],
+      }),
+    ).rejects.toThrow('agento restore -a qwen -s project');
   });
 
   it('writeBackup creates per-cwd nested backup for project scope', async () => {
@@ -189,10 +203,22 @@ describe('config store', () => {
 
   it('readBackup and backupExists fall back to legacy path for project scope', async () => {
     const { readBackup, backupExists } = await getStore();
-    const { writeFile, mkdir } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const { writeFile, mkdir } =
+      await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
     const legacyPath = join(testDir, '.agento', 'backups', 'qwen', 'project.bak.json');
     await mkdir(join(testDir, '.agento', 'backups', 'qwen'), { recursive: true });
-    await writeFile(legacyPath, JSON.stringify({ version: 2, sessionId: 'legacy', agentId: 'qwen', scope: 'project', createdAt: '2026-05-13T00:00:00.000Z', files: [] }), 'utf-8');
+    await writeFile(
+      legacyPath,
+      JSON.stringify({
+        version: 2,
+        sessionId: 'legacy',
+        agentId: 'qwen',
+        scope: 'project',
+        createdAt: '2026-05-13T00:00:00.000Z',
+        files: [],
+      }),
+      'utf-8',
+    );
 
     expect(backupExists('qwen', 'project', '/any/cwd')).toBe(true);
     const backup = await readBackup('qwen', 'project', '/any/cwd');
@@ -202,10 +228,17 @@ describe('config store', () => {
 
   it('writeConfig creates file with valid JSON content', async () => {
     const { writeConfig } = await getStore();
-    const { readFile: fsReadFile } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
-    const config = { providers: [], profiles: [], settings: { defaultLaunchMode: 'child', defaultConfigScope: 'project' } };
+    const { readFile: fsReadFile } =
+      await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const config = {
+      providers: [],
+      profiles: [],
+      settings: { defaultLaunchMode: 'child', defaultConfigScope: 'project' },
+    };
     await writeConfig(config as Parameters<typeof writeConfig>[0]);
-    const content = JSON.parse(await fsReadFile(join(testDir, '.agento', 'config.json'), 'utf-8')) as unknown;
+    const content = JSON.parse(
+      await fsReadFile(join(testDir, '.agento', 'config.json'), 'utf-8'),
+    ) as unknown;
     expect(content).toMatchObject({ providers: [], profiles: [] });
   });
 
@@ -223,7 +256,8 @@ describe('config store', () => {
   it('writeConfig cleans up temp file when rename fails', async () => {
     // Skip on Windows: EISDIR behaviour differs
     if (process.platform === 'win32') return;
-    const { mkdir: fsMkdir, readdir: fsReaddir } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const { mkdir: fsMkdir, readdir: fsReaddir } =
+      await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
     const configDir = join(testDir, '.agento');
     const configPath = join(configDir, 'config.json');
 
@@ -248,7 +282,8 @@ describe('config store', () => {
     const config = await readConfig();
     await writeConfig(config);
     const configPath = join(testDir, '.agento', 'config.json');
-    const { stat: fsStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const { stat: fsStat } =
+      await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
     const info = await fsStat(configPath);
     expect(info.mode & 0o777).toBe(0o600);
   });
@@ -260,7 +295,8 @@ describe('config store', () => {
       files: [{ path: '/home/user/.claude/settings.json', hadFile: true, content: { key: 'val' } }],
     });
     const backupPath = getBackupPath('claude-code', 'global');
-    const { stat: fsStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const { stat: fsStat } =
+      await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
     const fileInfo = await fsStat(backupPath);
     const dirInfo = await fsStat(join(testDir, '.agento', 'backups', 'claude-code'));
     expect(fileInfo.mode & 0o777).toBe(0o600);
@@ -270,16 +306,19 @@ describe('config store', () => {
   it('migrates old string[] models to ModelConfig[] on read', async () => {
     const { readConfig } = await getStore();
     // Write a config with old string[] format manually
-    const { writeFile, mkdir } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+    const { writeFile, mkdir } =
+      await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
     await mkdir(join(testDir, '.agento'), { recursive: true });
     const oldConfig = {
-      providers: [{
-        id: '00000000-0000-0000-0000-000000000001',
-        name: 'Test',
-        type: 'anthropic-compatible',
-        apiKey: 'key123',
-        models: ['claude-3-opus', 'claude-3-sonnet'],
-      }],
+      providers: [
+        {
+          id: '00000000-0000-0000-0000-000000000001',
+          name: 'Test',
+          type: 'anthropic-compatible',
+          apiKey: 'key123',
+          models: ['claude-3-opus', 'claude-3-sonnet'],
+        },
+      ],
       profiles: [],
       settings: {},
     };
@@ -288,7 +327,13 @@ describe('config store', () => {
     const config = await readConfig();
     expect(config.providers).toHaveLength(1);
     const models = config.providers[0]!.models;
-    expect(models[0]).toEqual({ name: 'claude-3-opus', capabilities: { image: true, video: false, audio: false } });
-    expect(models[1]).toEqual({ name: 'claude-3-sonnet', capabilities: { image: true, video: false, audio: false } });
+    expect(models[0]).toEqual({
+      name: 'claude-3-opus',
+      capabilities: { image: true, video: false, audio: false },
+    });
+    expect(models[1]).toEqual({
+      name: 'claude-3-sonnet',
+      capabilities: { image: true, video: false, audio: false },
+    });
   });
 });

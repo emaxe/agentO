@@ -38,7 +38,10 @@ export async function updateProfile(
   if (index === -1) throw new Error(`Profile not found: ${id}`);
   validateProfile({ ...config.profiles[index], ...updates }, config.profiles, config.providers, id);
   const updated = ProfileSchema.parse({ ...config.profiles[index], ...updates });
-  const newConfig = { ...config, profiles: config.profiles.map((p, i) => i === index ? updated : p) };
+  const newConfig = {
+    ...config,
+    profiles: config.profiles.map((p, i) => (i === index ? updated : p)),
+  };
   await writeConfig(newConfig);
   return updated;
 }
@@ -49,9 +52,7 @@ export async function updateProfile(
  */
 export async function removeProfile(idOrName: string): Promise<void> {
   const config = await readConfig();
-  const index = config.profiles.findIndex(
-    (p) => p.id === idOrName || p.name === idOrName,
-  );
+  const index = config.profiles.findIndex((p) => p.id === idOrName || p.name === idOrName);
   if (index === -1) throw new Error(`Profile not found: ${idOrName}`);
   const newConfig = { ...config, profiles: config.profiles.filter((_, i) => i !== index) };
   await writeConfig(newConfig);
@@ -79,7 +80,10 @@ export async function moveModelUp(profileId: string, modelIndex: number): Promis
   [models[modelIndex - 1], models[modelIndex]] = [models[modelIndex], models[modelIndex - 1]];
   const updated = ProfileSchema.parse({ ...profile, models });
   const index = config.profiles.findIndex((p) => p.id === profileId);
-  const newConfig = { ...config, profiles: config.profiles.map((p, i) => i === index ? updated : p) };
+  const newConfig = {
+    ...config,
+    profiles: config.profiles.map((p, i) => (i === index ? updated : p)),
+  };
   await writeConfig(newConfig);
   return updated;
 }
@@ -97,7 +101,10 @@ export async function moveModelDown(profileId: string, modelIndex: number): Prom
   [models[modelIndex], models[modelIndex + 1]] = [models[modelIndex + 1], models[modelIndex]];
   const updated = ProfileSchema.parse({ ...profile, models });
   const index = config.profiles.findIndex((p) => p.id === profileId);
-  const newConfig = { ...config, profiles: config.profiles.map((p, i) => i === index ? updated : p) };
+  const newConfig = {
+    ...config,
+    profiles: config.profiles.map((p, i) => (i === index ? updated : p)),
+  };
   await writeConfig(newConfig);
   return updated;
 }

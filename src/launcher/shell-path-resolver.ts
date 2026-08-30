@@ -148,10 +148,7 @@ export class ShellPathResolver {
   private _mergeWithSystemPath(resolved: string): string {
     const sep = this._delimiter;
     const system = this._systemPath.split(sep).filter(Boolean);
-    const cleaned = (resolved || '').replace(
-      new RegExp(`_?${DELIMITER}[^${sep}]*`, 'g'),
-      '',
-    );
+    const cleaned = (resolved || '').replace(new RegExp(`_?${DELIMITER}[^${sep}]*`, 'g'), '');
     const user = cleaned.split(sep).filter(Boolean);
     return this._dedupe([...user, ...system]);
   }

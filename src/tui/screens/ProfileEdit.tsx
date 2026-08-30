@@ -29,8 +29,12 @@ export function ProfileEdit({
 }: ProfileEditProps): React.JSX.Element {
   const [editName, setEditName] = useState(profile.name);
   const [editModels, setEditModels] = useState<ProfileModel[]>([...profile.models]);
-  const [editModelCursor, setEditModelCursor] = useState(startAddingModel ? profile.models.length : 0);
-  const [editFocus, setEditFocus] = useState<'name' | 'models' | 'save'>(startAddingModel ? 'models' : 'name');
+  const [editModelCursor, setEditModelCursor] = useState(
+    startAddingModel ? profile.models.length : 0,
+  );
+  const [editFocus, setEditFocus] = useState<'name' | 'models' | 'save'>(
+    startAddingModel ? 'models' : 'name',
+  );
   const [editSubStep, setEditSubStep] = useState<EditSubStep | null>(
     startAddingModel ? (profile.models.length > 0 ? 'select-model' : 'select-provider') : null,
   );
@@ -84,9 +88,18 @@ export function ProfileEdit({
 
     if (editSubStep !== null) {
       if (key.escape) {
-        if (editSubStep === 'select-provider') { setEditSubStep(null); return; }
-        if (editSubStep === 'select-model') { setEditSubStep('select-provider'); return; }
-        if (editSubStep === 'select-tier') { setEditSubStep('select-model'); return; }
+        if (editSubStep === 'select-provider') {
+          setEditSubStep(null);
+          return;
+        }
+        if (editSubStep === 'select-model') {
+          setEditSubStep('select-provider');
+          return;
+        }
+        if (editSubStep === 'select-tier') {
+          setEditSubStep('select-model');
+          return;
+        }
         return;
       }
       if (editSubStep === 'select-provider') {
@@ -94,8 +107,14 @@ export function ProfileEdit({
         const availableProviders = firstProviderId
           ? providers.filter((p) => p.id === firstProviderId)
           : providers;
-        if (key.upArrow) { setProviderCursor((i) => Math.max(0, i - 1)); return; }
-        if (key.downArrow) { setProviderCursor((i) => Math.min(availableProviders.length - 1, i + 1)); return; }
+        if (key.upArrow) {
+          setProviderCursor((i) => Math.max(0, i - 1));
+          return;
+        }
+        if (key.downArrow) {
+          setProviderCursor((i) => Math.min(availableProviders.length - 1, i + 1));
+          return;
+        }
         if (key.return && availableProviders[providerCursor]) {
           setPendingProviderId(availableProviders[providerCursor].id);
           setModelCursor(0);
@@ -106,17 +125,29 @@ export function ProfileEdit({
       }
       if (editSubStep === 'select-model') {
         const provider = providers.find((p) => p.id === pendingProviderId);
-        if (!provider) { setEditSubStep('select-provider'); return; }
+        if (!provider) {
+          setEditSubStep('select-provider');
+          return;
+        }
         const total = provider.models.length + 1;
-        if (key.upArrow) { setModelCursor((i) => Math.max(0, i - 1)); return; }
-        if (key.downArrow) { setModelCursor((i) => Math.min(total - 1, i + 1)); return; }
+        if (key.upArrow) {
+          setModelCursor((i) => Math.max(0, i - 1));
+          return;
+        }
+        if (key.downArrow) {
+          setModelCursor((i) => Math.min(total - 1, i + 1));
+          return;
+        }
         if (key.return) {
           let chosen: string | null = null;
           if (modelCursor < provider.models.length) {
             chosen = provider.models[modelCursor]?.name ?? null;
           } else {
             const trimmed = customModel.trim();
-            if (!trimmed) { setStatus('Enter custom model name'); return; }
+            if (!trimmed) {
+              setStatus('Enter custom model name');
+              return;
+            }
             chosen = trimmed;
           }
           if (!chosen) return;
@@ -131,13 +162,25 @@ export function ProfileEdit({
       }
       if (editSubStep === 'select-tier') {
         const optionsCount = 4;
-        if (key.upArrow) { setTierCursor((i) => Math.max(0, i - 1)); return; }
-        if (key.downArrow) { setTierCursor((i) => Math.min(optionsCount - 1, i + 1)); return; }
+        if (key.upArrow) {
+          setTierCursor((i) => Math.max(0, i - 1));
+          return;
+        }
+        if (key.downArrow) {
+          setTierCursor((i) => Math.min(optionsCount - 1, i + 1));
+          return;
+        }
         if (key.return) {
           const provider = providers.find((p) => p.id === pendingProviderId);
-          if (!provider || !pendingModel) { setEditSubStep('select-provider'); return; }
+          if (!provider || !pendingModel) {
+            setEditSubStep('select-provider');
+            return;
+          }
           const tier = tierCursor < 3 ? TIERS[tierCursor] : undefined;
-          setEditModels((prev) => [...prev, { providerId: provider.id, model: pendingModel, tier }]);
+          setEditModels((prev) => [
+            ...prev,
+            { providerId: provider.id, model: pendingModel, tier },
+          ]);
           setPendingModel('');
           setEditSubStep(null);
         }
@@ -146,7 +189,10 @@ export function ProfileEdit({
       return;
     }
 
-    if (key.escape) { onCancel(); return; }
+    if (key.escape) {
+      onCancel();
+      return;
+    }
     if (key.tab) {
       const focusOrder: ('name' | 'models' | 'save')[] = ['name', 'models', 'save'];
       const currentIdx = focusOrder.indexOf(editFocus);
@@ -156,14 +202,23 @@ export function ProfileEdit({
       return;
     }
     if (input === 's') {
-      if (editFocus === 'save') { doSave(); return; }
+      if (editFocus === 'save') {
+        doSave();
+        return;
+      }
       setEditFocus('save');
       return;
     }
-    if (key.return && editFocus === 'save') { doSave(); return; }
+    if (key.return && editFocus === 'save') {
+      doSave();
+      return;
+    }
 
     if (editFocus === 'name') {
-      if (key.return) { setEditFocus('models'); return; }
+      if (key.return) {
+        setEditFocus('models');
+        return;
+      }
       return; // TextInput handles text input
     }
 
@@ -173,17 +228,28 @@ export function ProfileEdit({
         setEditModelCursor((i) => Math.max(0, i - 1));
       } else if (key.downArrow && !key.shift) {
         setEditModelCursor((i) => Math.min(total - 1, i + 1));
-      } else if (key.shift && key.upArrow && editModelCursor > 0 && editModelCursor < editModels.length) {
+      } else if (
+        key.shift &&
+        key.upArrow &&
+        editModelCursor > 0 &&
+        editModelCursor < editModels.length
+      ) {
         setEditModels((prev) => {
           const arr = [...prev];
-          [arr[editModelCursor - 1], arr[editModelCursor]] = [arr[editModelCursor]!, arr[editModelCursor - 1]!];
+          [arr[editModelCursor - 1], arr[editModelCursor]] = [
+            arr[editModelCursor]!,
+            arr[editModelCursor - 1]!,
+          ];
           return arr;
         });
         setEditModelCursor((i) => i - 1);
       } else if (key.shift && key.downArrow && editModelCursor < editModels.length - 1) {
         setEditModels((prev) => {
           const arr = [...prev];
-          [arr[editModelCursor], arr[editModelCursor + 1]] = [arr[editModelCursor + 1]!, arr[editModelCursor]!];
+          [arr[editModelCursor], arr[editModelCursor + 1]] = [
+            arr[editModelCursor + 1]!,
+            arr[editModelCursor]!,
+          ];
           return arr;
         });
         setEditModelCursor((i) => i + 1);
@@ -211,108 +277,132 @@ export function ProfileEdit({
   if (confirmEmptyModels) {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold color="yellow">⚠ Profile has no models</Text>
+        <Text bold color="yellow">
+          ⚠ Profile has no models
+        </Text>
         <Box marginTop={1}>
           <Text dimColor>Cannot save profile without at least one model.</Text>
         </Box>
         <Box marginTop={1}>
           <Text>Delete this profile permanently? (y/n)</Text>
         </Box>
-        {status && <Box marginTop={1}><Text color="yellow">{status}</Text></Box>}
+        {status && (
+          <Box marginTop={1}>
+            <Text color="yellow">{status}</Text>
+          </Box>
+        )}
       </Box>
     );
   }
 
   if (editSubStep !== null) {
-    const subTitle = editSubStep === 'select-provider' ? 'Select provider'
-      : editSubStep === 'select-model' ? 'Select model'
-      : 'Assign tier';
+    const subTitle =
+      editSubStep === 'select-provider'
+        ? 'Select provider'
+        : editSubStep === 'select-model'
+          ? 'Select model'
+          : 'Assign tier';
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>Edit Profile — {subTitle}</Text>
         <Text dimColor>Esc: back</Text>
 
-        {editSubStep === 'select-provider' && (() => {
-          // Lock provider to the existing one if profile already has models
-          const firstProviderId = editModels[0]?.providerId;
-          const availableProviders = firstProviderId
-            ? providers.filter((p) => p.id === firstProviderId)
-            : providers;
-          return (
-            <Box flexDirection="column" marginTop={1}>
-              <Text dimColor>↑↓: navigate | Enter: select</Text>
-              {firstProviderId && availableProviders.length === 1 && (
-                <Text dimColor>Provider locked to: {availableProviders[0]?.name ?? '?'}</Text>
-              )}
-              <SelectList
-                items={availableProviders}
-                selected={providerCursor}
-                title={firstProviderId ? 'Provider (locked to existing):' : 'Select provider:'}
-                renderItem={(p, i, isSelected) => (
-                  <Text color={isSelected ? 'green' : undefined}>
-                    {isSelected ? '▶ ' : '  '}{p.name} ({p.type}, {p.models.length} models)
-                  </Text>
-                )}
-              />
-            </Box>
-          );
-        })()}
-
-        {editSubStep === 'select-model' && (() => {
-          const provider = providers.find((p) => p.id === pendingProviderId);
-          if (!provider) return <></>;
-          const customIdx = provider.models.length;
-          return (
-            <Box flexDirection="column" marginTop={1}>
-              <Text dimColor>↑↓: navigate | Enter: select</Text>
-              <Box marginTop={1}>
-                <Text>Provider: <Text color="cyan">{provider.name}</Text></Text>
-              </Box>
+        {editSubStep === 'select-provider' &&
+          (() => {
+            // Lock provider to the existing one if profile already has models
+            const firstProviderId = editModels[0]?.providerId;
+            const availableProviders = firstProviderId
+              ? providers.filter((p) => p.id === firstProviderId)
+              : providers;
+            return (
               <Box flexDirection="column" marginTop={1}>
-                {provider.models.map((m, i) => (
-                  <Text key={m.name} color={i === modelCursor ? 'green' : undefined}>
-                    {i === modelCursor ? '▶ ' : '  '}<Text color="gray">{capabilityMarker(m.capabilities)} </Text>{m.name}
+                <Text dimColor>↑↓: navigate | Enter: select</Text>
+                {firstProviderId && availableProviders.length === 1 && (
+                  <Text dimColor>Provider locked to: {availableProviders[0]?.name ?? '?'}</Text>
+                )}
+                <SelectList
+                  items={availableProviders}
+                  selected={providerCursor}
+                  title={firstProviderId ? 'Provider (locked to existing):' : 'Select provider:'}
+                  renderItem={(p, i, isSelected) => (
+                    <Text color={isSelected ? 'green' : undefined}>
+                      {isSelected ? '▶ ' : '  '}
+                      {p.name} ({p.type}, {p.models.length} models)
+                    </Text>
+                  )}
+                />
+              </Box>
+            );
+          })()}
+
+        {editSubStep === 'select-model' &&
+          (() => {
+            const provider = providers.find((p) => p.id === pendingProviderId);
+            if (!provider) return <></>;
+            const customIdx = provider.models.length;
+            return (
+              <Box flexDirection="column" marginTop={1}>
+                <Text dimColor>↑↓: navigate | Enter: select</Text>
+                <Box marginTop={1}>
+                  <Text>
+                    Provider: <Text color="cyan">{provider.name}</Text>
                   </Text>
-                ))}
-                <Box>
-                  <Text color={modelCursor === customIdx ? 'green' : 'cyan'}>
-                    {modelCursor === customIdx ? '▶ ' : '  '}[custom]:{' '}
-                  </Text>
-                  <TextInput
-                    value={customModel}
-                    onChange={setCustomModel}
-                    focus={modelCursor === customIdx}
-                    showCursor={modelCursor === customIdx}
-                    placeholder="model-name"
-                  />
+                </Box>
+                <Box flexDirection="column" marginTop={1}>
+                  {provider.models.map((m, i) => (
+                    <Text key={m.name} color={i === modelCursor ? 'green' : undefined}>
+                      {i === modelCursor ? '▶ ' : '  '}
+                      <Text color="gray">{capabilityMarker(m.capabilities)} </Text>
+                      {m.name}
+                    </Text>
+                  ))}
+                  <Box>
+                    <Text color={modelCursor === customIdx ? 'green' : 'cyan'}>
+                      {modelCursor === customIdx ? '▶ ' : '  '}[custom]:{' '}
+                    </Text>
+                    <TextInput
+                      value={customModel}
+                      onChange={setCustomModel}
+                      focus={modelCursor === customIdx}
+                      showCursor={modelCursor === customIdx}
+                      placeholder="model-name"
+                    />
+                  </Box>
                 </Box>
               </Box>
-            </Box>
-          );
-        })()}
+            );
+          })()}
 
-        {editSubStep === 'select-tier' && (() => {
-          const provider = providers.find((p) => p.id === pendingProviderId);
-          const usedTiers = new Set(editModels.map((m) => m.tier).filter(Boolean));
-          return (
-            <Box flexDirection="column" marginTop={1}>
-              <Text dimColor>↑↓: navigate | Enter: confirm</Text>
-              <Box marginTop={1}>
-                <Text>Model: <Text color="cyan">{pendingModel}</Text> ({provider?.name ?? '?'})</Text>
-              </Box>
+        {editSubStep === 'select-tier' &&
+          (() => {
+            const provider = providers.find((p) => p.id === pendingProviderId);
+            const usedTiers = new Set(editModels.map((m) => m.tier).filter(Boolean));
+            return (
               <Box flexDirection="column" marginTop={1}>
-                {TIERS.map((t, i) => (
-                  <Text key={t} color={i === tierCursor ? 'green' : usedTiers.has(t) ? 'yellow' : undefined}>
-                    {i === tierCursor ? '▶ ' : '  '}{t}{usedTiers.has(t) ? ' (already used)' : ''}
+                <Text dimColor>↑↓: navigate | Enter: confirm</Text>
+                <Box marginTop={1}>
+                  <Text>
+                    Model: <Text color="cyan">{pendingModel}</Text> ({provider?.name ?? '?'})
                   </Text>
-                ))}
-                <Text color={tierCursor === 3 ? 'green' : undefined} dimColor={tierCursor !== 3}>
-                  {tierCursor === 3 ? '▶ ' : '  '}skip (no tier)
-                </Text>
+                </Box>
+                <Box flexDirection="column" marginTop={1}>
+                  {TIERS.map((t, i) => (
+                    <Text
+                      key={t}
+                      color={i === tierCursor ? 'green' : usedTiers.has(t) ? 'yellow' : undefined}
+                    >
+                      {i === tierCursor ? '▶ ' : '  '}
+                      {t}
+                      {usedTiers.has(t) ? ' (already used)' : ''}
+                    </Text>
+                  ))}
+                  <Text color={tierCursor === 3 ? 'green' : undefined} dimColor={tierCursor !== 3}>
+                    {tierCursor === 3 ? '▶ ' : '  '}skip (no tier)
+                  </Text>
+                </Box>
               </Box>
-            </Box>
-          );
-        })()}
+            );
+          })()}
 
         {status && <Text color="yellow">{status}</Text>}
       </Box>
@@ -322,9 +412,7 @@ export function ProfileEdit({
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold>Edit Profile</Text>
-      <Text dimColor>
-        Tab: navigate (now: {editFocus}) | Esc: cancel
-      </Text>
+      <Text dimColor>Tab: navigate (now: {editFocus}) | Esc: cancel</Text>
       <Box marginTop={1}>
         <Text color={editFocus === 'name' ? 'green' : undefined}>
           {editFocus === 'name' ? '▶ ' : '  '}Name:{' '}
@@ -338,14 +426,20 @@ export function ProfileEdit({
       </Box>
       <Box flexDirection="column" marginTop={1}>
         <Text dimColor>
-          Models{editFocus === 'models' ? ' (↑↓ navigate | Shift+↑↓ reorder | d: delete model | Enter on [+]: add)' : ''}:
+          Models
+          {editFocus === 'models'
+            ? ' (↑↓ navigate | Shift+↑↓ reorder | d: delete model | Enter on [+]: add)'
+            : ''}
+          :
         </Text>
         {editModels.map((m, i) => {
           const p = providers.find((pr) => pr.id === m.providerId);
           const focused = editFocus === 'models' && i === editModelCursor;
           return (
             <Text key={i} color={focused ? 'green' : undefined}>
-              {focused ? '▶ ' : '  '}{m.model}{m.tier ? ` [${m.tier}]` : ''} ({p?.name ?? m.providerId.slice(0, 8) + '...'})
+              {focused ? '▶ ' : '  '}
+              {m.model}
+              {m.tier ? ` [${m.tier}]` : ''} ({p?.name ?? m.providerId.slice(0, 8) + '...'})
             </Text>
           );
         })}
@@ -353,14 +447,12 @@ export function ProfileEdit({
           color="cyan"
           dimColor={!(editFocus === 'models' && editModelCursor === editModels.length)}
         >
-          {editFocus === 'models' && editModelCursor === editModels.length ? '▶ ' : '  '}[+ add model]
+          {editFocus === 'models' && editModelCursor === editModels.length ? '▶ ' : '  '}[+ add
+          model]
         </Text>
       </Box>
       <Box marginTop={1}>
-        <Text
-          color="cyan"
-          bold={editFocus === 'save'}
-        >
+        <Text color="cyan" bold={editFocus === 'save'}>
           {editFocus === 'save' ? '▶ ' : '  '}[S] Save Profile
         </Text>
       </Box>

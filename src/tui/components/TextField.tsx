@@ -24,7 +24,8 @@ export function TextField({
   return (
     <Box>
       <Text color={focus ? 'green' : undefined}>
-        {focus ? '▶ ' : '  '}{label}{' '}
+        {focus ? '▶ ' : '  '}
+        {label}{' '}
       </Text>
       <TextInput
         value={value}

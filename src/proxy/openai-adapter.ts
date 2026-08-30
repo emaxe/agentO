@@ -71,7 +71,9 @@ export function convertRequest(req: AnthropicRequest): OpenAIRequest {
 }
 
 /** Convert a single Anthropic message into one or more OpenAI messages. */
-function convertMessage(msg: AnthropicRequest['messages'][number]): OpenAIRequest['messages'][number] | OpenAIRequest['messages'] {
+function convertMessage(
+  msg: AnthropicRequest['messages'][number],
+): OpenAIRequest['messages'][number] | OpenAIRequest['messages'] {
   const role = msg.role;
   const content = msg.content;
 
@@ -114,7 +116,12 @@ function convertMessage(msg: AnthropicRequest['messages'][number]): OpenAIReques
       if (block.type === 'tool_result') {
         let stringifiedContent: string;
         try {
-          stringifiedContent = typeof block.content === 'string' ? block.content : (block.content === undefined ? '' : JSON.stringify(block.content));
+          stringifiedContent =
+            typeof block.content === 'string'
+              ? block.content
+              : block.content === undefined
+                ? ''
+                : JSON.stringify(block.content);
         } catch {
           stringifiedContent = '';
         }
@@ -186,7 +193,8 @@ export function convertResponse(res: unknown): AnthropicResponse {
   }
   const r = res;
   const choices = isRecord(r) ? r.choices : undefined;
-  const choice = Array.isArray(choices) && choices.length > 0 && isRecord(choices[0]) ? choices[0] : {};
+  const choice =
+    Array.isArray(choices) && choices.length > 0 && isRecord(choices[0]) ? choices[0] : {};
   const message = isRecord(choice.message) ? choice.message : {};
   const finishReason = String(choice.finish_reason ?? 'stop');
 
@@ -219,14 +227,15 @@ export function convertResponse(res: unknown): AnthropicResponse {
 
   const rawUsage = isRecord(r) && isRecord(r.usage) ? r.usage : undefined;
   const inputTokens = typeof rawUsage?.prompt_tokens === 'number' ? rawUsage.prompt_tokens : 0;
-  const outputTokens = typeof rawUsage?.completion_tokens === 'number' ? rawUsage.completion_tokens : 0;
+  const outputTokens =
+    typeof rawUsage?.completion_tokens === 'number' ? rawUsage.completion_tokens : 0;
 
   return {
-    id: String(isRecord(r) ? r.id ?? '' : ''),
+    id: String(isRecord(r) ? (r.id ?? '') : ''),
     type: 'message',
     role: 'assistant',
     content,
-    model: String(isRecord(r) ? r.model ?? '' : ''),
+    model: String(isRecord(r) ? (r.model ?? '') : ''),
     stop_reason: mapFinishReason(finishReason),
     usage: {
       input_tokens: inputTokens,
@@ -272,7 +281,10 @@ export function convertError(err: unknown): Record<string, unknown> {
       },
     };
   }
-  return { type: 'error', error: { type: 'api_error', message: String(err.message ?? 'Unknown error') } };
+  return {
+    type: 'error',
+    error: { type: 'api_error', message: String(err.message ?? 'Unknown error') },
+  };
 }
 
 /** Mutable state accumulated while streaming an OpenAI chat completion into Anthropic SSE events. */
@@ -282,7 +294,10 @@ export interface StreamState {
   initialized: boolean;
   currentBlockType: 'text' | 'tool_use' | null;
   currentBlockIndex: number | null;
-  toolCalls: Map<number, { id: string; name: string; arguments: string; blockIndex: number | null }>;
+  toolCalls: Map<
+    number,
+    { id: string; name: string; arguments: string; blockIndex: number | null }
+  >;
   nextBlockIndex: number;
   /** Output token count: real value when provider includes usage in SSE, otherwise chunk count approximation. */
   outputTokens: number;
@@ -310,7 +325,10 @@ export function createStreamState(id: string, model: string): StreamState {
  *
  * Mutates `state` to keep track of block indexes, initialization, and output tokens.
  */
-export function convertStreamChunk(chunk: unknown, state: StreamState): Array<Record<string, unknown>> {
+export function convertStreamChunk(
+  chunk: unknown,
+  state: StreamState,
+): Array<Record<string, unknown>> {
   if (!isRecord(chunk)) return [];
   const choices = chunk.choices;
   if (!Array.isArray(choices) || choices.length === 0) {
@@ -318,7 +336,8 @@ export function convertStreamChunk(chunk: unknown, state: StreamState): Array<Re
     const lateUsage = isRecord(chunk.usage) ? chunk.usage : undefined;
     if (lateUsage) {
       if (typeof lateUsage.prompt_tokens === 'number') state.inputTokens = lateUsage.prompt_tokens;
-      if (typeof lateUsage.completion_tokens === 'number') state.outputTokens = lateUsage.completion_tokens;
+      if (typeof lateUsage.completion_tokens === 'number')
+        state.outputTokens = lateUsage.completion_tokens;
     }
     return [];
   }
@@ -418,8 +437,10 @@ export function convertStreamChunk(chunk: unknown, state: StreamState): Array<Re
     // Some providers (Groq, OpenRouter) include usage in the finish chunk itself.
     const finishUsage = isRecord(chunk.usage) ? chunk.usage : undefined;
     if (finishUsage) {
-      if (typeof finishUsage.prompt_tokens === 'number') state.inputTokens = finishUsage.prompt_tokens;
-      if (typeof finishUsage.completion_tokens === 'number') state.outputTokens = finishUsage.completion_tokens;
+      if (typeof finishUsage.prompt_tokens === 'number')
+        state.inputTokens = finishUsage.prompt_tokens;
+      if (typeof finishUsage.completion_tokens === 'number')
+        state.outputTokens = finishUsage.completion_tokens;
     }
 
     if (state.currentBlockType !== null && state.currentBlockIndex !== null) {

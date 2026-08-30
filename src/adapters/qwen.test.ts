@@ -13,7 +13,12 @@ const testProvider: Provider = {
   type: 'openai-compatible',
   apiKey: 'fw_test123',
   baseUrl: 'http://188.132.197.214:20128/v1',
-  models: [{ name: 'accounts/fireworks/models/kimi-k2', capabilities: { image: true, video: false, audio: false } }],
+  models: [
+    {
+      name: 'accounts/fireworks/models/kimi-k2',
+      capabilities: { image: true, video: false, audio: false },
+    },
+  ],
 };
 
 const testProfile: Profile = {
@@ -24,7 +29,12 @@ const testProfile: Profile = {
 
 describe('QwenAdapter', () => {
   it('supportedProviderTypes includes openai-compatible, fireworks and openrouter', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['openai-compatible', 'fireworks', 'openrouter', 'custom-api']);
+    expect(adapter.supportedProviderTypes).toEqual([
+      'openai-compatible',
+      'fireworks',
+      'openrouter',
+      'custom-api',
+    ]);
   });
 
   describe('configPaths', () => {
@@ -114,23 +124,39 @@ describe('QwenAdapter', () => {
 
     it('throws when provider type is anthropic', () => {
       const anthropicProvider: Provider = { ...testProvider, type: 'anthropic-compatible' };
-      expect(() => adapter.buildConfig(testProfile, [anthropicProvider])).toThrow('does not support Anthropic');
+      expect(() => adapter.buildConfig(testProfile, [anthropicProvider])).toThrow(
+        'does not support Anthropic',
+      );
     });
 
     it('throws when custom-api provider lacks openai mode', () => {
-      const providerNoMode: Provider = { ...testProvider, type: 'custom-api', baseUrl: undefined, customApiModes: { openai: false, anthropic: false, responses: false } };
-      expect(() => adapter.buildConfig(testProfile, [providerNoMode])).toThrow('requires openai mode');
+      const providerNoMode: Provider = {
+        ...testProvider,
+        type: 'custom-api',
+        baseUrl: undefined,
+        customApiModes: { openai: false, anthropic: false, responses: false },
+      };
+      expect(() => adapter.buildConfig(testProfile, [providerNoMode])).toThrow(
+        'requires openai mode',
+      );
     });
 
     it('passes model capabilities to generationConfig.modalities', () => {
       const providerWithCaps: Provider = {
         ...testProvider,
-        models: [{ name: 'accounts/fireworks/models/kimi-k2', capabilities: { image: true, video: true, audio: false } }],
+        models: [
+          {
+            name: 'accounts/fireworks/models/kimi-k2',
+            capabilities: { image: true, video: true, audio: false },
+          },
+        ],
       };
       const config = adapter.buildConfig(testProfile, [providerWithCaps]);
       const mp = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
       const entry = mp['openai']![0]!;
-      const gc = entry.generationConfig as { modalities: { image: boolean; video: boolean; audio: boolean } };
+      const gc = entry.generationConfig as {
+        modalities: { image: boolean; video: boolean; audio: boolean };
+      };
       expect(gc.modalities.image).toBe(true);
       expect(gc.modalities.video).toBe(true);
       expect(gc.modalities.audio).toBe(false);
@@ -140,7 +166,9 @@ describe('QwenAdapter', () => {
       const config = adapter.buildConfig(testProfile, [testProvider]);
       const mp = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
       const entry = mp['openai']![0]!;
-      const gc = entry.generationConfig as { modalities: { image: boolean; video: boolean; audio: boolean } };
+      const gc = entry.generationConfig as {
+        modalities: { image: boolean; video: boolean; audio: boolean };
+      };
       expect(gc.modalities.image).toBe(true);
       expect(gc.modalities.video).toBe(false);
       expect(gc.modalities.audio).toBe(false);
@@ -149,15 +177,24 @@ describe('QwenAdapter', () => {
 
   describe('env key derivation edge cases', () => {
     it('handles URL with https and path', () => {
-      const provider: Provider = { ...testProvider, baseUrl: 'https://api.fireworks.ai/inference/v1' };
-      const config = adapter.buildConfig({ ...testProfile, models: [{ ...testProfile.models[0]!, providerId: provider.id }] }, [provider]);
+      const provider: Provider = {
+        ...testProvider,
+        baseUrl: 'https://api.fireworks.ai/inference/v1',
+      };
+      const config = adapter.buildConfig(
+        { ...testProfile, models: [{ ...testProfile.models[0]!, providerId: provider.id }] },
+        [provider],
+      );
       const env = config.env as Record<string, string>;
       expect('QWEN_CUSTOM_API_KEY_OPENAI_HTTPS_API_FIREWORKS_AI_INFERENCE_V1' in env).toBe(true);
     });
 
     it('collapses consecutive underscores from special chars', () => {
       const provider: Provider = { ...testProvider, baseUrl: 'https://api.example.com/v1' };
-      const config = adapter.buildConfig({ ...testProfile, models: [{ ...testProfile.models[0]!, providerId: provider.id }] }, [provider]);
+      const config = adapter.buildConfig(
+        { ...testProfile, models: [{ ...testProfile.models[0]!, providerId: provider.id }] },
+        [provider],
+      );
       const env = config.env as Record<string, string>;
       // Should not have double underscores
       const key = Object.keys(env)[0]!;
@@ -170,15 +207,25 @@ describe('QwenAdapter', () => {
         name: 'Fireworks',
         type: 'fireworks',
         apiKey: 'fw-test-key',
-        models: [{ name: 'llama-3.1-70b-instruct', capabilities: { image: true, video: false, audio: false } }],
+        models: [
+          {
+            name: 'llama-3.1-70b-instruct',
+            capabilities: { image: true, video: false, audio: false },
+          },
+        ],
       };
       const profile: Profile = {
         id: '00000000-0000-0000-0000-000000000100',
         name: 'Fireworks Profile',
-        models: [{ providerId: fireworksProvider.id, model: 'llama-3.1-70b-instruct', tier: 'base' }],
+        models: [
+          { providerId: fireworksProvider.id, model: 'llama-3.1-70b-instruct', tier: 'base' },
+        ],
       };
       const config = adapter.buildConfig(profile, [fireworksProvider]);
-      const modelProviders = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
+      const modelProviders = config.modelProviders as Record<
+        string,
+        Array<Record<string, unknown>>
+      >;
       expect(modelProviders.openai).toBeDefined();
       expect(modelProviders.openai![0]!.baseUrl).toBe('https://api.fireworks.ai/inference/v1');
     });
@@ -189,57 +236,67 @@ describe('QwenAdapter', () => {
         name: 'OpenRouter',
         type: 'openrouter',
         apiKey: 'sk-or-v1-test',
-        models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+        models: [
+          {
+            name: 'anthropic/claude-sonnet-4.6',
+            capabilities: { image: true, video: false, audio: false },
+          },
+        ],
       };
       const profile: Profile = {
         id: '00000000-0000-0000-0000-0000000000a2',
         name: 'OR Profile',
-        models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+        models: [
+          { providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' },
+        ],
       };
       const config = adapter.buildConfig(profile, [openrouterProvider]);
-      const modelProviders = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
+      const modelProviders = config.modelProviders as Record<
+        string,
+        Array<Record<string, unknown>>
+      >;
       expect(modelProviders.openai).toBeDefined();
       expect(modelProviders.openai![0]!.baseUrl).toBe('https://openrouter.ai/api/v1');
     });
 
-  it('custom-api provider with openai mode appends /v1 to baseUrl', () => {
-    const customProvider: Provider = {
-      id: '00000000-0000-0000-0000-0000000000e1',
-      name: 'Custom',
-      type: 'custom-api',
-      apiKey: 'sk-custom',
-      baseUrl: 'https://proxy.example.com',
-      customApiModes: { openai: true, anthropic: false, responses: false },
-      models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
-    };
-    const profile: Profile = {
-      id: '00000000-0000-0000-0000-0000000000e2',
-      name: 'Custom',
-      models: [{ providerId: customProvider.id, model: 'gpt-4', tier: 'base' }],
-    };
-    const config = adapter.buildConfig(profile, [customProvider]);
-    const mp = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
-    expect(mp['openai']).toHaveLength(1);
-    expect(mp['openai']![0]!.baseUrl).toBe('https://proxy.example.com/v1');
-  });
+    it('custom-api provider with openai mode appends /v1 to baseUrl', () => {
+      const customProvider: Provider = {
+        id: '00000000-0000-0000-0000-0000000000e1',
+        name: 'Custom',
+        type: 'custom-api',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://proxy.example.com',
+        customApiModes: { openai: true, anthropic: false, responses: false },
+        models: [{ name: 'gpt-4', capabilities: { image: true, video: false, audio: false } }],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-0000000000e2',
+        name: 'Custom',
+        models: [{ providerId: customProvider.id, model: 'gpt-4', tier: 'base' }],
+      };
+      const config = adapter.buildConfig(profile, [customProvider]);
+      const mp = config.modelProviders as Record<string, Array<Record<string, unknown>>>;
+      expect(mp['openai']).toHaveLength(1);
+      expect(mp['openai']![0]!.baseUrl).toBe('https://proxy.example.com/v1');
+    });
 
-  it('throws for custom-api provider without openai mode', () => {
-    const customProvider: Provider = {
-      id: '00000000-0000-0000-0000-0000000000e3',
-      name: 'Custom',
-      type: 'custom-api',
-      apiKey: 'sk-custom',
-      baseUrl: 'https://proxy.example.com',
-      customApiModes: { openai: false, anthropic: true, responses: false },
-      models: [{ name: 'claude-3', capabilities: { image: true, video: false, audio: false } }],
-    };
-    const profile: Profile = {
-      id: '00000000-0000-0000-0000-0000000000e4',
-      name: 'Custom',
-      models: [{ providerId: customProvider.id, model: 'claude-3', tier: 'base' }],
-    };
-    expect(() => adapter.buildConfig(profile, [customProvider])).toThrow('requires openai mode');
-  });
+    it('throws for custom-api provider without openai mode', () => {
+      const customProvider: Provider = {
+        id: '00000000-0000-0000-0000-0000000000e3',
+        name: 'Custom',
+        type: 'custom-api',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://proxy.example.com',
+        customApiModes: { openai: false, anthropic: true, responses: false },
+        models: [{ name: 'claude-3', capabilities: { image: true, video: false, audio: false } }],
+      };
+      const profile: Profile = {
+        id: '00000000-0000-0000-0000-0000000000e4',
+        name: 'Custom',
+        models: [{ providerId: customProvider.id, model: 'claude-3', tier: 'base' }],
+      };
+      expect(() => adapter.buildConfig(profile, [customProvider])).toThrow('requires openai mode');
+    });
 
     it('openrouter envKey derives from resolved baseUrl', () => {
       const openrouterProvider: Provider = {
@@ -247,12 +304,19 @@ describe('QwenAdapter', () => {
         name: 'OpenRouter',
         type: 'openrouter',
         apiKey: 'sk-or-v1-test',
-        models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+        models: [
+          {
+            name: 'anthropic/claude-sonnet-4.6',
+            capabilities: { image: true, video: false, audio: false },
+          },
+        ],
       };
       const profile: Profile = {
         id: '00000000-0000-0000-0000-0000000000a4',
         name: 'OR Profile',
-        models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+        models: [
+          { providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' },
+        ],
       };
       const config = adapter.buildConfig(profile, [openrouterProvider]);
       const env = config.env as Record<string, string>;
@@ -280,7 +344,12 @@ describe('QwenAdapter', () => {
       const dir = await mkdtemp(join(tmpdir(), 'agento-qwen-merge-'));
       try {
         await adapter.writeConfig({ customKey: 'value', env: { OLD: '1' } }, 'project', dir);
-        await adapter.writeConfig({ env: { NEW: '2' }, model: { name: 'new-model' } }, 'project', dir, true);
+        await adapter.writeConfig(
+          { env: { NEW: '2' }, model: { name: 'new-model' } },
+          'project',
+          dir,
+          true,
+        );
         const result = await adapter.readConfig('project', dir);
         expect(result).toEqual({
           customKey: 'value',

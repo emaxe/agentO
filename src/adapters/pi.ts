@@ -33,7 +33,10 @@ function mapToPiProvider(type: ProviderType, provider: Provider): string | null 
 }
 
 function getApiType(type: ProviderType, provider: Provider): string {
-  if (type === 'anthropic-compatible' || (type === 'custom-api' && provider.customApiModes?.anthropic)) {
+  if (
+    type === 'anthropic-compatible' ||
+    (type === 'custom-api' && provider.customApiModes?.anthropic)
+  ) {
     return 'anthropic-messages';
   }
   // Everything else (openai-compatible, fireworks, openrouter, custom-api openai)
@@ -45,8 +48,8 @@ function getApiType(type: ProviderType, provider: Provider): string {
 const PROVIDER_ENV_MAP: Record<ProviderType, string | null> = {
   'anthropic-compatible': 'ANTHROPIC_API_KEY',
   'openai-compatible': 'OPENAI_API_KEY',
-  'fireworks': 'FIREWORKS_API_KEY',
-  'openrouter': 'OPENROUTER_API_KEY',
+  fireworks: 'FIREWORKS_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
   'responses-compatible': 'OPENAI_API_KEY',
   'custom-api': null,
 };
@@ -78,10 +81,7 @@ export class PiAdapter implements AgentAdapter<PiConfig> {
     return join(homedir(), '.pi', 'agent', 'models.json');
   }
 
-  async readConfig(
-    scope: LaunchScope,
-    cwd?: string,
-  ): Promise<PiConfig | null> {
+  async readConfig(scope: LaunchScope, cwd?: string): Promise<PiConfig | null> {
     const path = this.configPaths(cwd)[scope];
     if (!existsSync(path)) return null;
     const raw = await readFile(path, 'utf-8');
@@ -89,9 +89,7 @@ export class PiAdapter implements AgentAdapter<PiConfig> {
   }
 
   buildConfig(profile: Profile, providers: Provider[]): PiConfig {
-    const provider = providers.find(
-      (p) => p.id === profile.models[0].providerId,
-    );
+    const provider = providers.find((p) => p.id === profile.models[0].providerId);
     if (!provider) return {};
 
     const piProvider = mapToPiProvider(provider.type, provider);
@@ -117,7 +115,9 @@ export class PiAdapter implements AgentAdapter<PiConfig> {
       },
     };
     if (provider.baseUrl) {
-      const providerOverride = (modelsJson.providers as Record<string, Record<string, unknown>>)[piProvider];
+      const providerOverride = (modelsJson.providers as Record<string, Record<string, unknown>>)[
+        piProvider
+      ];
       providerOverride.baseUrl = provider.baseUrl;
     }
 
@@ -143,8 +143,7 @@ export class PiAdapter implements AgentAdapter<PiConfig> {
     await mkdir(dirname(path), { recursive: true });
 
     const existing = await this.readConfig(scope, cwd);
-    const merged =
-      mergeEnabled && existing ? mergeAgentConfig(existing, config, []) : config;
+    const merged = mergeEnabled && existing ? mergeAgentConfig(existing, config, []) : config;
     await writeJsonAtomic(path, merged);
 
     // Write models.json to PI agent dir (PI reads only from agent dir)

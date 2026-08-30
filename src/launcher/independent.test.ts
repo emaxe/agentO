@@ -6,7 +6,7 @@ vi.mock('../config/store.js', () => ({
   writeBackup: vi.fn(),
   readBackup: vi.fn(),
   deleteBackup: vi.fn(),
-  inferBackupFileFormat: vi.fn((path: string) => path.endsWith('.toml') ? 'toml' : 'json'),
+  inferBackupFileFormat: vi.fn((path: string) => (path.endsWith('.toml') ? 'toml' : 'json')),
   readConfig: vi.fn().mockResolvedValue({ settings: { mergeAgentConfigs: true } }),
 }));
 
@@ -44,7 +44,9 @@ function makeAdapter(currentConfig: Record<string, unknown> | null = null): Agen
     readConfig: vi.fn().mockResolvedValue(currentConfig),
     writeConfig: vi.fn().mockResolvedValue(undefined),
     buildConfig: vi.fn().mockReturnValue({ env: { TEST: 'value' } }),
-    configPaths: vi.fn().mockReturnValue({ global: '/home/user/.config/test.json', project: '/project/.test.json' }),
+    configPaths: vi
+      .fn()
+      .mockReturnValue({ global: '/home/user/.config/test.json', project: '/project/.test.json' }),
   } as unknown as AgentAdapter;
 }
 
@@ -69,27 +71,33 @@ describe('launchIndependent', () => {
 
     expect(mockWriteBackup).toHaveBeenCalledWith('test-agent', 'project', {
       cwd: '/project',
-      files: [{
-        path: '/project/.test.json',
-        format: 'json',
-        hadFile: true,
-        content: existingConfig,
-      }],
+      files: [
+        {
+          path: '/project/.test.json',
+          format: 'json',
+          hadFile: true,
+          content: existingConfig,
+        },
+      ],
     });
     expect(adapter.writeConfig).toHaveBeenCalledTimes(1);
   });
 
   it('does not write new config when active backup already exists', async () => {
     const adapter = makeAdapter({ model: 'original' });
-    mockWriteBackup.mockRejectedValue(new Error('Active backup already exists for test-agent (global)'));
+    mockWriteBackup.mockRejectedValue(
+      new Error('Active backup already exists for test-agent (global)'),
+    );
 
-    await expect(launchIndependent({
-      adapter,
-      profile: testProfile,
-      providers: [testProvider],
-      scope: 'global',
-      command: 'claude',
-    })).rejects.toThrow('Active backup already exists');
+    await expect(
+      launchIndependent({
+        adapter,
+        profile: testProfile,
+        providers: [testProvider],
+        scope: 'global',
+        command: 'claude',
+      }),
+    ).rejects.toThrow('Active backup already exists');
 
     expect(adapter.writeConfig).not.toHaveBeenCalled();
   });

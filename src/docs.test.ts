@@ -91,7 +91,9 @@ describe.each(READMES)('%s prose provider-type lists', (name) => {
     const types = new Set<string>(PROVIDER_TYPES);
     const offenders: string[] = [];
 
-    for (const match of markdown.matchAll(/`[a-z][a-z0-9-]*`(?:(?:,| and|, and|\/) `[a-z][a-z0-9-]*`)+/g)) {
+    for (const match of markdown.matchAll(
+      /`[a-z][a-z0-9-]*`(?:(?:,| and|, and|\/) `[a-z][a-z0-9-]*`)+/g,
+    )) {
       const run = tokens(match[0]);
       if (!run.some((t) => types.has(t))) continue;
       offenders.push(...run.filter((t) => !types.has(t)));

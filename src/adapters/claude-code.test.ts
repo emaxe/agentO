@@ -105,7 +105,9 @@ describe('ClaudeCodeAdapter', () => {
       name: 'Second Provider',
       type: 'anthropic-compatible',
       apiKey: 'sk-ant-other',
-      models: [{ name: 'claude-3-haiku', capabilities: { image: true, video: false, audio: false } }],
+      models: [
+        { name: 'claude-3-haiku', capabilities: { image: true, video: false, audio: false } },
+      ],
     };
     const mixedProfile: Profile = {
       id: '00000000-0000-0000-0000-000000000005',
@@ -116,7 +118,7 @@ describe('ClaudeCodeAdapter', () => {
       ],
     };
     expect(() => adapter.buildConfig(mixedProfile, [testProvider, secondProvider])).toThrow(
-      'Claude Code supports only one provider per profile'
+      'Claude Code supports only one provider per profile',
     );
   });
 
@@ -135,12 +137,19 @@ describe('ClaudeCodeAdapter', () => {
       name: 'OpenRouter',
       type: 'openrouter',
       apiKey: 'sk-or-v1-test',
-      models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+      models: [
+        {
+          name: 'anthropic/claude-sonnet-4.6',
+          capabilities: { image: true, video: false, audio: false },
+        },
+      ],
     };
     const profile: Profile = {
       id: '00000000-0000-0000-0000-00000000000b',
       name: 'OR Profile',
-      models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+      models: [
+        { providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' },
+      ],
     };
     const config = adapter.buildConfig(profile, [openrouterProvider]);
     const env = config.env as Record<string, string>;
@@ -162,12 +171,19 @@ describe('ClaudeCodeAdapter', () => {
       type: 'openrouter',
       apiKey: 'sk-or-v1-test',
       baseUrl: 'https://proxy.example.com',
-      models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+      models: [
+        {
+          name: 'anthropic/claude-sonnet-4.6',
+          capabilities: { image: true, video: false, audio: false },
+        },
+      ],
     };
     const profile: Profile = {
       id: '00000000-0000-0000-0000-00000000000d',
       name: 'OR Custom',
-      models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+      models: [
+        { providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' },
+      ],
     };
     const config = adapter.buildConfig(profile, [openrouterProvider]);
     const env = config.env as Record<string, string>;
@@ -180,7 +196,12 @@ describe('ClaudeCodeAdapter', () => {
       name: 'Fireworks',
       type: 'fireworks',
       apiKey: 'fw-test-key',
-      models: [{ name: 'llama-3.1-70b-instruct', capabilities: { image: true, video: false, audio: false } }],
+      models: [
+        {
+          name: 'llama-3.1-70b-instruct',
+          capabilities: { image: true, video: false, audio: false },
+        },
+      ],
     };
     const profile: Profile = {
       id: '00000000-0000-0000-0000-000000000007',
@@ -200,7 +221,9 @@ describe('ClaudeCodeAdapter', () => {
       apiKey: 'sk-custom',
       baseUrl: 'https://proxy.example.com',
       customApiModes: { openai: false, anthropic: true, responses: false },
-      models: [{ name: 'claude-3-sonnet', capabilities: { image: true, video: false, audio: false } }],
+      models: [
+        { name: 'claude-3-sonnet', capabilities: { image: true, video: false, audio: false } },
+      ],
     };
     const profile: Profile = {
       id: '00000000-0000-0000-0000-0000000000e2',
@@ -227,7 +250,9 @@ describe('ClaudeCodeAdapter', () => {
       name: 'Custom',
       models: [{ providerId: customProvider.id, model: 'gpt-4', tier: 'base' }],
     };
-    expect(() => adapter.buildConfig(profile, [customProvider])).toThrow('requires anthropic, openai, or responses mode');
+    expect(() => adapter.buildConfig(profile, [customProvider])).toThrow(
+      'requires anthropic, openai, or responses mode',
+    );
   });
 
   it('custom-api provider with openai mode uses resolveCustomApiUrl for ANTHROPIC_BASE_URL', () => {
@@ -260,7 +285,9 @@ describe('ClaudeCodeAdapter', () => {
       apiKey: 'sk-custom',
       baseUrl: 'https://proxy.example.com',
       customApiModes: { openai: true, anthropic: true, responses: false },
-      models: [{ name: 'claude-3-sonnet', capabilities: { image: true, video: false, audio: false } }],
+      models: [
+        { name: 'claude-3-sonnet', capabilities: { image: true, video: false, audio: false } },
+      ],
     };
     const profile: Profile = {
       id: '00000000-0000-0000-0000-0000000000e4',
@@ -373,7 +400,12 @@ describe('ClaudeCodeAdapter', () => {
       const dir = await mkdtemp(join(tmpdir(), 'agento-cc-merge-'));
       try {
         await adapter.writeConfig({ customKey: 'value', env: { OLD: '1' } }, 'project', dir);
-        await adapter.writeConfig({ env: { NEW: '2' }, model: 'claude-3-sonnet' }, 'project', dir, true);
+        await adapter.writeConfig(
+          { env: { NEW: '2' }, model: 'claude-3-sonnet' },
+          'project',
+          dir,
+          true,
+        );
         const result = await adapter.readConfig('project', dir);
         expect(result).toEqual({
           customKey: 'value',

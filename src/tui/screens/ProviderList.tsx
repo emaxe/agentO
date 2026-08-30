@@ -14,7 +14,11 @@ interface ProviderListProps {
   status?: string;
 }
 
-export function ProviderList({ providers, selected, status }: ProviderListProps): React.JSX.Element {
+export function ProviderList({
+  providers,
+  selected,
+  status,
+}: ProviderListProps): React.JSX.Element {
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold>Providers</Text>
@@ -24,12 +28,16 @@ export function ProviderList({ providers, selected, status }: ProviderListProps)
         {providers.map((p, i) => (
           <Box key={p.id} flexDirection="column">
             <Text color={i === selected ? 'green' : undefined}>
-              {i === selected ? '▶ ' : '  '}{p.name} ({p.type})
+              {i === selected ? '▶ ' : '  '}
+              {p.name} ({p.type})
             </Text>
             {i === selected && (
               <Box flexDirection="column" paddingLeft={3}>
                 <Text dimColor>key: {p.apiKey.slice(0, 8)}...</Text>
-                <Text dimColor>models: {p.models.map((m) => `${capabilityMarker(m.capabilities)} ${m.name}`).join(', ')}</Text>
+                <Text dimColor>
+                  models:{' '}
+                  {p.models.map((m) => `${capabilityMarker(m.capabilities)} ${m.name}`).join(', ')}
+                </Text>
                 {p.baseUrl && <Text dimColor>url: {p.baseUrl}</Text>}
               </Box>
             )}

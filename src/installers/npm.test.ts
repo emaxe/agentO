@@ -38,7 +38,9 @@ describe('createNpmInstaller', () => {
 
     it('resolves failure on non-zero exit', async () => {
       const mockChild = {
-        stderr: { on: vi.fn((event: string, cb: (chunk: Buffer) => void) => cb(Buffer.from('npm err'))) },
+        stderr: {
+          on: vi.fn((event: string, cb: (chunk: Buffer) => void) => cb(Buffer.from('npm err'))),
+        },
         on: vi.fn((event: string, cb: (code: number) => void) => {
           if (event === 'exit') cb(1);
         }),
@@ -71,7 +73,9 @@ describe('createNpmInstaller', () => {
 
     it('resolves failure on non-zero exit', async () => {
       const mockChild = {
-        stderr: { on: vi.fn((event: string, cb: (chunk: Buffer) => void) => cb(Buffer.from('npm err'))) },
+        stderr: {
+          on: vi.fn((event: string, cb: (chunk: Buffer) => void) => cb(Buffer.from('npm err'))),
+        },
         on: vi.fn((event: string, cb: (code: number) => void) => {
           if (event === 'exit') cb(1);
         }),

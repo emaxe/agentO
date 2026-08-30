@@ -116,7 +116,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function normalizeFormat(value: unknown): BackupFileFormat {
   return typeof value === 'string' && BACKUP_FORMATS.includes(value as BackupFileFormat)
-    ? value as BackupFileFormat
+    ? (value as BackupFileFormat)
     : 'json';
 }
 
@@ -127,16 +127,18 @@ export function inferBackupFileFormat(path: string): BackupFileFormat {
   return 'raw';
 }
 
-function normalizeBackupManifest(raw: unknown, agentId: string, scope: LaunchScope): BackupManifest {
+function normalizeBackupManifest(
+  raw: unknown,
+  agentId: string,
+  scope: LaunchScope,
+): BackupManifest {
   if (isRecord(raw) && raw.version === 2 && Array.isArray(raw.files)) {
-    const files = raw.files
-      .filter(isRecord)
-      .map((file): BackupManifestFile => ({
-        path: typeof file.path === 'string' ? file.path : '',
-        format: normalizeFormat(file.format),
-        hadFile: file.hadFile === true,
-        content: file.content,
-      }));
+    const files = raw.files.filter(isRecord).map((file): BackupManifestFile => ({
+      path: typeof file.path === 'string' ? file.path : '',
+      format: normalizeFormat(file.format),
+      hadFile: file.hadFile === true,
+      content: file.content,
+    }));
 
     return {
       version: 2,
@@ -155,12 +157,14 @@ function normalizeBackupManifest(raw: unknown, agentId: string, scope: LaunchSco
     agentId,
     scope,
     createdAt: LEGACY_BACKUP_CREATED_AT,
-    files: [{
-      path: '',
-      format: 'json',
-      hadFile: true,
-      content: raw,
-    }],
+    files: [
+      {
+        path: '',
+        format: 'json',
+        hadFile: true,
+        content: raw,
+      },
+    ],
   };
 }
 
@@ -246,11 +250,19 @@ export function backupExists(agentId: string, scope: string, cwd?: string): bool
 /** Удаляет бэкап конфига агента. Не бросает ошибку если файл не существует. */
 export async function deleteBackup(agentId: string, scope: string, cwd?: string): Promise<void> {
   const backupPath = join(getBackupDir(agentId, scope as LaunchScope, cwd), `${scope}.bak.json`);
-  try { await unlink(backupPath); } catch { /* file might not exist */ }
+  try {
+    await unlink(backupPath);
+  } catch {
+    /* file might not exist */
+  }
 
   // Backward-compatibility: also try legacy path for project scope
   if (scope === 'project' && cwd) {
-    try { await unlink(getLegacyBackupPath(agentId, scope as LaunchScope)); } catch { /* file might not exist */ }
+    try {
+      await unlink(getLegacyBackupPath(agentId, scope as LaunchScope));
+    } catch {
+      /* file might not exist */
+    }
   }
 }
 

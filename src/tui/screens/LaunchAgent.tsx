@@ -16,8 +16,20 @@ interface LaunchAgentProps {
   agentStatusCache?: Record<string, boolean>;
 }
 
-export function LaunchAgent({ dev, onBack, onExec, launchError, agentStatusCache }: LaunchAgentProps): React.JSX.Element {
-  const { state, actions, computed } = useLaunchWizard({ dev, onBack, onExec, launchError, agentStatusCache });
+export function LaunchAgent({
+  dev,
+  onBack,
+  onExec,
+  launchError,
+  agentStatusCache,
+}: LaunchAgentProps): React.JSX.Element {
+  const { state, actions, computed } = useLaunchWizard({
+    dev,
+    onBack,
+    onExec,
+    launchError,
+    agentStatusCache,
+  });
 
   useKeyInput(actions.handleKey);
 

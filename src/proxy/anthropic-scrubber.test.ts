@@ -230,7 +230,7 @@ describe('startAnthropicScrubberProxy', () => {
 
     const res = await fetch(`${proxy.url}/v1/messages`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { receivedUrl: string };
+    const body = (await res.json()) as { receivedUrl: string };
     expect(body.receivedUrl).toBe('/inference/v1/messages');
   });
 
@@ -246,7 +246,7 @@ describe('startAnthropicScrubberProxy', () => {
 
     const res = await fetch(`${proxy.url}/v1/models`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { receivedUrl: string };
+    const body = (await res.json()) as { receivedUrl: string };
     expect(body.receivedUrl).toBe('/api/v1/models');
   });
 
@@ -262,7 +262,7 @@ describe('startAnthropicScrubberProxy', () => {
 
     const res = await fetch(`${proxy.url}/v1/messages?beta=true`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { receivedUrl: string };
+    const body = (await res.json()) as { receivedUrl: string };
     expect(body.receivedUrl).toBe('/inference/v1/messages?beta=true');
   });
 
@@ -278,13 +278,15 @@ describe('startAnthropicScrubberProxy', () => {
 
     const res = await fetch(`${proxy.url}/v1/messages`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { receivedUrl: string };
+    const body = (await res.json()) as { receivedUrl: string };
     expect(body.receivedUrl).toBe('/inference/v1/messages');
   });
 
   it('returns 502 when upstream times out', async () => {
     // upstream accepts the connection but never responds
-    upstream.on('request', () => { /* intentionally hang */ });
+    upstream.on('request', () => {
+      /* intentionally hang */
+    });
 
     proxy = await startAnthropicScrubberProxy({ upstreamUrl, timeoutMs: 50 });
     const res = await fetch(`${proxy.url}/v1/messages`, {

@@ -5,11 +5,7 @@ import { useKeyInput } from '../use-key-input.js';
 import type { Provider, ModelConfig, ProviderType } from '../../config/schema.js';
 import { capabilityMarker, PROVIDER_TYPES } from '../../config/schema.js';
 import { validateProvider } from '../../config/validation.js';
-import {
-  isOpenAICompatible,
-  resolveModelsBaseUrl,
-  fetchProviderModels,
-} from '../provider-api.js';
+import { isOpenAICompatible, resolveModelsBaseUrl, fetchProviderModels } from '../provider-api.js';
 
 /** All possible field names, including conditional API-test fields. */
 type FieldName =
@@ -64,19 +60,33 @@ interface ProviderFormProps {
 /** Returns the left-column label for each field. */
 function labelFor(f: FieldName): string {
   switch (f) {
-    case 'name':         return 'Name:    ';
-    case 'type':         return 'Type:    ';
-    case 'apiKey':       return 'API Key: ';
-    case 'baseUrl':      return 'Base URL:';
-    case 'customApiModes': return 'API Modes:';
-    case 'models':       return 'Models:  ';
-    case 'apiTest':      return 'API:     ';
-    case 'fetchModels':  return 'Модели:  ';
-    case 'save':         return 'Save:    ';
+    case 'name':
+      return 'Name:    ';
+    case 'type':
+      return 'Type:    ';
+    case 'apiKey':
+      return 'API Key: ';
+    case 'baseUrl':
+      return 'Base URL:';
+    case 'customApiModes':
+      return 'API Modes:';
+    case 'models':
+      return 'Models:  ';
+    case 'apiTest':
+      return 'API:     ';
+    case 'fetchModels':
+      return 'Модели:  ';
+    case 'save':
+      return 'Save:    ';
   }
 }
 
-export function ProviderForm({ provider, providers, onSubmit, onCancel }: ProviderFormProps): React.JSX.Element {
+export function ProviderForm({
+  provider,
+  providers,
+  onSubmit,
+  onCancel,
+}: ProviderFormProps): React.JSX.Element {
   const [form, setForm] = useState<FormState>(
     provider
       ? {
@@ -102,7 +112,9 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
   const [status, setStatus] = useState('');
 
   // --- API test state ---
-  const [apiTestStatus, setApiTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [apiTestStatus, setApiTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>(
+    'idle',
+  );
   const [apiTestError, setApiTestError] = useState('');
   const [cachedModels, setCachedModels] = useState<string[]>([]);
 
@@ -116,7 +128,10 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
   // Sync customApiModes when type switches to custom-api.
   useEffect(() => {
     if (form.type === 'custom-api' && !form.customApiModes) {
-      setForm((f) => ({ ...f, customApiModes: { openai: false, anthropic: false, responses: false } }));
+      setForm((f) => ({
+        ...f,
+        customApiModes: { openai: false, anthropic: false, responses: false },
+      }));
     }
   }, [form.type]);
 
@@ -182,12 +197,23 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
     const models = form.models.map((m) => ({ ...m, name: m.name.trim() })).filter((m) => m.name);
     try {
       validateProvider(
-        { name: form.name, type: form.type, apiKey: form.apiKey, baseUrl: form.baseUrl, models, customApiModes: form.customApiModes ?? undefined },
+        {
+          name: form.name,
+          type: form.type,
+          apiKey: form.apiKey,
+          baseUrl: form.baseUrl,
+          models,
+          customApiModes: form.customApiModes ?? undefined,
+        },
         providers,
         provider?.id,
       );
       setStatus('Saving...');
-      const result = onSubmit({ ...form, models, customApiModes: form.customApiModes ?? undefined });
+      const result = onSubmit({
+        ...form,
+        models,
+        customApiModes: form.customApiModes ?? undefined,
+      });
       if (result instanceof Promise) {
         result.catch((err: unknown) => setStatus(`Error: ${String(err)}`));
       }
@@ -243,8 +269,14 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
     // --- models sub-mode ---
     if (subMode === 'models') {
       if (key.escape) {
-        if (modelsEditingIndex !== null) { setModelsEditingIndex(null); return; }
-        if (modelsAddingNew) { setModelsAddingNew(false); return; }
+        if (modelsEditingIndex !== null) {
+          setModelsEditingIndex(null);
+          return;
+        }
+        if (modelsAddingNew) {
+          setModelsAddingNew(false);
+          return;
+        }
         setSubMode('form');
         return;
       }
@@ -253,20 +285,47 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
         return;
       }
 
-      if (key.upArrow) { setModelsListIndex((i) => Math.max(0, i - 1)); return; }
-      if (key.downArrow) { setModelsListIndex((i) => Math.min(form.models.length, i + 1)); return; }
+      if (key.upArrow) {
+        setModelsListIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setModelsListIndex((i) => Math.min(form.models.length, i + 1));
+        return;
+      }
 
       if (modelsListIndex < form.models.length) {
         if (input === 'i') {
-          setForm((f) => ({ ...f, models: f.models.map((m, j) => j === modelsListIndex ? { ...m, capabilities: { ...m.capabilities, image: !m.capabilities.image } } : m) }));
+          setForm((f) => ({
+            ...f,
+            models: f.models.map((m, j) =>
+              j === modelsListIndex
+                ? { ...m, capabilities: { ...m.capabilities, image: !m.capabilities.image } }
+                : m,
+            ),
+          }));
           return;
         }
         if (input === 'v') {
-          setForm((f) => ({ ...f, models: f.models.map((m, j) => j === modelsListIndex ? { ...m, capabilities: { ...m.capabilities, video: !m.capabilities.video } } : m) }));
+          setForm((f) => ({
+            ...f,
+            models: f.models.map((m, j) =>
+              j === modelsListIndex
+                ? { ...m, capabilities: { ...m.capabilities, video: !m.capabilities.video } }
+                : m,
+            ),
+          }));
           return;
         }
         if (input === 'a') {
-          setForm((f) => ({ ...f, models: f.models.map((m, j) => j === modelsListIndex ? { ...m, capabilities: { ...m.capabilities, audio: !m.capabilities.audio } } : m) }));
+          setForm((f) => ({
+            ...f,
+            models: f.models.map((m, j) =>
+              j === modelsListIndex
+                ? { ...m, capabilities: { ...m.capabilities, audio: !m.capabilities.audio } }
+                : m,
+            ),
+          }));
           return;
         }
       }
@@ -327,15 +386,33 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
 
     if (activeField === 'customApiModes' && form.customApiModes) {
       if (input === 'o') {
-        setForm((f) => f.customApiModes ? ({ ...f, customApiModes: { ...f.customApiModes, openai: !f.customApiModes.openai } }) : f);
+        setForm((f) =>
+          f.customApiModes
+            ? { ...f, customApiModes: { ...f.customApiModes, openai: !f.customApiModes.openai } }
+            : f,
+        );
         return;
       }
       if (input === 'a') {
-        setForm((f) => f.customApiModes ? ({ ...f, customApiModes: { ...f.customApiModes, anthropic: !f.customApiModes.anthropic } }) : f);
+        setForm((f) =>
+          f.customApiModes
+            ? {
+                ...f,
+                customApiModes: { ...f.customApiModes, anthropic: !f.customApiModes.anthropic },
+              }
+            : f,
+        );
         return;
       }
       if (input === 'r') {
-        setForm((f) => f.customApiModes ? ({ ...f, customApiModes: { ...f.customApiModes, responses: !f.customApiModes.responses } }) : f);
+        setForm((f) =>
+          f.customApiModes
+            ? {
+                ...f,
+                customApiModes: { ...f.customApiModes, responses: !f.customApiModes.responses },
+              }
+            : f,
+        );
         return;
       }
     }
@@ -379,15 +456,13 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>Выбор моделей</Text>
-        <Text dimColor>↑↓: навигация  Space: выбрать  Enter: добавить  Esc: отмена</Text>
+        <Text dimColor>↑↓: навигация Space: выбрать Enter: добавить Esc: отмена</Text>
         <Text dimColor>
-          Выбрано: {modelSelectionSelected.size}  [{modelSelectionCursor + 1}/{cachedModels.length}]
+          Выбрано: {modelSelectionSelected.size} [{modelSelectionCursor + 1}/{cachedModels.length}]
         </Text>
         <Box flexDirection="column" marginTop={1} paddingLeft={2}>
-          {cachedModels.length === 0 && (
-            <Text dimColor>(нет моделей)</Text>
-          )}
-          {viewStart > 0 && <Text dimColor>  ↑ ещё {viewStart}</Text>}
+          {cachedModels.length === 0 && <Text dimColor>(нет моделей)</Text>}
+          {viewStart > 0 && <Text dimColor> ↑ ещё {viewStart}</Text>}
           {visibleModels.map((modelId, relIdx) => {
             const idx = viewStart + relIdx;
             const isCursor = idx === modelSelectionCursor;
@@ -395,9 +470,7 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
             const alreadyAdded = form.models.some((m) => m.name === modelId);
             return (
               <Box key={modelId}>
-                <Text color={isCursor ? 'cyan' : undefined}>
-                  {isCursor ? '▶ ' : '  '}
-                </Text>
+                <Text color={isCursor ? 'cyan' : undefined}>{isCursor ? '▶ ' : '  '}</Text>
                 <Text dimColor={alreadyAdded}>
                   [{isChecked ? 'x' : ' '}] {modelId}
                   {alreadyAdded ? ' (уже есть)' : ''}
@@ -405,7 +478,9 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
               </Box>
             );
           })}
-          {viewEnd < cachedModels.length && <Text dimColor>  ↓ ещё {cachedModels.length - viewEnd}</Text>}
+          {viewEnd < cachedModels.length && (
+            <Text dimColor> ↓ ещё {cachedModels.length - viewEnd}</Text>
+          )}
         </Box>
       </Box>
     );
@@ -418,17 +493,15 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
       <Box flexDirection="column" padding={1}>
         <Text bold>Edit Models</Text>
         <Text dimColor>
-          {inEdit ? 'Enter: save  Esc: cancel' : '↑↓: navigate  Enter: edit/add  i/v/a: toggle caps  d: delete  Esc: back'}
+          {inEdit
+            ? 'Enter: save  Esc: cancel'
+            : '↑↓: navigate  Enter: edit/add  i/v/a: toggle caps  d: delete  Esc: back'}
         </Text>
         <Box flexDirection="column" marginTop={1} paddingLeft={2}>
-          {form.models.length === 0 && !modelsAddingNew && (
-            <Text dimColor>(no models)</Text>
-          )}
+          {form.models.length === 0 && !modelsAddingNew && <Text dimColor>(no models)</Text>}
           {form.models.map((model, idx) => (
             <Box key={idx}>
-              <Text color="cyan">
-                {modelsListIndex === idx && !inEdit ? '▶ ' : '  '}
-              </Text>
+              <Text color="cyan">{modelsListIndex === idx && !inEdit ? '▶ ' : '  '}</Text>
               {modelsEditingIndex === idx ? (
                 <TextInput
                   value={model.name}
@@ -442,7 +515,10 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
                   onSubmit={() => setModelsEditingIndex(null)}
                 />
               ) : (
-                <Text><Text color="gray">{capabilityMarker(model.capabilities)} </Text>{model.name}</Text>
+                <Text>
+                  <Text color="gray">{capabilityMarker(model.capabilities)} </Text>
+                  {model.name}
+                </Text>
               )}
             </Box>
           ))}
@@ -455,7 +531,17 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
                 onChange={setModelsNewValue}
                 onSubmit={() => {
                   const trimmed = modelsNewValue.trim();
-                  if (trimmed) setForm((f) => ({ ...f, models: [...f.models, { name: trimmed, capabilities: { image: true, video: false, audio: false } }] }));
+                  if (trimmed)
+                    setForm((f) => ({
+                      ...f,
+                      models: [
+                        ...f.models,
+                        {
+                          name: trimmed,
+                          capabilities: { image: true, video: false, audio: false },
+                        },
+                      ],
+                    }));
                   setModelsAddingNew(false);
                   setModelsNewValue('');
                 }}
@@ -492,7 +578,13 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold>{provider ? 'Edit Provider' : 'Add Provider'}</Text>
-      {status && <Text color={status.startsWith('Error') ? 'red' : status === 'Saving...' ? 'cyan' : 'yellow'}>{status}</Text>}
+      {status && (
+        <Text
+          color={status.startsWith('Error') ? 'red' : status === 'Saving...' ? 'cyan' : 'yellow'}
+        >
+          {status}
+        </Text>
+      )}
       <Text dimColor>{hint}</Text>
       <Box flexDirection="column" marginTop={1}>
         {fields.map((field, i) => {
@@ -501,27 +593,42 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
           return (
             <Box key={field} flexDirection="column">
               <Box>
-                <Text color={labelColor}>{focused ? '▶ ' : '  '}{labelFor(field)} </Text>
+                <Text color={labelColor}>
+                  {focused ? '▶ ' : '  '}
+                  {labelFor(field)}{' '}
+                </Text>
                 {field === 'type' && (
-                  <Text>{focused ? '◀ ' : '  '}{form.type}{focused ? ' ▶' : ''}</Text>
+                  <Text>
+                    {focused ? '◀ ' : '  '}
+                    {form.type}
+                    {focused ? ' ▶' : ''}
+                  </Text>
                 )}
                 {field === 'save' && (
-                  <Text color={focused ? 'green' : 'gray'} bold={focused}>{focused ? '[ Save ]' : '  Save  '}</Text>
+                  <Text color={focused ? 'green' : 'gray'} bold={focused}>
+                    {focused ? '[ Save ]' : '  Save  '}
+                  </Text>
                 )}
                 {field === 'apiTest' && (
                   <Box>
                     <Text
                       color={
-                        apiTestStatus === 'success' ? 'green'
-                          : apiTestStatus === 'error' ? 'red'
-                            : focused ? 'green' : 'gray'
+                        apiTestStatus === 'success'
+                          ? 'green'
+                          : apiTestStatus === 'error'
+                            ? 'red'
+                            : focused
+                              ? 'green'
+                              : 'gray'
                       }
                       bold={focused}
                     >
                       {focused ? '[ Протестировать API ]' : '  Протестировать API  '}
                     </Text>
                     {apiTestStatus === 'testing' && <Text color="cyan"> Проверяем...</Text>}
-                    {apiTestStatus === 'success' && <Text color="green"> ✓ OK — {cachedModels.length} моделей</Text>}
+                    {apiTestStatus === 'success' && (
+                      <Text color="green"> ✓ OK — {cachedModels.length} моделей</Text>
+                    )}
                     {apiTestStatus === 'error' && <Text color="red"> ✗ {apiTestError}</Text>}
                   </Box>
                 )}
@@ -530,48 +637,56 @@ export function ProviderForm({ provider, providers, onSubmit, onCancel }: Provid
                     {focused ? '[ Запросить список моделей ]' : '  Запросить список моделей  '}
                   </Text>
                 )}
-                {field !== 'type' && field !== 'models' && field !== 'customApiModes' && field !== 'save' && field !== 'apiTest' && field !== 'fetchModels' && (
-                  <TextInput
-                    value={form[field as StringField]}
-                    onChange={(value) => setForm((f) => ({ ...f, [field]: value }))}
-                    focus={focused}
-                    showCursor={focused}
-                    placeholder={field === 'baseUrl'
-                      ? (form.type === 'custom-api'
-                        ? '(required, /v1/ stripped automatically)'
-                        : form.type === 'responses-compatible'
-                          ? '(required)'
-                          : form.type === 'openai-compatible'
-                            ? '(optional, default: https://api.openai.com/v1)'
-                            : '(optional)')
-                      : ''}
-                  />
-                )}
+                {field !== 'type' &&
+                  field !== 'models' &&
+                  field !== 'customApiModes' &&
+                  field !== 'save' &&
+                  field !== 'apiTest' &&
+                  field !== 'fetchModels' && (
+                    <TextInput
+                      value={form[field as StringField]}
+                      onChange={(value) => setForm((f) => ({ ...f, [field]: value }))}
+                      focus={focused}
+                      showCursor={focused}
+                      placeholder={
+                        field === 'baseUrl'
+                          ? form.type === 'custom-api'
+                            ? '(required, /v1/ stripped automatically)'
+                            : form.type === 'responses-compatible'
+                              ? '(required)'
+                              : form.type === 'openai-compatible'
+                                ? '(optional, default: https://api.openai.com/v1)'
+                                : '(optional)'
+                          : ''
+                      }
+                    />
+                  )}
               </Box>
               {field === 'customApiModes' && form.customApiModes && (
                 <Box flexDirection="column" paddingLeft={4}>
                   <Text dimColor={!focused}>
-                    <Text color={focused ? 'cyan' : undefined}>{focused ? '▶ ' : '  '}</Text>
-                    [{form.customApiModes.openai ? 'x' : ' '}] openai
+                    <Text color={focused ? 'cyan' : undefined}>{focused ? '▶ ' : '  '}</Text>[
+                    {form.customApiModes.openai ? 'x' : ' '}] openai
                   </Text>
                   <Text dimColor={!focused}>
-                    <Text color={focused ? 'cyan' : undefined}>{focused ? '▶ ' : '  '}</Text>
-                    [{form.customApiModes.anthropic ? 'x' : ' '}] anthropic
+                    <Text color={focused ? 'cyan' : undefined}>{focused ? '▶ ' : '  '}</Text>[
+                    {form.customApiModes.anthropic ? 'x' : ' '}] anthropic
                   </Text>
                   <Text dimColor={!focused}>
-                    <Text color={focused ? 'cyan' : undefined}>{focused ? '▶ ' : '  '}</Text>
-                    [{form.customApiModes.responses ? 'x' : ' '}] responses
+                    <Text color={focused ? 'cyan' : undefined}>{focused ? '▶ ' : '  '}</Text>[
+                    {form.customApiModes.responses ? 'x' : ' '}] responses
                   </Text>
                 </Box>
               )}
               {field === 'models' && (
                 <Box flexDirection="column" paddingLeft={4}>
-                  {form.models.length === 0 && (
-                    <Text dimColor>(no models)</Text>
-                  )}
+                  {form.models.length === 0 && <Text dimColor>(no models)</Text>}
                   {form.models.map((model, idx) => (
                     <Box key={idx}>
-                      <Text dimColor={!focused}><Text color="gray">{capabilityMarker(model.capabilities)} </Text>{model.name}</Text>
+                      <Text dimColor={!focused}>
+                        <Text color="gray">{capabilityMarker(model.capabilities)} </Text>
+                        {model.name}
+                      </Text>
                     </Box>
                   ))}
                   <Text

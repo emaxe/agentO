@@ -86,8 +86,9 @@ describe('describeIncompatibility', () => {
         { providerId: b.id, model: 'm2', tier: 'small' },
       ],
     };
-    expect(describeIncompatibility(adapterFor('claude-code'), mixed, [a, b]))
-      .toContain('only one provider per profile');
+    expect(describeIncompatibility(adapterFor('claude-code'), mixed, [a, b])).toContain(
+      'only one provider per profile',
+    );
   });
 });
 

@@ -6,7 +6,14 @@ import { buildProxyHeaders, getOutboundAgent, normalizeProxyUpstream } from './p
 const PROXY_URL = 'http://proxy.example.com:8080';
 
 /** Save and restore proxy-related env vars around each test to avoid cross-test pollution. */
-const PROXY_VARS = ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy'] as const;
+const PROXY_VARS = [
+  'HTTPS_PROXY',
+  'https_proxy',
+  'HTTP_PROXY',
+  'http_proxy',
+  'ALL_PROXY',
+  'all_proxy',
+] as const;
 
 describe('getOutboundAgent', () => {
   let saved: Partial<Record<string, string>>;
@@ -127,7 +134,11 @@ describe('normalizeProxyUpstream', () => {
 
 describe('buildProxyHeaders', () => {
   it('removes hop-by-hop headers', () => {
-    const h = buildProxyHeaders({ host: 'foo', 'content-length': '4', 'transfer-encoding': 'chunked' });
+    const h = buildProxyHeaders({
+      host: 'foo',
+      'content-length': '4',
+      'transfer-encoding': 'chunked',
+    });
     expect(h).toEqual({ 'accept-encoding': 'identity' });
   });
 
@@ -145,7 +156,10 @@ describe('buildProxyHeaders', () => {
   });
 
   it('strips anthropic-beta', () => {
-    const h = buildProxyHeaders({ 'anthropic-beta': 'interleaved-thinking-2025-05-14', 'content-type': 'application/json' });
+    const h = buildProxyHeaders({
+      'anthropic-beta': 'interleaved-thinking-2025-05-14',
+      'content-type': 'application/json',
+    });
     expect(h).not.toHaveProperty('anthropic-beta');
     expect(h['content-type']).toBe('application/json');
   });

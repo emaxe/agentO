@@ -46,10 +46,15 @@ export function Agents({ dev, onBack }: AgentsProps): React.JSX.Element {
     setStatuses(result);
   }, [dev]);
 
-  useEffect(() => { loadStatuses(); }, [loadStatuses]);
+  useEffect(() => {
+    loadStatuses();
+  }, [loadStatuses]);
 
   useKeyInput((input, key) => {
-    if (key.escape || input === 'q') { onBack(); return; }
+    if (key.escape || input === 'q') {
+      onBack();
+      return;
+    }
     if (key.upArrow) setSelectedIndex((i) => Math.max(0, i - 1));
     else if (key.downArrow) setSelectedIndex((i) => Math.min(statuses.length - 1, i + 1));
     else if (input === 'r' && statuses[selectedIndex]?.modified) {
@@ -60,11 +65,17 @@ export function Agents({ dev, onBack }: AgentsProps): React.JSX.Element {
       const restoreCwd = process.cwd();
       readBackup(s.adapterId, s.scope, restoreCwd)
         .then(async (backup) => {
-          if (!backup) { setStatus('No backup found'); return; }
+          if (!backup) {
+            setStatus('No backup found');
+            return;
+          }
           await restorePrimaryBackupFile(adapter, backup, s.scope, restoreCwd);
           await deleteBackup(s.adapterId, s.scope, restoreCwd);
         })
-        .then(() => { setStatus(`Restored ${s.displayName} [${s.scope}]`); loadStatuses(); })
+        .then(() => {
+          setStatus(`Restored ${s.displayName} [${s.scope}]`);
+          loadStatuses();
+        })
         .catch((err) => setStatus(`Error: ${String(err)}`));
     }
   });

@@ -30,7 +30,6 @@ export interface QwenConfig {
   [key: string]: unknown;
 }
 
-
 /** Генерирует env-ключ для Qwen из baseUrl.
  * Пример: "http://188.132.197.214:20128/v1" → "QWEN_CUSTOM_API_KEY_OPENAI_HTTP_188_132_197_214_20128_V1"
  */
@@ -45,7 +44,12 @@ function deriveEnvKey(baseUrl: string): string {
 export class QwenAdapter implements AgentAdapter<QwenConfig> {
   readonly id = 'qwen';
   readonly displayName = 'Qwen CLI';
-  readonly supportedProviderTypes = ['openai-compatible', 'fireworks', 'openrouter', 'custom-api'] as const;
+  readonly supportedProviderTypes = [
+    'openai-compatible',
+    'fireworks',
+    'openrouter',
+    'custom-api',
+  ] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -79,12 +83,16 @@ export class QwenAdapter implements AgentAdapter<QwenConfig> {
         throw new Error(`Provider not found for id: ${profileModel.providerId}`);
       }
       if (provider.type === 'anthropic-compatible') {
-        throw new Error(`Qwen CLI does not support Anthropic providers (provider: "${provider.name}")`);
+        throw new Error(
+          `Qwen CLI does not support Anthropic providers (provider: "${provider.name}")`,
+        );
       }
       let resolvedBaseUrl: string | undefined;
       if (provider.type === 'custom-api') {
         if (!provider.customApiModes?.openai) {
-          throw new Error(`Qwen CLI requires openai mode for custom-api provider "${provider.name}"`);
+          throw new Error(
+            `Qwen CLI requires openai mode for custom-api provider "${provider.name}"`,
+          );
         }
         resolvedBaseUrl = resolveCustomApiUrl(provider, 'openai');
       } else {
@@ -131,7 +139,12 @@ export class QwenAdapter implements AgentAdapter<QwenConfig> {
    * conservative shallow merge: unknown top-level keys are preserved, generated
    * keys overwrite, nested objects are replaced whole, and `env` is merged flat.
    */
-  async writeConfig(config: QwenConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
+  async writeConfig(
+    config: QwenConfig,
+    scope: LaunchScope,
+    cwd?: string,
+    mergeEnabled?: boolean,
+  ): Promise<void> {
     const path = this.configPaths(cwd)[scope];
     const dir = join(path, '..');
     await mkdir(dir, { recursive: true });

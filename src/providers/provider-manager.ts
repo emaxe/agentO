@@ -46,7 +46,10 @@ export async function updateProvider(
   if (index === -1) throw new Error(`Provider not found: ${id}`);
   validateProvider({ ...config.providers[index], ...updates }, config.providers, id);
   const updated = ProviderSchema.parse({ ...config.providers[index], ...updates });
-  const newConfig = { ...config, providers: config.providers.map((p, i) => i === index ? updated : p) };
+  const newConfig = {
+    ...config,
+    providers: config.providers.map((p, i) => (i === index ? updated : p)),
+  };
   await writeConfig(newConfig);
   return updated;
 }
@@ -57,9 +60,7 @@ export async function updateProvider(
  */
 export async function removeProvider(idOrName: string): Promise<void> {
   const config = await readConfig();
-  const index = config.providers.findIndex(
-    (p) => p.id === idOrName || p.name === idOrName,
-  );
+  const index = config.providers.findIndex((p) => p.id === idOrName || p.name === idOrName);
   if (index === -1) throw new Error(`Provider not found: ${idOrName}`);
   const newConfig = { ...config, providers: config.providers.filter((_, i) => i !== index) };
   await writeConfig(newConfig);

@@ -17,8 +17,8 @@ export interface CopilotConfig {
 const PROVIDER_TYPE_MAP: Record<ProviderType, string> = {
   'openai-compatible': 'openai',
   'anthropic-compatible': 'anthropic',
-  'fireworks': 'openai',
-  'openrouter': 'openai',
+  fireworks: 'openai',
+  openrouter: 'openai',
   'responses-compatible': 'openai',
   'custom-api': 'openai',
 };
@@ -26,7 +26,14 @@ const PROVIDER_TYPE_MAP: Record<ProviderType, string> = {
 export class CopilotAdapter implements AgentAdapter<CopilotConfig> {
   readonly id = 'copilot';
   readonly displayName = 'Copilot CLI';
-  readonly supportedProviderTypes = ['openai-compatible', 'anthropic-compatible', 'fireworks', 'openrouter', 'responses-compatible', 'custom-api'] as const;
+  readonly supportedProviderTypes = [
+    'openai-compatible',
+    'anthropic-compatible',
+    'fireworks',
+    'openrouter',
+    'responses-compatible',
+    'custom-api',
+  ] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -60,9 +67,12 @@ export class CopilotAdapter implements AgentAdapter<CopilotConfig> {
         resolvedUrl = resolveCustomApiUrl(provider, 'anthropic');
       } else if (provider.customApiModes?.openai || provider.customApiModes?.responses) {
         copilotProviderType = 'openai';
-        resolvedUrl = resolveCustomApiUrl(provider, 'openai') ?? resolveCustomApiUrl(provider, 'responses');
+        resolvedUrl =
+          resolveCustomApiUrl(provider, 'openai') ?? resolveCustomApiUrl(provider, 'responses');
       } else {
-        throw new Error(`Copilot CLI: custom-api provider "${provider.name}" requires at least one compatible mode (anthropic, openai, or responses)`);
+        throw new Error(
+          `Copilot CLI: custom-api provider "${provider.name}" requires at least one compatible mode (anthropic, openai, or responses)`,
+        );
       }
     } else {
       copilotProviderType = PROVIDER_TYPE_MAP[provider.type];
@@ -84,14 +94,22 @@ export class CopilotAdapter implements AgentAdapter<CopilotConfig> {
       COPILOT_PROVIDER_BASE_URL: resolvedUrl,
     };
 
-    if (provider.type === 'responses-compatible' || (provider.type === 'custom-api' && provider.customApiModes?.responses)) {
+    if (
+      provider.type === 'responses-compatible' ||
+      (provider.type === 'custom-api' && provider.customApiModes?.responses)
+    ) {
       env.COPILOT_PROVIDER_WIRE_API = 'responses';
     }
 
     return env;
   }
 
-  async writeConfig(_config: CopilotConfig, _scope: LaunchScope, _cwd?: string, _mergeEnabled?: boolean): Promise<void> {
+  async writeConfig(
+    _config: CopilotConfig,
+    _scope: LaunchScope,
+    _cwd?: string,
+    _mergeEnabled?: boolean,
+  ): Promise<void> {
     // No-op: Copilot CLI receives all config via environment variables (see buildEnv).
     // There is nothing to write to settings.json.
   }

@@ -85,15 +85,20 @@ export interface GitExcludeResult {
  * written to is reported through {@link GitExcludeResult.error} so the caller can
  * warn instead of failing the launch.
  */
-export async function addToGitExclude(cwd: string, targetPaths: string[]): Promise<GitExcludeResult> {
+export async function addToGitExclude(
+  cwd: string,
+  targetPaths: string[],
+): Promise<GitExcludeResult> {
   const gitRoot = findGitRoot(cwd);
   if (!gitRoot) return { added: [] };
 
-  const patterns = [...new Set(
-    targetPaths
-      .map((path) => toExcludePattern(gitRoot, path))
-      .filter((pattern): pattern is string => pattern !== null),
-  )];
+  const patterns = [
+    ...new Set(
+      targetPaths
+        .map((path) => toExcludePattern(gitRoot, path))
+        .filter((pattern): pattern is string => pattern !== null),
+    ),
+  ];
   if (patterns.length === 0) return { added: [] };
 
   const commonDir = resolveGitCommonDir(gitRoot);
@@ -111,10 +116,7 @@ export async function addToGitExclude(cwd: string, targetPaths: string[]): Promi
     const missing = patterns.filter((pattern) => !present.has(pattern));
     if (missing.length === 0) return { added: [] };
 
-    const block = [
-      ...(present.has(MARKER) ? [] : [MARKER]),
-      ...missing,
-    ].join('\n');
+    const block = [...(present.has(MARKER) ? [] : [MARKER]), ...missing].join('\n');
     const separator = existing === '' || existing.endsWith('\n') ? '' : '\n';
 
     await mkdir(dirname(excludePath), { recursive: true });

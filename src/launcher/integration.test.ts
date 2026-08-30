@@ -20,7 +20,9 @@ vi.mock('../proxy/openai-proxy.js', () => ({
 }));
 
 vi.mock('../proxy/anthropic-scrubber.js', () => ({
-  startAnthropicScrubberProxy: vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:9998', stop: vi.fn() }),
+  startAnthropicScrubberProxy: vi
+    .fn()
+    .mockResolvedValue({ url: 'http://127.0.0.1:9998', stop: vi.fn() }),
 }));
 
 import { startOpenAIProxy } from '../proxy/openai-proxy.js';
@@ -47,7 +49,9 @@ const provider: Provider = {
   name: 'Test',
   type: 'anthropic-compatible',
   apiKey: 'sk-test',
-  models: [{ name: 'claude-3-5-sonnet', capabilities: { image: true, video: false, audio: false } }],
+  models: [
+    { name: 'claude-3-5-sonnet', capabilities: { image: true, video: false, audio: false } },
+  ],
 };
 
 const profile: Profile = {
@@ -83,7 +87,10 @@ describe('launch/restore integration', () => {
     const configPath = join(testDir, '.claude', 'settings.json');
     const originalConfig = { model: 'original-model', env: {} };
     await mkdir(join(testDir, '.claude'), { recursive: true });
-    await writeFile(configPath, JSON.stringify(originalConfig, null, 2), { encoding: 'utf-8', mode: 0o600 });
+    await writeFile(configPath, JSON.stringify(originalConfig, null, 2), {
+      encoding: 'utf-8',
+      mode: 0o600,
+    });
 
     const { cleanup } = await prepareLaunchTransaction({
       adapter: claudeCodeAdapter,
@@ -98,7 +105,10 @@ describe('launch/restore integration', () => {
 
     await cleanup();
 
-    const restoredContent = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
+    const restoredContent = JSON.parse(await readFile(configPath, 'utf-8')) as Record<
+      string,
+      unknown
+    >;
     expect(restoredContent['model']).toBe('original-model');
   });
 
@@ -152,7 +162,9 @@ describe('launch/restore integration', () => {
       name: 'OpenRouter',
       type: 'openrouter',
       apiKey: 'or-test',
-      models: [{ name: 'claude-3-5-sonnet', capabilities: { image: true, video: false, audio: false } }],
+      models: [
+        { name: 'claude-3-5-sonnet', capabilities: { image: true, video: false, audio: false } },
+      ],
     };
     const openrouterProfile: Profile = {
       id: '00000000-0000-0000-0000-000000000006',
@@ -172,7 +184,9 @@ describe('launch/restore integration', () => {
     const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
     const env = config.env as Record<string, string>;
     expect(env['ANTHROPIC_BASE_URL']).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-    expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://openrouter.ai/api' });
+    expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({
+      upstreamUrl: 'https://openrouter.ai/api',
+    });
     expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
 
     await cleanup();
@@ -187,7 +201,12 @@ describe('launch/restore integration', () => {
       name: 'Fireworks',
       type: 'fireworks',
       apiKey: 'fw-test',
-      models: [{ name: 'accounts/fireworks/models/kimi-k2p6', capabilities: { image: true, video: false, audio: false } }],
+      models: [
+        {
+          name: 'accounts/fireworks/models/kimi-k2p6',
+          capabilities: { image: true, video: false, audio: false },
+        },
+      ],
     };
     const fireworksProfile: Profile = {
       id: '00000000-0000-0000-0000-000000000008',
@@ -207,7 +226,9 @@ describe('launch/restore integration', () => {
     const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
     const env = config.env as Record<string, string>;
     expect(env['ANTHROPIC_BASE_URL']).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-    expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://api.fireworks.ai/inference' });
+    expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({
+      upstreamUrl: 'https://api.fireworks.ai/inference',
+    });
     expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
 
     await cleanup();
@@ -299,7 +320,9 @@ describe('launch/restore integration', () => {
     const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>;
     const env = config.env as Record<string, string>;
     expect(env['ANTHROPIC_BASE_URL']).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-    expect(mockStartOpenAIProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://proxy.example.com/v1' });
+    expect(mockStartOpenAIProxy).toHaveBeenCalledWith({
+      upstreamUrl: 'https://proxy.example.com/v1',
+    });
     expect(mockStartAnthropicScrubberProxy).not.toHaveBeenCalled();
 
     await cleanup();

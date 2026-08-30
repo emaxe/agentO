@@ -62,7 +62,11 @@ function mapToKimiProviderType(type: string, provider: Provider): KimiProviderTy
 }
 
 /** Map AgentO capabilities to Kimi capability strings. */
-function mapCapabilities(capabilities: { image?: boolean; video?: boolean; audio?: boolean }): string[] {
+function mapCapabilities(capabilities: {
+  image?: boolean;
+  video?: boolean;
+  audio?: boolean;
+}): string[] {
   const caps: string[] = [];
   if (capabilities.image) caps.push('image_in');
   if (capabilities.video) caps.push('video_in');
@@ -181,7 +185,9 @@ export class KimiAdapter implements AgentAdapter<KimiConfig> {
       api_key: provider.apiKey,
     };
 
-    const caps = mapCapabilities(provider.models.find((m) => m.name === modelName)?.capabilities ?? {});
+    const caps = mapCapabilities(
+      provider.models.find((m) => m.name === modelName)?.capabilities ?? {},
+    );
 
     const kimiModel: KimiModelConfig = {
       provider: providerName,

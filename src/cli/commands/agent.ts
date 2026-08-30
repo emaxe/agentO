@@ -13,7 +13,7 @@ function resolveDevOption(command: Command, optionValue?: boolean): boolean {
 
   let current: Command | null = command;
   while (current) {
-    if ((current.opts<{ dev?: boolean }>().dev) === true) return true;
+    if (current.opts<{ dev?: boolean }>().dev === true) return true;
     current = current.parent;
   }
 

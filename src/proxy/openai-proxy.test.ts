@@ -43,22 +43,29 @@ describe('startOpenAIProxy', () => {
     upstream.on('request', async (req, res) => {
       expect(req.url).toBe('/v1/chat/completions');
       const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
+      for await (const chunk of req)
+        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
       receivedBody = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({
-        id: 'chatcmpl-1',
-        model: 'gpt-4',
-        choices: [{ message: { role: 'assistant', content: 'Hi' }, finish_reason: 'stop' }],
-        usage: { prompt_tokens: 5, completion_tokens: 1 },
-      }));
+      res.end(
+        JSON.stringify({
+          id: 'chatcmpl-1',
+          model: 'gpt-4',
+          choices: [{ message: { role: 'assistant', content: 'Hi' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 5, completion_tokens: 1 },
+        }),
+      );
     });
 
     proxy = await startOpenAIProxy({ upstreamUrl });
     const res = await fetch(`${proxy.url}/v1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-3', messages: [{ role: 'user', content: 'Hello' }], max_tokens: 100 }),
+      body: JSON.stringify({
+        model: 'claude-3',
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 100,
+      }),
     });
 
     expect(res.status).toBe(200);
@@ -77,8 +84,12 @@ describe('startOpenAIProxy', () => {
     upstream.on('request', (req, res) => {
       expect(req.url).toBe('/v1/chat/completions');
       res.writeHead(200, { 'content-type': 'text/event-stream' });
-      res.write('data: {"id":"chatcmpl-1","choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n\n');
-      res.write('data: {"id":"chatcmpl-1","choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}\n\n');
+      res.write(
+        'data: {"id":"chatcmpl-1","choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n\n',
+      );
+      res.write(
+        'data: {"id":"chatcmpl-1","choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}\n\n',
+      );
       res.write('data: {"id":"chatcmpl-1","choices":[{"delta":{},"finish_reason":"stop"}]}\n\n');
       res.write('data: [DONE]\n\n');
       res.end();
@@ -88,7 +99,12 @@ describe('startOpenAIProxy', () => {
     const res = await fetch(`${proxy.url}/v1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-3', messages: [{ role: 'user', content: 'Hello' }], max_tokens: 100, stream: true }),
+      body: JSON.stringify({
+        model: 'claude-3',
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 100,
+        stream: true,
+      }),
     });
 
     expect(res.status).toBe(200);
@@ -103,7 +119,9 @@ describe('startOpenAIProxy', () => {
   it('translates upstream JSON errors to Anthropic format', async () => {
     upstream.on('request', (_req, res) => {
       res.writeHead(400, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: { message: 'Invalid model', type: 'invalid_request_error' } }));
+      res.end(
+        JSON.stringify({ error: { message: 'Invalid model', type: 'invalid_request_error' } }),
+      );
     });
 
     proxy = await startOpenAIProxy({ upstreamUrl });
@@ -144,7 +162,9 @@ describe('startOpenAIProxy', () => {
     upstream.on('request', (_req, res) => {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       // First write: complete first event + incomplete second event (no trailing \n\n)
-      res.write('data: {"id":"c","choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n\ndata: {"id":"c","choices":[{"delta":{"content":"Hi');
+      res.write(
+        'data: {"id":"c","choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n\ndata: {"id":"c","choices":[{"delta":{"content":"Hi',
+      );
       // Second write: completes the second event
       res.write('"},"finish_reason":null}]}\n\n');
       // Remaining events
@@ -157,7 +177,12 @@ describe('startOpenAIProxy', () => {
     const res = await fetch(`${proxy.url}/v1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-3', messages: [{ role: 'user', content: 'Hello' }], max_tokens: 100, stream: true }),
+      body: JSON.stringify({
+        model: 'claude-3',
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 100,
+        stream: true,
+      }),
     });
     expect(res.status).toBe(200);
     const text = await res.text();
@@ -213,7 +238,9 @@ describe('startOpenAIProxy', () => {
   });
 
   it('returns 502 when upstream times out', async () => {
-    upstream.on('request', () => { /* intentionally hang */ });
+    upstream.on('request', () => {
+      /* intentionally hang */
+    });
 
     proxy = await startOpenAIProxy({ upstreamUrl, timeoutMs: 50 });
     const res = await fetch(`${proxy.url}/v1/messages`, {
@@ -228,9 +255,15 @@ describe('startOpenAIProxy', () => {
     upstream.on('request', (_req, res) => {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       // Some providers prefix SSE blocks with an event: line
-      res.write('event: message_start\ndata: {"id":"c","choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n\n');
-      res.write('event: content_delta\ndata: {"id":"c","choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}\n\n');
-      res.write('event: message_stop\ndata: {"id":"c","choices":[{"delta":{},"finish_reason":"stop"}]}\n\n');
+      res.write(
+        'event: message_start\ndata: {"id":"c","choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n\n',
+      );
+      res.write(
+        'event: content_delta\ndata: {"id":"c","choices":[{"delta":{"content":"Hi"},"finish_reason":null}]}\n\n',
+      );
+      res.write(
+        'event: message_stop\ndata: {"id":"c","choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+      );
       res.write('data: [DONE]\n\n');
       res.end();
     });
@@ -239,7 +272,12 @@ describe('startOpenAIProxy', () => {
     const res = await fetch(`${proxy.url}/v1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-3', messages: [{ role: 'user', content: 'Hello' }], max_tokens: 100, stream: true }),
+      body: JSON.stringify({
+        model: 'claude-3',
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 100,
+        stream: true,
+      }),
     });
     expect(res.status).toBe(200);
     const text = await res.text();
@@ -253,7 +291,14 @@ describe('startOpenAIProxy', () => {
     upstream.on('request', (req, res) => {
       receivedUrl = req.url ?? '';
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ id: 'x', model: 'gpt-4', choices: [{ message: { role: 'assistant', content: '' }, finish_reason: 'stop' }], usage: { prompt_tokens: 0, completion_tokens: 0 } }));
+      res.end(
+        JSON.stringify({
+          id: 'x',
+          model: 'gpt-4',
+          choices: [{ message: { role: 'assistant', content: '' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 0, completion_tokens: 0 },
+        }),
+      );
     });
 
     proxy = await startOpenAIProxy({ upstreamUrl });

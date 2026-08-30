@@ -32,13 +32,15 @@ describe('isOpenAICompatible', () => {
 
 describe('resolveModelsBaseUrl', () => {
   it('prefers what the user typed', () => {
-    expect(resolveModelsBaseUrl('fireworks', 'https://mine.example.com/v1'))
-      .toBe('https://mine.example.com/v1');
+    expect(resolveModelsBaseUrl('fireworks', 'https://mine.example.com/v1')).toBe(
+      'https://mine.example.com/v1',
+    );
   });
 
   it('trims surrounding whitespace', () => {
-    expect(resolveModelsBaseUrl('fireworks', '  https://mine.example.com/v1  '))
-      .toBe('https://mine.example.com/v1');
+    expect(resolveModelsBaseUrl('fireworks', '  https://mine.example.com/v1  ')).toBe(
+      'https://mine.example.com/v1',
+    );
   });
 
   it('falls back to the type default when the field is blank', () => {
@@ -85,16 +87,21 @@ describe('fetchProviderModels', () => {
 
   it('tolerates a response with no data array', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
-    expect(await fetchProviderModels('https://api.example.com/v1', 'sk-x'))
-      .toEqual({ ok: true, models: [] });
+    expect(await fetchProviderModels('https://api.example.com/v1', 'sk-x')).toEqual({
+      ok: true,
+      models: [],
+    });
   });
 
   it('surfaces an HTTP error with a truncated body', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: false,
-      status: 401,
-      text: async () => 'x'.repeat(500),
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: async () => 'x'.repeat(500),
+      }),
+    );
 
     const result = await fetchProviderModels('https://api.example.com/v1', 'bad');
     expect(result.ok).toBe(false);

@@ -37,7 +37,14 @@ function toGooseOpenAIHost(url: string): string {
 export class GooseAdapter implements AgentAdapter<GooseConfig> {
   readonly id = 'goose';
   readonly displayName = 'Goose';
-  readonly supportedProviderTypes = ['openai-compatible', 'anthropic-compatible', 'fireworks', 'openrouter', 'responses-compatible', 'custom-api'] as const;
+  readonly supportedProviderTypes = [
+    'openai-compatible',
+    'anthropic-compatible',
+    'fireworks',
+    'openrouter',
+    'responses-compatible',
+    'custom-api',
+  ] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -117,25 +124,35 @@ export class GooseAdapter implements AgentAdapter<GooseConfig> {
       } else if (provider.customApiModes?.openai || provider.customApiModes?.responses) {
         env.GOOSE_PROVIDER = 'openai';
         env.OPENAI_API_KEY = provider.apiKey;
-        const url = resolveCustomApiUrl(provider, 'openai') ?? resolveCustomApiUrl(provider, 'responses');
+        const url =
+          resolveCustomApiUrl(provider, 'openai') ?? resolveCustomApiUrl(provider, 'responses');
         if (!url) {
           throw new Error('Goose: custom-api provider must have openai or responses mode enabled');
         }
         env.OPENAI_HOST = toGooseOpenAIHost(url);
       } else {
-        throw new Error(`Goose: custom-api provider "${provider.name}" requires at least one compatible mode (anthropic, openai, or responses)`);
+        throw new Error(
+          `Goose: custom-api provider "${provider.name}" requires at least one compatible mode (anthropic, openai, or responses)`,
+        );
       }
     } else {
       // openai-compatible — baseUrl is optional; falls back to https://api.openai.com/v1
       env.GOOSE_PROVIDER = 'openai';
       env.OPENAI_API_KEY = provider.apiKey;
-      env.OPENAI_HOST = toGooseOpenAIHost(provider.baseUrl ?? DEFAULT_BASE_URLS['openai-compatible']!);
+      env.OPENAI_HOST = toGooseOpenAIHost(
+        provider.baseUrl ?? DEFAULT_BASE_URLS['openai-compatible']!,
+      );
     }
 
     return env;
   }
 
-  async writeConfig(_config: GooseConfig, _scope: LaunchScope, _cwd?: string, _mergeEnabled?: boolean): Promise<void> {
+  async writeConfig(
+    _config: GooseConfig,
+    _scope: LaunchScope,
+    _cwd?: string,
+    _mergeEnabled?: boolean,
+  ): Promise<void> {
     // No-op: Goose receives all config via environment variables (see buildEnv).
     // There is nothing to write to config.yaml.
   }

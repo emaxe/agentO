@@ -32,12 +32,10 @@ export function isEnoent(err: unknown): boolean {
  * Extracted from `bin/agento.ts` so the failure paths are testable — the reason
  * the missing `cleanup()` below went unnoticed is that nothing exercised them.
  */
-export async function runTuiLoop({
-  startTui,
-  spawnAgent,
-  beforeSpawn,
-  warn = (message) => console.warn(message),
-}: RunTuiLoopDeps, options: StartTuiOptions = {}): Promise<void> {
+export async function runTuiLoop(
+  { startTui, spawnAgent, beforeSpawn, warn = (message) => console.warn(message) }: RunTuiLoopDeps,
+  options: StartTuiOptions = {},
+): Promise<void> {
   let execReq = await startTui(options);
 
   while (execReq) {

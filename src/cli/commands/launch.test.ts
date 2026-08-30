@@ -57,13 +57,15 @@ vi.mock('node:child_process', () => ({
 }));
 
 vi.mock('../../agents/registry.js', () => ({
-  listAgents: mocks.listAgents.mockReturnValue([{
-    id: 'qwen',
-    label: 'Qwen CLI',
-    adapter: mocks.mockAdapter,
-    command: 'qwen',
-    args: [],
-  }]),
+  listAgents: mocks.listAgents.mockReturnValue([
+    {
+      id: 'qwen',
+      label: 'Qwen CLI',
+      adapter: mocks.mockAdapter,
+      command: 'qwen',
+      args: [],
+    },
+  ]),
   getAgentCommand: mocks.getAgentCommand,
 }));
 
@@ -73,19 +75,23 @@ vi.mock('../../agents/registry.js', () => ({
 const PROVIDER_ID = '00000000-0000-0000-0000-000000000001';
 
 const baseConfig = {
-  providers: [{
-    id: PROVIDER_ID,
-    name: 'MyProvider',
-    type: 'openai-compatible',
-    apiKey: 'k',
-    baseUrl: 'https://api.example.com',
-    models: [{ name: 'qwen-max', capabilities: { image: true, video: false, audio: false } }],
-  }],
-  profiles: [{
-    id: '00000000-0000-0000-0000-000000000002',
-    name: 'default',
-    models: [{ providerId: PROVIDER_ID, model: 'qwen-max' }],
-  }],
+  providers: [
+    {
+      id: PROVIDER_ID,
+      name: 'MyProvider',
+      type: 'openai-compatible',
+      apiKey: 'k',
+      baseUrl: 'https://api.example.com',
+      models: [{ name: 'qwen-max', capabilities: { image: true, video: false, audio: false } }],
+    },
+  ],
+  profiles: [
+    {
+      id: '00000000-0000-0000-0000-000000000002',
+      name: 'default',
+      models: [{ providerId: PROVIDER_ID, model: 'qwen-max' }],
+    },
+  ],
   settings: {
     defaultLaunchMode: 'child',
     defaultConfigScope: 'global',
@@ -114,13 +120,15 @@ describe('launch command — mode/scope validation', () => {
     mocks.readConfig.mockResolvedValue(structuredClone(baseConfig));
 
     // Default agent registry mocks
-    mocks.listAgents.mockReturnValue([{
-      id: 'qwen',
-      label: 'Qwen CLI',
-      adapter: mocks.mockAdapter,
-      command: 'qwen',
-      args: [],
-    }]);
+    mocks.listAgents.mockReturnValue([
+      {
+        id: 'qwen',
+        label: 'Qwen CLI',
+        adapter: mocks.mockAdapter,
+        command: 'qwen',
+        args: [],
+      },
+    ]);
 
     mocks.getAgentCommand.mockReturnValue({
       adapter: mocks.mockAdapter,

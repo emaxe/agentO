@@ -28,10 +28,12 @@ const provider: Provider = {
   name: 'Fireworks AI',
   type: 'fireworks',
   apiKey: 'fw-test-key',
-  models: [{
-    name: 'accounts/fireworks/models/kimi-k2',
-    capabilities: { image: true, video: false, audio: false },
-  }],
+  models: [
+    {
+      name: 'accounts/fireworks/models/kimi-k2',
+      capabilities: { image: true, video: false, audio: false },
+    },
+  ],
 };
 
 const profile: Profile = {
@@ -113,7 +115,11 @@ describe('Codex project launch transaction', () => {
 
     const { readBackup, backupExists } = await import('../config/store.js');
     const backup = await readBackup('codex', 'project', projectDir);
-    expect(backup?.files.map((file) => file.path)).toEqual([paths.global, paths.project, paths.defaultProfile]);
+    expect(backup?.files.map((file) => file.path)).toEqual([
+      paths.global,
+      paths.project,
+      paths.defaultProfile,
+    ]);
     expect(backup?.files.map((file) => file.hadFile)).toEqual([true, true, true]);
 
     // Global config should NOT have legacy profile keys after write

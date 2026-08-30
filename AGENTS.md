@@ -46,7 +46,8 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── schema.ts          # Zod-схемы и типы
 │   │   ├── store.ts           # Чтение/запись ~/.agento/config.json
 │   │   ├── validation.ts      # Доменная валидация providers/profiles (008)
-│   │   └── atomic-write.ts    # Атомарная запись файлов с mode 0o600 (009/010)
+│   │   ├── atomic-write.ts    # Атомарная запись файлов с mode 0o600 (009/010)
+│   │   └── version.ts         # Динамическое чтение версии из package.json
 │   ├── installers/            # Установщики агентов (TUI Install Wizard)
 │   │   ├── base.ts            # Интерфейс AgentInstaller
 │   │   ├── registry.ts        # Реестр установщиков

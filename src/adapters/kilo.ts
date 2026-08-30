@@ -40,7 +40,14 @@ import { resolveBaseModel } from './resolve-base-model.js';
 export class KiloAdapter implements AgentAdapter<KiloConfig> {
   readonly id = 'kilo';
   readonly displayName = 'Kilo Code';
-  readonly supportedProviderTypes = ['anthropic-compatible', 'openai-compatible', 'fireworks', 'openrouter', 'responses-compatible', 'custom-api'] as const;
+  readonly supportedProviderTypes = [
+    'anthropic-compatible',
+    'openai-compatible',
+    'fireworks',
+    'openrouter',
+    'responses-compatible',
+    'custom-api',
+  ] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -126,7 +133,8 @@ export class KiloAdapter implements AgentAdapter<KiloConfig> {
       if (provider.customApiModes?.openai || provider.customApiModes?.responses) {
         const providerKey = provider.name.toLowerCase().replace(/\s+/g, '-');
         const options: Record<string, unknown> = { apiKey: provider.apiKey };
-        const resolved = resolveCustomApiUrl(provider, 'openai') ?? resolveCustomApiUrl(provider, 'responses');
+        const resolved =
+          resolveCustomApiUrl(provider, 'openai') ?? resolveCustomApiUrl(provider, 'responses');
         if (resolved) options['baseURL'] = resolved;
         return {
           model: `${providerKey}/${base.model}`,
@@ -140,7 +148,9 @@ export class KiloAdapter implements AgentAdapter<KiloConfig> {
           },
         };
       }
-      throw new Error(`Kilo Code: custom-api provider "${provider.name}" requires at least one compatible mode (anthropic, openai, or responses)`);
+      throw new Error(
+        `Kilo Code: custom-api provider "${provider.name}" requires at least one compatible mode (anthropic, openai, or responses)`,
+      );
     }
 
     // openai-compatible and responses-compatible: custom provider named from agento
@@ -188,7 +198,12 @@ export class KiloAdapter implements AgentAdapter<KiloConfig> {
    * keys overwrite, and nested objects are replaced whole. Kilo has no
    * env-only flat-merge keys (`envKeys` is empty).
    */
-  async writeConfig(config: KiloConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
+  async writeConfig(
+    config: KiloConfig,
+    scope: LaunchScope,
+    cwd?: string,
+    mergeEnabled?: boolean,
+  ): Promise<void> {
     const path = this.configPaths(cwd)[scope];
     const dir = join(path, '..');
     await mkdir(dir, { recursive: true });

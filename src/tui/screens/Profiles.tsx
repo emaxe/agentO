@@ -5,7 +5,12 @@ import { ProfileList } from './ProfileList.js';
 import { ProfileDetail } from './ProfileDetail.js';
 import { ProfileEdit } from './ProfileEdit.js';
 import { ProfileWizard } from '../wizards/ProfileWizard.js';
-import { listProfiles, addProfile, updateProfile, removeProfile } from '../../profiles/profile-manager.js';
+import {
+  listProfiles,
+  addProfile,
+  updateProfile,
+  removeProfile,
+} from '../../profiles/profile-manager.js';
 import { listProviders } from '../../providers/provider-manager.js';
 import type { Profile, Provider } from '../../config/schema.js';
 
@@ -31,27 +36,30 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
     listProviders().then(setProviders).catch(console.error);
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
 
   useKeyInput((input, key) => {
     if (mode === 'list') {
-      if (key.escape || input === 'q') { onBack(); return; }
+      if (key.escape || input === 'q') {
+        onBack();
+        return;
+      }
       if (key.upArrow) setSelectedIndex((i) => Math.max(0, i - 1));
       else if (key.downArrow) setSelectedIndex((i) => Math.min(profiles.length - 1, i + 1));
       else if (key.return && profiles[selectedIndex]) {
         setDetailProfile(profiles[selectedIndex]);
         setDetailModelIndex(0);
         setMode('detail');
-      }
-      else if (input === 'a') {
+      } else if (input === 'a') {
         if (providers.length === 0) {
           setStatus('Add at least one provider first');
           return;
         }
         setStatus('');
         setMode('add');
-      }
-      else if (input === 'd' && profiles[selectedIndex]) {
+      } else if (input === 'd' && profiles[selectedIndex]) {
         setMode('confirm-delete');
       }
       return;
@@ -60,7 +68,11 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
     if (mode === 'confirm-delete') {
       if (input === 'y' && profiles[selectedIndex]) {
         removeProfile(profiles[selectedIndex].id)
-          .then(() => { setStatus('Deleted'); reload(); setMode('list'); })
+          .then(() => {
+            setStatus('Deleted');
+            reload();
+            setMode('list');
+          })
           .catch((err) => setStatus(`Error: ${String(err)}`));
       } else {
         setMode('list');
@@ -69,7 +81,10 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
     }
 
     if (mode === 'detail' && detailProfile) {
-      if (key.escape || input === 'q') { setMode('list'); return; }
+      if (key.escape || input === 'q') {
+        setMode('list');
+        return;
+      }
       if (input === 'd') {
         if (detailProfile.models.length === 0) {
           setStatus('No models to delete');
@@ -110,7 +125,9 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
   if (mode === 'confirm-delete') {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text>Delete profile <Text bold>"{profiles[selectedIndex]?.name}"</Text>? (y/n)</Text>
+        <Text>
+          Delete profile <Text bold>"{profiles[selectedIndex]?.name}"</Text>? (y/n)
+        </Text>
       </Box>
     );
   }
@@ -122,7 +139,11 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
         profiles={profiles}
         onDone={(result) => {
           addProfile({ name: result.name, models: result.models })
-            .then((p) => { setStatus(`Added "${p.name}"`); reload(); setMode('list'); })
+            .then((p) => {
+              setStatus(`Added "${p.name}"`);
+              reload();
+              setMode('list');
+            })
             .catch((err) => setStatus(`Error: ${String(err)}`));
         }}
         onCancel={() => setMode('list')}
@@ -140,12 +161,20 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
         onSave={(result: any) => {
           if (result._deleteProfile) {
             removeProfile(detailProfile.id)
-              .then(() => { setStatus(`Profile deleted`); reload(); setMode('list'); })
+              .then(() => {
+                setStatus(`Profile deleted`);
+                reload();
+                setMode('list');
+              })
               .catch((err) => setStatus(`Error: ${String(err)}`));
             return;
           }
           updateProfile(detailProfile.id, { name: result.name, models: result.models })
-            .then((updated) => { setDetailProfile(updated); reload(); setMode('detail'); })
+            .then((updated) => {
+              setDetailProfile(updated);
+              reload();
+              setMode('detail');
+            })
             .catch((err) => setStatus(`Error: ${String(err)}`));
         }}
         onCancel={() => setMode('detail')}

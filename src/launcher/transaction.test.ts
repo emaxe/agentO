@@ -7,7 +7,7 @@ vi.mock('../config/store.js', () => ({
   writeBackup: vi.fn(),
   readBackup: vi.fn(),
   deleteBackup: vi.fn().mockResolvedValue(undefined),
-  inferBackupFileFormat: vi.fn((path: string) => path.endsWith('.toml') ? 'toml' : 'json'),
+  inferBackupFileFormat: vi.fn((path: string) => (path.endsWith('.toml') ? 'toml' : 'json')),
   readConfig: vi.fn().mockResolvedValue({ settings: { mergeAgentConfigs: true } }),
 }));
 
@@ -26,7 +26,9 @@ vi.mock('../proxy/openai-proxy.js', () => ({
 }));
 
 vi.mock('../proxy/anthropic-scrubber.js', () => ({
-  startAnthropicScrubberProxy: vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:9998', stop: vi.fn() }),
+  startAnthropicScrubberProxy: vi
+    .fn()
+    .mockResolvedValue({ url: 'http://127.0.0.1:9998', stop: vi.fn() }),
 }));
 
 vi.mock('../proxy/responses-proxy.js', () => ({
@@ -71,7 +73,9 @@ function makeAdapter(currentConfig: Record<string, unknown> | null = null): Agen
     writeConfig: vi.fn().mockResolvedValue(undefined),
     buildConfig: vi.fn().mockReturnValue({ env: { TEST: 'value' } }),
     buildEnv: vi.fn().mockReturnValue({ ADAPTER_KEY: 'adapter-value' }),
-    configPaths: vi.fn().mockReturnValue({ global: '/home/user/.config/test.json', project: '/project/.test.toml' }),
+    configPaths: vi
+      .fn()
+      .mockReturnValue({ global: '/home/user/.config/test.json', project: '/project/.test.toml' }),
   };
 }
 
@@ -83,7 +87,10 @@ describe('prepareLaunchTransaction', () => {
     mockDeleteBackup.mockResolvedValue(undefined);
     mockUnlink.mockResolvedValue(undefined);
     mockStartOpenAIProxy.mockResolvedValue({ url: 'http://127.0.0.1:9999', stop: vi.fn() });
-    mockStartAnthropicScrubberProxy.mockResolvedValue({ url: 'http://127.0.0.1:9998', stop: vi.fn() });
+    mockStartAnthropicScrubberProxy.mockResolvedValue({
+      url: 'http://127.0.0.1:9998',
+      stop: vi.fn(),
+    });
     mockStartResponsesProxy.mockResolvedValue({ url: 'http://127.0.0.1:19999', stop: vi.fn() });
   });
 
@@ -102,12 +109,14 @@ describe('prepareLaunchTransaction', () => {
 
     expect(mockWriteBackup).toHaveBeenCalledWith('test-agent', 'project', {
       cwd: '/project',
-      files: [{
-        path: '/project/.test.toml',
-        format: 'toml',
-        hadFile: true,
-        content: existingConfig,
-      }],
+      files: [
+        {
+          path: '/project/.test.toml',
+          format: 'toml',
+          hadFile: true,
+          content: existingConfig,
+        },
+      ],
     });
   });
 
@@ -126,20 +135,29 @@ describe('prepareLaunchTransaction', () => {
     });
 
     expect(adapter.buildConfig).toHaveBeenCalledWith(testProfile, [testProvider]);
-    expect(adapter.writeConfig).toHaveBeenCalledWith({ env: { TEST: 'value' } }, 'global', undefined, true);
+    expect(adapter.writeConfig).toHaveBeenCalledWith(
+      { env: { TEST: 'value' } },
+      'global',
+      undefined,
+      true,
+    );
   });
 
   it('does not write config when an active backup already exists', async () => {
     const adapter = makeAdapter({ model: 'original' });
-    mockWriteBackup.mockRejectedValue(new Error('Active backup already exists for test-agent (global)'));
+    mockWriteBackup.mockRejectedValue(
+      new Error('Active backup already exists for test-agent (global)'),
+    );
 
-    await expect(prepareLaunchTransaction({
-      adapter,
-      profile: testProfile,
-      providers: [testProvider],
-      scope: 'global',
-      command: 'claude',
-    })).rejects.toThrow('Active backup already exists');
+    await expect(
+      prepareLaunchTransaction({
+        adapter,
+        profile: testProfile,
+        providers: [testProvider],
+        scope: 'global',
+        command: 'claude',
+      }),
+    ).rejects.toThrow('Active backup already exists');
 
     expect(adapter.buildConfig).not.toHaveBeenCalled();
     expect(adapter.writeConfig).not.toHaveBeenCalled();
@@ -176,12 +194,14 @@ describe('prepareLaunchTransaction', () => {
       agentId: 'test-agent',
       scope: 'global',
       createdAt: '2026-05-13T00:00:00.000Z',
-      files: [{
-        path: '/home/user/.config/test.json',
-        format: 'json',
-        hadFile: true,
-        content: existingConfig,
-      }],
+      files: [
+        {
+          path: '/home/user/.config/test.json',
+          format: 'json',
+          hadFile: true,
+          content: existingConfig,
+        },
+      ],
     });
 
     const { cleanup } = await prepareLaunchTransaction({
@@ -208,12 +228,14 @@ describe('prepareLaunchTransaction', () => {
       agentId: 'test-agent',
       scope: 'global',
       createdAt: '2026-05-13T00:00:00.000Z',
-      files: [{
-        path: '/home/user/.config/test.json',
-        format: 'json',
-        hadFile: false,
-        content: null,
-      }],
+      files: [
+        {
+          path: '/home/user/.config/test.json',
+          format: 'json',
+          hadFile: false,
+          content: null,
+        },
+      ],
     });
 
     const { cleanup } = await prepareLaunchTransaction({
@@ -243,12 +265,14 @@ describe('prepareLaunchTransaction', () => {
       agentId: 'test-agent',
       scope: 'global',
       createdAt: '2026-05-13T00:00:00.000Z',
-      files: [{
-        path: '/home/user/.config/test.json',
-        format: 'json',
-        hadFile: false,
-        content: null,
-      }],
+      files: [
+        {
+          path: '/home/user/.config/test.json',
+          format: 'json',
+          hadFile: false,
+          content: null,
+        },
+      ],
     });
 
     const { cleanup } = await prepareLaunchTransaction({
@@ -324,7 +348,9 @@ describe('prepareLaunchTransaction', () => {
       command: 'claude',
     });
 
-    expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://api.fireworks.ai/inference' });
+    expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({
+      upstreamUrl: 'https://api.fireworks.ai/inference',
+    });
     expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
   });
 
@@ -394,7 +420,9 @@ describe('prepareLaunchTransaction', () => {
       command: 'claude',
     });
 
-    expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://proxy.example.com/v1' });
+    expect(mockStartAnthropicScrubberProxy).toHaveBeenCalledWith({
+      upstreamUrl: 'https://proxy.example.com/v1',
+    });
     expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
   });
 
@@ -464,7 +492,9 @@ describe('prepareLaunchTransaction', () => {
       command: 'claude',
     });
 
-    expect(mockStartResponsesProxy).toHaveBeenCalledWith({ upstreamUrl: 'https://proxy.example.com' });
+    expect(mockStartResponsesProxy).toHaveBeenCalledWith({
+      upstreamUrl: 'https://proxy.example.com',
+    });
     expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
     expect(mockStartAnthropicScrubberProxy).not.toHaveBeenCalled();
   });

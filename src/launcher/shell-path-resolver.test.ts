@@ -11,43 +11,37 @@ import { ShellPathResolver } from './shell-path-resolver.js';
 const mockExecFile = vi.mocked(execFile);
 
 function mockExecFileSuccess(stdout: string) {
-  mockExecFile.mockImplementation(
-    (_cmd: unknown, _args: unknown, _opts: unknown, cb: unknown) => {
-      const callback = cb as (err: Error | null, stdout: string, stderr: string) => void;
-      // Extract delimiter from script args to wrap the path
-      const args = _args as string[];
-      const script = args[2]; // The -c argument
-      const match = script.match(/printf '%s%s%s' '([^']+)'/);
-      const delimiter = match?.[1] ?? '';
-      callback(null, `${delimiter}${stdout}${delimiter}`, '');
-      return {} as ReturnType<typeof execFile>;
-    },
-  );
+  mockExecFile.mockImplementation((_cmd: unknown, _args: unknown, _opts: unknown, cb: unknown) => {
+    const callback = cb as (err: Error | null, stdout: string, stderr: string) => void;
+    // Extract delimiter from script args to wrap the path
+    const args = _args as string[];
+    const script = args[2]; // The -c argument
+    const match = script.match(/printf '%s%s%s' '([^']+)'/);
+    const delimiter = match?.[1] ?? '';
+    callback(null, `${delimiter}${stdout}${delimiter}`, '');
+    return {} as ReturnType<typeof execFile>;
+  });
 }
 
 function mockExecFileFailure() {
-  mockExecFile.mockImplementation(
-    (_cmd: unknown, _args: unknown, _opts: unknown, cb: unknown) => {
-      const callback = cb as (err: Error | null, stdout: string, stderr: string) => void;
-      callback(new Error('timeout'), '', '');
-      return {} as ReturnType<typeof execFile>;
-    },
-  );
+  mockExecFile.mockImplementation((_cmd: unknown, _args: unknown, _opts: unknown, cb: unknown) => {
+    const callback = cb as (err: Error | null, stdout: string, stderr: string) => void;
+    callback(new Error('timeout'), '', '');
+    return {} as ReturnType<typeof execFile>;
+  });
 }
 
 function mockExecFileWithOSC(path: string) {
-  mockExecFile.mockImplementation(
-    (_cmd: unknown, _args: unknown, _opts: unknown, cb: unknown) => {
-      const callback = cb as (err: Error | null, stdout: string, stderr: string) => void;
-      const args = _args as string[];
-      const script = args[2];
-      const match = script.match(/printf '%s%s%s' '([^']+)'/);
-      const delimiter = match?.[1] ?? '';
-      // Simulate OSC sequences before the actual output
-      callback(null, `\x1b]7;file:///Users/test\x07${delimiter}${path}${delimiter}`, '');
-      return {} as ReturnType<typeof execFile>;
-    },
-  );
+  mockExecFile.mockImplementation((_cmd: unknown, _args: unknown, _opts: unknown, cb: unknown) => {
+    const callback = cb as (err: Error | null, stdout: string, stderr: string) => void;
+    const args = _args as string[];
+    const script = args[2];
+    const match = script.match(/printf '%s%s%s' '([^']+)'/);
+    const delimiter = match?.[1] ?? '';
+    // Simulate OSC sequences before the actual output
+    callback(null, `\x1b]7;file:///Users/test\x07${delimiter}${path}${delimiter}`, '');
+    return {} as ReturnType<typeof execFile>;
+  });
 }
 
 describe('ShellPathResolver', () => {

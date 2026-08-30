@@ -30,7 +30,12 @@ const mocks = vi.hoisted(() => {
   };
 
   const agents = [
-    { id: 'claude-code', label: 'Claude Code', adapter: adapters['claude-code'], command: 'claude' },
+    {
+      id: 'claude-code',
+      label: 'Claude Code',
+      adapter: adapters['claude-code'],
+      command: 'claude',
+    },
     { id: 'opencode', label: 'OpenCode', adapter: adapters.opencode, command: 'opencode' },
     { id: 'qwen', label: 'Qwen CLI', adapter: adapters.qwen, command: 'qwen' },
     { id: 'codex', label: 'Codex CLI', adapter: adapters.codex, command: 'codex' },
@@ -49,12 +54,12 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('../../agents/registry.js', () => ({
-  listAgents: vi.fn((options: { dev?: boolean } = {}) => (
-    mocks.agents.filter((agent) => options.dev || !agent.adapter.dev)
-  )),
-  getAgent: vi.fn((id: string, options: { dev?: boolean } = {}) => (
-    mocks.agents.find((agent) => agent.id === id && (options.dev || !agent.adapter.dev))
-  )),
+  listAgents: vi.fn((options: { dev?: boolean } = {}) =>
+    mocks.agents.filter((agent) => options.dev || !agent.adapter.dev),
+  ),
+  getAgent: vi.fn((id: string, options: { dev?: boolean } = {}) =>
+    mocks.agents.find((agent) => agent.id === id && (options.dev || !agent.adapter.dev)),
+  ),
 }));
 
 vi.mock('../../config/store.js', () => ({
@@ -94,12 +99,14 @@ describe('restore command', () => {
       agentId: 'qwen',
       scope: 'global',
       createdAt: '2026-05-13T00:00:00.000Z',
-      files: [{
-        path: '/home/user/.qwen/settings.json',
-        format: 'json',
-        hadFile: true,
-        content: { restored: true },
-      }],
+      files: [
+        {
+          path: '/home/user/.qwen/settings.json',
+          format: 'json',
+          hadFile: true,
+          content: { restored: true },
+        },
+      ],
     });
     mocks.deleteBackup.mockResolvedValue(undefined);
     mocks.unlink.mockResolvedValue(undefined);
@@ -124,7 +131,11 @@ describe('restore command', () => {
     await runRestore(['-a', 'qwen', '-s', 'global']);
 
     expect(mocks.backupExists).toHaveBeenCalledWith('qwen', 'global', '/test/cwd');
-    expect(adapter('qwen').writeConfig).toHaveBeenCalledWith({ restored: true }, 'global', '/test/cwd');
+    expect(adapter('qwen').writeConfig).toHaveBeenCalledWith(
+      { restored: true },
+      'global',
+      '/test/cwd',
+    );
     expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'global', '/test/cwd');
     expect(logSpy).toHaveBeenCalledWith('Restored qwen config (global)');
     expect(exitSpy).toHaveBeenCalledWith(0);
@@ -133,7 +144,11 @@ describe('restore command', () => {
   it('restores a dev agent without a restore-specific dev flag', async () => {
     await runRestore(['-a', 'codex', '-s', 'project']);
 
-    expect(adapter('codex').writeConfig).toHaveBeenCalledWith({ restored: true }, 'project', '/test/cwd');
+    expect(adapter('codex').writeConfig).toHaveBeenCalledWith(
+      { restored: true },
+      'project',
+      '/test/cwd',
+    );
     expect(mocks.deleteBackup).toHaveBeenCalledWith('codex', 'project', '/test/cwd');
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
@@ -141,7 +156,9 @@ describe('restore command', () => {
   it('prints the registry ordered agent list for an unknown agent', async () => {
     await runRestore(['-a', 'unknown-agent', '-s', 'global']);
 
-    expect(errorSpy).toHaveBeenCalledWith(`Error: Unknown agent: unknown-agent. Supported: ${supportedAgents}`);
+    expect(errorSpy).toHaveBeenCalledWith(
+      `Error: Unknown agent: unknown-agent. Supported: ${supportedAgents}`,
+    );
     expect(mocks.backupExists).not.toHaveBeenCalled();
     expect(adapter('qwen').writeConfig).not.toHaveBeenCalled();
     expect(mocks.deleteBackup).not.toHaveBeenCalled();
@@ -151,7 +168,9 @@ describe('restore command', () => {
   it('rejects invalid scope before reading backup or writing config', async () => {
     await runRestore(['-a', 'qwen', '-s', 'workspace']);
 
-    expect(errorSpy).toHaveBeenCalledWith('Error: Invalid scope: workspace. Supported: global, project');
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Error: Invalid scope: workspace. Supported: global, project',
+    );
     expect(mocks.backupExists).not.toHaveBeenCalled();
     expect(mocks.readBackup).not.toHaveBeenCalled();
     expect(adapter('qwen').writeConfig).not.toHaveBeenCalled();
@@ -162,10 +181,15 @@ describe('restore command', () => {
   it('deletes backup after a successful writeConfig', async () => {
     await runRestore(['-a', 'opencode', '-s', 'project']);
 
-    expect(adapter('opencode').writeConfig).toHaveBeenCalledWith({ restored: true }, 'project', '/test/cwd');
+    expect(adapter('opencode').writeConfig).toHaveBeenCalledWith(
+      { restored: true },
+      'project',
+      '/test/cwd',
+    );
     expect(mocks.deleteBackup).toHaveBeenCalledWith('opencode', 'project', '/test/cwd');
-    expect(adapter('opencode').writeConfig.mock.invocationCallOrder[0])
-      .toBeLessThan(mocks.deleteBackup.mock.invocationCallOrder[0]);
+    expect(adapter('opencode').writeConfig.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.deleteBackup.mock.invocationCallOrder[0],
+    );
   });
 
   it('does not write config or delete backup when no backup exists', async () => {
@@ -188,12 +212,14 @@ describe('restore command', () => {
       scope: 'project',
       cwd: '/project',
       createdAt: '2026-05-13T00:00:00.000Z',
-      files: [{
-        path: '/project/.qwen/settings.json',
-        format: 'json',
-        hadFile: false,
-        content: null,
-      }],
+      files: [
+        {
+          path: '/project/.qwen/settings.json',
+          format: 'json',
+          hadFile: false,
+          content: null,
+        },
+      ],
     });
 
     await runRestore(['-a', 'qwen', '-s', 'project']);
@@ -211,17 +237,23 @@ describe('restore command', () => {
       agentId: 'qwen',
       scope: 'global',
       createdAt: '1970-01-01T00:00:00.000Z',
-      files: [{
-        path: '',
-        format: 'json',
-        hadFile: true,
-        content: { legacy: true },
-      }],
+      files: [
+        {
+          path: '',
+          format: 'json',
+          hadFile: true,
+          content: { legacy: true },
+        },
+      ],
     });
 
     await runRestore(['-a', 'qwen', '-s', 'global']);
 
-    expect(adapter('qwen').writeConfig).toHaveBeenCalledWith({ legacy: true }, 'global', '/test/cwd');
+    expect(adapter('qwen').writeConfig).toHaveBeenCalledWith(
+      { legacy: true },
+      'global',
+      '/test/cwd',
+    );
     expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'global', '/test/cwd');
     expect(exitSpy).toHaveBeenCalledWith(0);
   });

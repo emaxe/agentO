@@ -12,7 +12,9 @@ const anthropicProvider: Provider = {
   type: 'anthropic-compatible',
   apiKey: 'sk-ant-test123',
   baseUrl: 'https://api.anthropic.com',
-  models: [{ name: 'claude-sonnet-4-6', capabilities: { image: true, video: false, audio: false } }],
+  models: [
+    { name: 'claude-sonnet-4-6', capabilities: { image: true, video: false, audio: false } },
+  ],
 };
 
 const openaiProvider: Provider = {
@@ -29,7 +31,12 @@ const fireworksProvider: Provider = {
   name: 'Fireworks',
   type: 'fireworks',
   apiKey: 'fw_test',
-  models: [{ name: 'accounts/fireworks/models/llama-v3p1-70b-instruct', capabilities: { image: false, video: false, audio: false } }],
+  models: [
+    {
+      name: 'accounts/fireworks/models/llama-v3p1-70b-instruct',
+      capabilities: { image: false, video: false, audio: false },
+    },
+  ],
 };
 
 const openrouterProvider: Provider = {
@@ -38,7 +45,12 @@ const openrouterProvider: Provider = {
   type: 'openrouter',
   apiKey: 'sk-or-test',
   baseUrl: 'https://openrouter.ai/api/v1',
-  models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+  models: [
+    {
+      name: 'anthropic/claude-sonnet-4.6',
+      capabilities: { image: true, video: false, audio: false },
+    },
+  ],
 };
 
 const customApiOpenAiProvider: Provider = {
@@ -85,7 +97,12 @@ const testProfileOpenAi: Profile = {
 const testProfileFireworks: Profile = {
   id: '00000000-0000-0000-0000-000000000012',
   name: 'Test Fireworks',
-  models: [{ providerId: fireworksProvider.id, model: 'accounts/fireworks/models/llama-v3p1-70b-instruct' }],
+  models: [
+    {
+      providerId: fireworksProvider.id,
+      model: 'accounts/fireworks/models/llama-v3p1-70b-instruct',
+    },
+  ],
 };
 
 const testProfileOpenRouter: Profile = {
@@ -148,7 +165,10 @@ describe('PiAdapter', () => {
       expect(cfg.defaultModel).toBe('custom-model');
       expect(cfg.__agento_models_json__).toBeDefined();
       const mj = cfg.__agento_models_json__ as Record<string, unknown>;
-      const openaiProvider = ((mj.providers as Record<string, unknown>)?.openai as Record<string, unknown>);
+      const openaiProvider = (mj.providers as Record<string, unknown>)?.openai as Record<
+        string,
+        unknown
+      >;
       expect(openaiProvider?.models).toBeDefined();
       expect(openaiProvider?.baseUrl).toBeUndefined();
     });
@@ -209,7 +229,9 @@ describe('PiAdapter', () => {
     it('uses anthropic-messages api for anthropic-compatible', () => {
       const cfg = adapter.buildConfig(testProfileAnthropic, [anthropicProvider]);
       const mj = cfg.__agento_models_json__ as Record<string, unknown>;
-      const models = ((mj?.providers as Record<string, unknown>)?.anthropic as Record<string, unknown>)?.models as Array<Record<string, string>>;
+      const models = (
+        (mj?.providers as Record<string, unknown>)?.anthropic as Record<string, unknown>
+      )?.models as Array<Record<string, string>>;
       expect(models?.[0]?.api).toBe('anthropic-messages');
     });
   });

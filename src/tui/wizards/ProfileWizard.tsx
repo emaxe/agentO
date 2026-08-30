@@ -17,7 +17,12 @@ interface ProfileWizardProps {
   onCancel: () => void;
 }
 
-export function ProfileWizard({ providers, profiles, onDone, onCancel }: ProfileWizardProps): React.JSX.Element {
+export function ProfileWizard({
+  providers,
+  profiles,
+  onDone,
+  onCancel,
+}: ProfileWizardProps): React.JSX.Element {
   const [step, setStep] = useState<WizardStep>('name');
   const [formName, setFormName] = useState('');
   const [formModels, setFormModels] = useState<ProfileModel[]>([]);
@@ -46,9 +51,15 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
 
   useKeyInput((input, key) => {
     if (step === 'name') {
-      if (key.escape) { onCancel(); return; }
+      if (key.escape) {
+        onCancel();
+        return;
+      }
       if (key.return) {
-        if (!formName.trim()) { setStatus('Name required'); return; }
+        if (!formName.trim()) {
+          setStatus('Name required');
+          return;
+        }
         setStatus('');
         setStep('select-provider');
       }
@@ -61,11 +72,21 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
         ? providers.filter((p) => p.id === firstProviderId)
         : providers;
       if (key.escape) {
-        if (formModels.length > 0) { setStep('review'); return; }
-        setStep('name'); return;
+        if (formModels.length > 0) {
+          setStep('review');
+          return;
+        }
+        setStep('name');
+        return;
       }
-      if (key.upArrow) { setProviderCursor((i) => Math.max(0, i - 1)); return; }
-      if (key.downArrow) { setProviderCursor((i) => Math.min(availableProviders.length - 1, i + 1)); return; }
+      if (key.upArrow) {
+        setProviderCursor((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setProviderCursor((i) => Math.min(availableProviders.length - 1, i + 1));
+        return;
+      }
       if (key.return && availableProviders[providerCursor]) {
         setPendingProviderId(availableProviders[providerCursor].id);
         setModelCursor(0);
@@ -80,18 +101,33 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
 
     if (step === 'select-model') {
       const provider = providers.find((p) => p.id === pendingProviderId);
-      if (!provider) { setStep('select-provider'); return; }
+      if (!provider) {
+        setStep('select-provider');
+        return;
+      }
       const total = provider.models.length + 1;
-      if (key.escape) { setStep('select-provider'); return; }
-      if (key.upArrow) { setModelCursor((i) => Math.max(0, i - 1)); return; }
-      if (key.downArrow) { setModelCursor((i) => Math.min(total - 1, i + 1)); return; }
+      if (key.escape) {
+        setStep('select-provider');
+        return;
+      }
+      if (key.upArrow) {
+        setModelCursor((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setModelCursor((i) => Math.min(total - 1, i + 1));
+        return;
+      }
       if (key.return) {
         let chosen: string | null = null;
         if (modelCursor < provider.models.length) {
           chosen = provider.models[modelCursor]?.name ?? null;
         } else {
           const trimmed = customModel.trim();
-          if (!trimmed) { setStatus('Enter custom model name'); return; }
+          if (!trimmed) {
+            setStatus('Enter custom model name');
+            return;
+          }
           chosen = trimmed;
         }
         if (!chosen) return;
@@ -107,12 +143,24 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
 
     if (step === 'select-tier') {
       const optionsCount = 4;
-      if (key.escape) { setStep('select-model'); return; }
-      if (key.upArrow) { setTierCursor((i) => Math.max(0, i - 1)); return; }
-      if (key.downArrow) { setTierCursor((i) => Math.min(optionsCount - 1, i + 1)); return; }
+      if (key.escape) {
+        setStep('select-model');
+        return;
+      }
+      if (key.upArrow) {
+        setTierCursor((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setTierCursor((i) => Math.min(optionsCount - 1, i + 1));
+        return;
+      }
       if (key.return) {
         const provider = providers.find((p) => p.id === pendingProviderId);
-        if (!provider || !pendingModel) { setStep('select-provider'); return; }
+        if (!provider || !pendingModel) {
+          setStep('select-provider');
+          return;
+        }
         const tier = tierCursor < 3 ? TIERS[tierCursor] : undefined;
         setFormModels((arr) => [...arr, { providerId: provider.id, model: pendingModel, tier }]);
         setPendingModel('');
@@ -122,9 +170,18 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
     }
 
     if (step === 'review') {
-      if (key.escape) { setStep('select-provider'); return; }
-      if (key.upArrow) { setReviewCursor(0); return; }
-      if (key.downArrow) { setReviewCursor(1); return; }
+      if (key.escape) {
+        setStep('select-provider');
+        return;
+      }
+      if (key.upArrow) {
+        setReviewCursor(0);
+        return;
+      }
+      if (key.downArrow) {
+        setReviewCursor(1);
+        return;
+      }
       if (key.return) {
         if (reviewCursor === 0) {
           if (formModels.length > 0) {
@@ -181,7 +238,9 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
                 const p = providers.find((pr) => pr.id === m.providerId);
                 return (
                   <Text key={i} dimColor>
-                    {'  • '}{p?.name ?? '?'}: {m.model}{m.tier ? ` [${m.tier}]` : ''}
+                    {'  • '}
+                    {p?.name ?? '?'}: {m.model}
+                    {m.tier ? ` [${m.tier}]` : ''}
                   </Text>
                 );
               })}
@@ -193,7 +252,8 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
             title={firstProviderId ? 'Provider (locked to existing):' : 'Select provider:'}
             renderItem={(p, i, isSelected) => (
               <Text color={isSelected ? 'green' : undefined}>
-                {isSelected ? '▶ ' : '  '}{p.name} ({p.type}, {p.models.length} models)
+                {isSelected ? '▶ ' : '  '}
+                {p.name} ({p.type}, {p.models.length} models)
               </Text>
             )}
           />
@@ -213,13 +273,17 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
         <Box flexDirection="column" marginTop={1}>
           <Text dimColor>↑↓: navigate | Enter: select | Esc: back</Text>
           <Box marginTop={1}>
-            <Text>Provider: <Text color="cyan">{provider.name}</Text></Text>
+            <Text>
+              Provider: <Text color="cyan">{provider.name}</Text>
+            </Text>
           </Box>
           <Box flexDirection="column" marginTop={1}>
             <Text>Select model:</Text>
             {provider.models.map((m, i) => (
               <Text key={m.name} color={i === modelCursor ? 'green' : undefined}>
-                {i === modelCursor ? '▶ ' : '  '}<Text color="gray">{capabilityMarker(m.capabilities)} </Text>{m.name}
+                {i === modelCursor ? '▶ ' : '  '}
+                <Text color="gray">{capabilityMarker(m.capabilities)} </Text>
+                {m.name}
               </Text>
             ))}
             <Box>
@@ -250,13 +314,20 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
         <Box flexDirection="column" marginTop={1}>
           <Text dimColor>↑↓: navigate | Enter: confirm | Esc: back</Text>
           <Box marginTop={1}>
-            <Text>Model: <Text color="cyan">{pendingModel}</Text> ({provider?.name ?? '?'})</Text>
+            <Text>
+              Model: <Text color="cyan">{pendingModel}</Text> ({provider?.name ?? '?'})
+            </Text>
           </Box>
           <Box flexDirection="column" marginTop={1}>
             <Text>Assign tier:</Text>
             {TIERS.map((t, i) => (
-              <Text key={t} color={i === tierCursor ? 'green' : usedTiers.has(t) ? 'yellow' : undefined}>
-                {i === tierCursor ? '▶ ' : '  '}{t}{usedTiers.has(t) ? ' (already used — will be replaced visually)' : ''}
+              <Text
+                key={t}
+                color={i === tierCursor ? 'green' : usedTiers.has(t) ? 'yellow' : undefined}
+              >
+                {i === tierCursor ? '▶ ' : '  '}
+                {t}
+                {usedTiers.has(t) ? ' (already used — will be replaced visually)' : ''}
               </Text>
             ))}
             <Text color={tierCursor === 3 ? 'green' : undefined} dimColor={tierCursor !== 3}>
@@ -281,13 +352,17 @@ export function ProfileWizard({ providers, profiles, onDone, onCancel }: Profile
       <Box flexDirection="column" marginTop={1}>
         <Text dimColor>↑↓: choose | Enter: confirm | Esc: back</Text>
         <Box flexDirection="column" marginTop={1}>
-          <Text>Profile: <Text color="cyan">{formName}</Text></Text>
+          <Text>
+            Profile: <Text color="cyan">{formName}</Text>
+          </Text>
           <Text>Models ({formModels.length}):</Text>
           {formModels.map((m, i) => {
             const p = providers.find((pr) => pr.id === m.providerId);
             return (
               <Text key={i}>
-                {'  • '}{p?.name ?? '?'}: {m.model}{m.tier ? ` [${m.tier}]` : ''}
+                {'  • '}
+                {p?.name ?? '?'}: {m.model}
+                {m.tier ? ` [${m.tier}]` : ''}
               </Text>
             );
           })}

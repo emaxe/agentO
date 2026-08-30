@@ -34,14 +34,14 @@ function press(input: string): string {
 
 describe('useKeyInput', () => {
   it.each([
-    ['у', 'e'],  // edit
-    ['в', 'd'],  // delete
-    ['ф', 'a'],  // add
-    ['й', 'q'],  // quit
-    ['г', 'u'],  // update
+    ['у', 'e'], // edit
+    ['в', 'd'], // delete
+    ['ф', 'a'], // add
+    ['й', 'q'], // quit
+    ['г', 'u'], // update
     ['и', 'b'],
-    ['ш', 'i'],  // image capability
-    ['м', 'v'],  // video capability
+    ['ш', 'i'], // image capability
+    ['м', 'v'], // video capability
   ])('maps %s to %s', (ru, en) => {
     expect(press(ru)).toBe(en);
   });

@@ -39,7 +39,14 @@ import { resolveBaseModel } from './resolve-base-model.js';
 export class OpenCodeAdapter implements AgentAdapter<OpenCodeConfig> {
   readonly id = 'opencode';
   readonly displayName = 'OpenCode';
-  readonly supportedProviderTypes = ['anthropic-compatible', 'openai-compatible', 'fireworks', 'openrouter', 'responses-compatible', 'custom-api'] as const;
+  readonly supportedProviderTypes = [
+    'anthropic-compatible',
+    'openai-compatible',
+    'fireworks',
+    'openrouter',
+    'responses-compatible',
+    'custom-api',
+  ] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -125,7 +132,8 @@ export class OpenCodeAdapter implements AgentAdapter<OpenCodeConfig> {
       if (provider.customApiModes?.openai || provider.customApiModes?.responses) {
         const providerKey = provider.name.toLowerCase().replace(/\s+/g, '-');
         const options: Record<string, unknown> = { apiKey: provider.apiKey };
-        const resolved = resolveCustomApiUrl(provider, 'openai') ?? resolveCustomApiUrl(provider, 'responses');
+        const resolved =
+          resolveCustomApiUrl(provider, 'openai') ?? resolveCustomApiUrl(provider, 'responses');
         if (resolved) options['baseURL'] = resolved;
         return {
           model: `${providerKey}/${base.model}`,
@@ -139,7 +147,9 @@ export class OpenCodeAdapter implements AgentAdapter<OpenCodeConfig> {
           },
         };
       }
-      throw new Error(`OpenCode: custom-api provider "${provider.name}" requires at least one compatible mode (anthropic, openai, or responses)`);
+      throw new Error(
+        `OpenCode: custom-api provider "${provider.name}" requires at least one compatible mode (anthropic, openai, or responses)`,
+      );
     }
 
     // openai-compatible and responses-compatible: кастомный провайдер с именем из agento
@@ -190,7 +200,12 @@ export class OpenCodeAdapter implements AgentAdapter<OpenCodeConfig> {
    * keys overwrite, and nested objects are replaced whole. OpenCode has no
    * env-only flat-merge keys (`envKeys` is empty).
    */
-  async writeConfig(config: OpenCodeConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
+  async writeConfig(
+    config: OpenCodeConfig,
+    scope: LaunchScope,
+    cwd?: string,
+    mergeEnabled?: boolean,
+  ): Promise<void> {
     const path = this.configPaths(cwd)[scope];
     const dir = join(path, '..');
     await mkdir(dir, { recursive: true });

@@ -5,13 +5,7 @@ import { getAgent } from '../../agents/registry.js';
 import type { AgentId } from '../../config/schema.js';
 
 type SubScreen =
-  | 'choice'
-  | 'auto-checking'
-  | 'installing'
-  | 'success'
-  | 'error-env'
-  | 'error-install'
-  | 'manual';
+  'choice' | 'auto-checking' | 'installing' | 'success' | 'error-env' | 'error-install' | 'manual';
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -49,29 +43,35 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
     }
 
     setSubScreen('auto-checking');
-    installer.checkEnvironment().then((envResult) => {
-      if (!envResult.ok) {
-        setMissingDeps(envResult.missing);
-        setSubScreen('error-env');
-        return;
-      }
-
-      setSubScreen('installing');
-      installer.install().then((result) => {
-        if (result.success) {
-          setSubScreen('success');
-        } else {
-          setInstallError(result.error ?? 'Неизвестная ошибка');
-          setSubScreen('error-install');
+    installer
+      .checkEnvironment()
+      .then((envResult) => {
+        if (!envResult.ok) {
+          setMissingDeps(envResult.missing);
+          setSubScreen('error-env');
+          return;
         }
-      }).catch((err: unknown) => {
+
+        setSubScreen('installing');
+        installer
+          .install()
+          .then((result) => {
+            if (result.success) {
+              setSubScreen('success');
+            } else {
+              setInstallError(result.error ?? 'Неизвестная ошибка');
+              setSubScreen('error-install');
+            }
+          })
+          .catch((err: unknown) => {
+            setInstallError(String(err));
+            setSubScreen('error-install');
+          });
+      })
+      .catch((err: unknown) => {
         setInstallError(String(err));
         setSubScreen('error-install');
       });
-    }).catch((err: unknown) => {
-      setInstallError(String(err));
-      setSubScreen('error-install');
-    });
   };
 
   useKeyInput((_input, key) => {
@@ -148,7 +148,8 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
         <Box flexDirection="column" marginTop={1}>
           {choices.map((c, i) => (
             <Text key={i} color={i === selectedChoice ? 'green' : undefined}>
-              {i === selectedChoice ? '▶ ' : '  '}{c}
+              {i === selectedChoice ? '▶ ' : '  '}
+              {c}
             </Text>
           ))}
         </Box>
@@ -199,7 +200,8 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
         <Box flexDirection="column" marginTop={1}>
           {choices.map((c, i) => (
             <Text key={i} color={i === selectedChoice ? 'green' : undefined}>
-              {i === selectedChoice ? '▶ ' : '  '}{c}
+              {i === selectedChoice ? '▶ ' : '  '}
+              {c}
             </Text>
           ))}
         </Box>
@@ -216,7 +218,8 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
         <Box flexDirection="column" marginTop={1}>
           {choices.map((c, i) => (
             <Text key={i} color={i === selectedChoice ? 'green' : undefined}>
-              {i === selectedChoice ? '▶ ' : '  '}{c}
+              {i === selectedChoice ? '▶ ' : '  '}
+              {c}
             </Text>
           ))}
         </Box>
@@ -233,14 +236,17 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
           <Text>Выполни команды:</Text>
           <Box marginTop={1} flexDirection="column">
             {instructions?.commands.map((cmd, i) => (
-              <Text key={i} color="cyan">  {cmd}</Text>
+              <Text key={i} color="cyan">
+                {' '}
+                {cmd}
+              </Text>
             ))}
           </Box>
         </Box>
         {instructions?.docsUrl && (
           <Box marginTop={1} flexDirection="column">
             <Text>Документация:</Text>
-            <Text color="blue">  {instructions.docsUrl}</Text>
+            <Text color="blue"> {instructions.docsUrl}</Text>
           </Box>
         )}
         <Box marginTop={1}>

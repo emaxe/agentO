@@ -46,22 +46,29 @@ export function validateProvider(
 
   // Types that require baseUrl (openai-compatible defaults to https://api.openai.com/v1)
   const baseUrlRequiredTypes = ['responses-compatible', 'custom-api'] as const;
-  if (baseUrlRequiredTypes.includes(data.type as (typeof baseUrlRequiredTypes)[number]) && !data.baseUrl) {
+  if (
+    baseUrlRequiredTypes.includes(data.type as (typeof baseUrlRequiredTypes)[number]) &&
+    !data.baseUrl
+  ) {
     throw new Error(`Provider type "${data.type}" requires a baseUrl.`);
   }
 
   // custom-api requires at least one enabled API mode
   if (data.type === 'custom-api') {
-    const modes = (data as ProviderInput & { customApiModes?: { openai?: boolean; anthropic?: boolean; responses?: boolean } }).customApiModes;
+    const modes = (
+      data as ProviderInput & {
+        customApiModes?: { openai?: boolean; anthropic?: boolean; responses?: boolean };
+      }
+    ).customApiModes;
     if (!modes || (!modes.openai && !modes.anthropic && !modes.responses)) {
-      throw new Error('Provider type "custom-api" requires at least one API mode (openai, anthropic, or responses) to be enabled.');
+      throw new Error(
+        'Provider type "custom-api" requires at least one API mode (openai, anthropic, or responses) to be enabled.',
+      );
     }
   }
 
   // name must be unique (skip self when updating)
-  const duplicate = existingProviders.find(
-    (p) => p.name === data.name && p.id !== selfId,
-  );
+  const duplicate = existingProviders.find((p) => p.name === data.name && p.id !== selfId);
   if (duplicate) {
     throw new Error(`Provider name "${data.name}" is already in use.`);
   }
@@ -91,9 +98,7 @@ export function validateProfile(
   }
 
   // name must be unique (skip self when updating)
-  const duplicate = existingProfiles.find(
-    (p) => p.name === data.name && p.id !== selfId,
-  );
+  const duplicate = existingProfiles.find((p) => p.name === data.name && p.id !== selfId);
   if (duplicate) {
     throw new Error(`Profile name "${data.name}" is already in use.`);
   }
@@ -119,8 +124,8 @@ export function validateProfile(
       const otherProvider = existingProviders.find((p) => p.id === m.providerId);
       throw new Error(
         `Profile models must all belong to the same provider. ` +
-        `Current provider: "${firstProvider?.name ?? firstProviderId}", ` +
-        `conflicting model "${m.model}" belongs to "${otherProvider?.name ?? m.providerId}".`,
+          `Current provider: "${firstProvider?.name ?? firstProviderId}", ` +
+          `conflicting model "${m.model}" belongs to "${otherProvider?.name ?? m.providerId}".`,
       );
     }
   }
@@ -131,7 +136,7 @@ export function validateProfile(
     if (missingTier) {
       throw new Error(
         `Multi-model profile: every model must have a tier (small|base|smart). ` +
-        `Model "${missingTier.model}" (provider ${missingTier.providerId}) is missing a tier.`,
+          `Model "${missingTier.model}" (provider ${missingTier.providerId}) is missing a tier.`,
       );
     }
 
@@ -146,9 +151,7 @@ export function validateProfile(
 
     // multi-model: must have at least one model with tier=base
     if (!data.models.some((m: ProfileModel) => m.tier === 'base')) {
-      throw new Error(
-        'Multi-model profile: at least one model must have tier=base.',
-      );
+      throw new Error('Multi-model profile: at least one model must have tier=base.');
     }
   }
 }

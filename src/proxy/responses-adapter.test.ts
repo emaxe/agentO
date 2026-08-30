@@ -40,7 +40,11 @@ describe('convertRequest', () => {
         {
           name: 'bash',
           description: 'Run shell commands',
-          input_schema: { type: 'object', properties: { cmd: { type: 'string' } }, required: ['cmd'] },
+          input_schema: {
+            type: 'object',
+            properties: { cmd: { type: 'string' } },
+            required: ['cmd'],
+          },
         },
       ],
     });
@@ -90,9 +94,7 @@ describe('convertRequest', () => {
       messages: [
         {
           role: 'user',
-          content: [
-            { type: 'tool_result', tool_use_id: 'call_1', content: 'Paris' },
-          ],
+          content: [{ type: 'tool_result', tool_use_id: 'call_1', content: 'Paris' }],
         },
       ],
       max_tokens: 10,
@@ -128,9 +130,7 @@ describe('convertRequest', () => {
       messages: [
         {
           role: 'assistant',
-          content: [
-            { type: 'tool_use', id: 'call_1', name: 'bash', input: { cmd: 'ls' } },
-          ],
+          content: [{ type: 'tool_use', id: 'call_1', name: 'bash', input: { cmd: 'ls' } }],
         },
       ],
       max_tokens: 10,
@@ -207,7 +207,9 @@ describe('convertResponse', () => {
     const result = convertResponse({
       id: 'r',
       model: 'm',
-      output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Hi' }] }],
+      output: [
+        { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Hi' }] },
+      ],
       usage: { input_tokens: 1, output_tokens: 1 },
     });
     expect(result.stop_reason).toBe('end_turn');
@@ -232,7 +234,10 @@ describe('convertError', () => {
 
   it('extracts error.message from object', () => {
     const result = convertError({ error: { type: 'invalid_request_error', message: 'No model' } });
-    expect(result).toEqual({ type: 'error', error: { type: 'invalid_request_error', message: 'No model' } });
+    expect(result).toEqual({
+      type: 'error',
+      error: { type: 'invalid_request_error', message: 'No model' },
+    });
   });
 
   it('handles unknown object', () => {
@@ -275,11 +280,14 @@ describe('convertStreamChunk', () => {
   it('response.output_item.added (type=message) → content_block_start text', () => {
     const state = createStreamState('r', 'm');
     state.initialized = true;
-    const events = convertStreamChunk({
-      type: 'response.output_item.added',
-      output_index: 0,
-      item: { type: 'message', role: 'assistant' },
-    }, state);
+    const events = convertStreamChunk(
+      {
+        type: 'response.output_item.added',
+        output_index: 0,
+        item: { type: 'message', role: 'assistant' },
+      },
+      state,
+    );
     expect(events).toEqual([
       { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
     ]);
@@ -289,11 +297,14 @@ describe('convertStreamChunk', () => {
   it('response.output_item.added (type=function_call) → content_block_start tool_use', () => {
     const state = createStreamState('r', 'm');
     state.initialized = true;
-    const events = convertStreamChunk({
-      type: 'response.output_item.added',
-      output_index: 0,
-      item: { type: 'function_call', call_id: 'call_1', name: 'bash', arguments: '' },
-    }, state);
+    const events = convertStreamChunk(
+      {
+        type: 'response.output_item.added',
+        output_index: 0,
+        item: { type: 'function_call', call_id: 'call_1', name: 'bash', arguments: '' },
+      },
+      state,
+    );
     expect(events).toEqual([
       {
         type: 'content_block_start',
@@ -308,11 +319,14 @@ describe('convertStreamChunk', () => {
     state.initialized = true;
     state.itemIndexMap.set(0, 0);
     state.nextBlockIndex = 1;
-    const events = convertStreamChunk({
-      type: 'response.output_text.delta',
-      output_index: 0,
-      delta: 'Hello',
-    }, state);
+    const events = convertStreamChunk(
+      {
+        type: 'response.output_text.delta',
+        output_index: 0,
+        delta: 'Hello',
+      },
+      state,
+    );
     expect(events).toEqual([
       { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hello' } },
     ]);
@@ -324,13 +338,20 @@ describe('convertStreamChunk', () => {
     state.initialized = true;
     state.itemIndexMap.set(0, 0);
     state.nextBlockIndex = 1;
-    const events = convertStreamChunk({
-      type: 'response.function_call_arguments.delta',
-      output_index: 0,
-      delta: '{"cmd":',
-    }, state);
+    const events = convertStreamChunk(
+      {
+        type: 'response.function_call_arguments.delta',
+        output_index: 0,
+        delta: '{"cmd":',
+      },
+      state,
+    );
     expect(events).toEqual([
-      { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"cmd":' } },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'input_json_delta', partial_json: '{"cmd":' },
+      },
     ]);
   });
 
@@ -339,20 +360,26 @@ describe('convertStreamChunk', () => {
     state.initialized = true;
     state.itemIndexMap.set(0, 0);
     state.nextBlockIndex = 1;
-    const events = convertStreamChunk({ type: 'response.output_item.done', output_index: 0 }, state);
+    const events = convertStreamChunk(
+      { type: 'response.output_item.done', output_index: 0 },
+      state,
+    );
     expect(events).toEqual([{ type: 'content_block_stop', index: 0 }]);
   });
 
   it('response.completed → message_delta + message_stop with end_turn', () => {
     const state = createStreamState('r', 'm');
     state.initialized = true;
-    const events = convertStreamChunk({
-      type: 'response.completed',
-      response: {
-        output: [{ type: 'message', role: 'assistant', content: [] }],
-        usage: { input_tokens: 10, output_tokens: 5 },
+    const events = convertStreamChunk(
+      {
+        type: 'response.completed',
+        response: {
+          output: [{ type: 'message', role: 'assistant', content: [] }],
+          usage: { input_tokens: 10, output_tokens: 5 },
+        },
       },
-    }, state);
+      state,
+    );
     expect(events).toContainEqual(expect.objectContaining({ type: 'message_delta' }));
     expect(events).toContainEqual({ type: 'message_stop' });
     const delta = events.find((e) => e.type === 'message_delta') as Record<string, unknown>;
@@ -363,13 +390,16 @@ describe('convertStreamChunk', () => {
   it('response.completed with function_call output → stop_reason tool_use', () => {
     const state = createStreamState('r', 'm');
     state.initialized = true;
-    const events = convertStreamChunk({
-      type: 'response.completed',
-      response: {
-        output: [{ type: 'function_call', call_id: 'c1', name: 'bash', arguments: '{}' }],
-        usage: { input_tokens: 5, output_tokens: 2 },
+    const events = convertStreamChunk(
+      {
+        type: 'response.completed',
+        response: {
+          output: [{ type: 'function_call', call_id: 'c1', name: 'bash', arguments: '{}' }],
+          usage: { input_tokens: 5, output_tokens: 2 },
+        },
       },
-    }, state);
+      state,
+    );
     const delta = events.find((e) => e.type === 'message_delta') as Record<string, unknown>;
     expect((delta.delta as Record<string, unknown>).stop_reason).toBe('tool_use');
   });
@@ -377,10 +407,13 @@ describe('convertStreamChunk', () => {
   it('response.reasoning_summary_text.delta → thinking content_block_start + delta', () => {
     const state = createStreamState('r', 'm');
     state.initialized = true;
-    const events = convertStreamChunk({
-      type: 'response.reasoning_summary_text.delta',
-      delta: 'Let me think...',
-    }, state);
+    const events = convertStreamChunk(
+      {
+        type: 'response.reasoning_summary_text.delta',
+        delta: 'Let me think...',
+      },
+      state,
+    );
     expect(events[0]).toEqual({
       type: 'content_block_start',
       index: 0,
@@ -397,10 +430,17 @@ describe('convertStreamChunk', () => {
     const state = createStreamState('r', 'm');
     state.initialized = true;
     convertStreamChunk({ type: 'response.reasoning_summary_text.delta', delta: 'part1' }, state);
-    const events2 = convertStreamChunk({ type: 'response.reasoning_summary_text.delta', delta: 'part2' }, state);
+    const events2 = convertStreamChunk(
+      { type: 'response.reasoning_summary_text.delta', delta: 'part2' },
+      state,
+    );
     // second call: no content_block_start, just delta
     expect(events2).toEqual([
-      { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'part2' } },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'thinking_delta', thinking: 'part2' },
+      },
     ]);
   });
 
@@ -408,10 +448,13 @@ describe('convertStreamChunk', () => {
     const state = createStreamState('r', 'm');
     state.initialized = true;
     convertStreamChunk({ type: 'response.reasoning_summary_text.delta', delta: 'think' }, state);
-    const events = convertStreamChunk({
-      type: 'response.completed',
-      response: { output: [], usage: { input_tokens: 1, output_tokens: 1 } },
-    }, state);
+    const events = convertStreamChunk(
+      {
+        type: 'response.completed',
+        response: { output: [], usage: { input_tokens: 1, output_tokens: 1 } },
+      },
+      state,
+    );
     expect(events[0]).toEqual({ type: 'content_block_stop', index: 0 });
     expect(events[1].type).toBe('message_delta');
     expect(events[2].type).toBe('message_stop');

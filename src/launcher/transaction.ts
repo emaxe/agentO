@@ -3,7 +3,13 @@ import { resolveBaseModel } from '../adapters/resolve-base-model.js';
 import { restoreBackupManifest } from '../config/backup-restore.js';
 import { addToGitExclude } from '../config/git-exclude.js';
 import type { Profile, Provider } from '../config/schema.js';
-import { deleteBackup, inferBackupFileFormat, readBackup, readConfig, writeBackup } from '../config/store.js';
+import {
+  deleteBackup,
+  inferBackupFileFormat,
+  readBackup,
+  readConfig,
+  writeBackup,
+} from '../config/store.js';
 import { startAnthropicScrubberProxy } from '../proxy/anthropic-scrubber.js';
 import { startOpenAIProxy } from '../proxy/openai-proxy.js';
 import { startResponsesProxy } from '../proxy/responses-proxy.js';
@@ -44,7 +50,9 @@ export interface LaunchTransactionResult {
 
 function cleanProcessEnv(): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
   );
 }
 
@@ -58,7 +66,12 @@ const LOOPBACK_NO_PROXY = '127.0.0.1,localhost,::1';
  */
 function withNoProxyLoopback(env: Record<string, string>): Record<string, string> {
   const hasProxy =
-    env['HTTP_PROXY'] ?? env['http_proxy'] ?? env['HTTPS_PROXY'] ?? env['https_proxy'] ?? env['ALL_PROXY'] ?? env['all_proxy'];
+    env['HTTP_PROXY'] ??
+    env['http_proxy'] ??
+    env['HTTPS_PROXY'] ??
+    env['https_proxy'] ??
+    env['ALL_PROXY'] ??
+    env['all_proxy'];
   if (!hasProxy) return env;
 
   const patch: Record<string, string> = {};
@@ -69,7 +82,9 @@ function withNoProxyLoopback(env: Record<string, string>): Record<string, string
   return { ...env, ...patch };
 }
 
-async function buildExecRequest(options: LaunchTransactionOptions & { args: string[] }): Promise<ExecRequest> {
+async function buildExecRequest(
+  options: LaunchTransactionOptions & { args: string[] },
+): Promise<ExecRequest> {
   const { adapter, profile, providers, command, args } = options;
   const resolvedPath = await shellPathResolver.resolve();
   const adapterEnv = adapter.buildEnv?.(profile, providers) ?? {};
@@ -133,20 +148,18 @@ async function excludeProjectConfigsFromGit(
   ];
 }
 
-async function snapshotPrimaryConfigFile(
-  adapter: AgentAdapter,
-  scope: LaunchScope,
-  cwd?: string,
-) {
+async function snapshotPrimaryConfigFile(adapter: AgentAdapter, scope: LaunchScope, cwd?: string) {
   const currentConfig = await adapter.readConfig(scope, cwd);
   const configPath = adapter.configPaths(cwd)[scope];
 
-  return [{
-    path: configPath,
-    format: inferBackupFileFormat(configPath),
-    hadFile: currentConfig !== null,
-    content: currentConfig,
-  }];
+  return [
+    {
+      path: configPath,
+      format: inferBackupFileFormat(configPath),
+      hadFile: currentConfig !== null,
+      content: currentConfig,
+    },
+  ];
 }
 
 /**
@@ -175,12 +188,18 @@ async function maybeStartProxy(
   const upstream = env?.['ANTHROPIC_BASE_URL'];
   if (!upstream || typeof upstream !== 'string') return;
 
-  const needsResponsesProxy = provider.type === 'responses-compatible'
-    || (provider.type === 'custom-api' && !!provider.customApiModes?.responses && !provider.customApiModes?.anthropic && !provider.customApiModes?.openai);
-  const needsOpenAIProxy = !needsResponsesProxy && (
-    provider.type === 'openai-compatible'
-    || (provider.type === 'custom-api' && !!provider.customApiModes?.openai && !provider.customApiModes?.anthropic)
-  );
+  const needsResponsesProxy =
+    provider.type === 'responses-compatible' ||
+    (provider.type === 'custom-api' &&
+      !!provider.customApiModes?.responses &&
+      !provider.customApiModes?.anthropic &&
+      !provider.customApiModes?.openai);
+  const needsOpenAIProxy =
+    !needsResponsesProxy &&
+    (provider.type === 'openai-compatible' ||
+      (provider.type === 'custom-api' &&
+        !!provider.customApiModes?.openai &&
+        !provider.customApiModes?.anthropic));
   const proxy = needsResponsesProxy
     ? await startResponsesProxy({ upstreamUrl: upstream })
     : needsOpenAIProxy
@@ -193,7 +212,11 @@ async function maybeStartProxy(
   return proxy.stop;
 }
 
-function createLaunchCleanup(adapter: AgentAdapter, scope: LaunchScope, cwd?: string): () => Promise<void> {
+function createLaunchCleanup(
+  adapter: AgentAdapter,
+  scope: LaunchScope,
+  cwd?: string,
+): () => Promise<void> {
   return async (): Promise<void> => {
     const backup = await readBackup(adapter.id, scope, cwd);
     if (backup !== null) {
@@ -213,7 +236,9 @@ function createLaunchCleanup(adapter: AgentAdapter, scope: LaunchScope, cwd?: st
  * The `mergeAgentConfigs` setting from AgentO config is passed to the adapter
  * so JSON-based configs can be merged conservatively rather than overwritten.
  */
-export async function prepareLaunchTransaction(options: LaunchTransactionOptions): Promise<LaunchTransactionResult> {
+export async function prepareLaunchTransaction(
+  options: LaunchTransactionOptions,
+): Promise<LaunchTransactionResult> {
   const { adapter, profile, providers, scope, cwd } = options;
   const args = options.args ?? [];
 

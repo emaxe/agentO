@@ -70,7 +70,10 @@ describe('profile manager', () => {
     it('addProfile with unknown providerId throws', async () => {
       const { addProfile, listProfiles } = await getManager();
       await expect(
-        addProfile({ name: 'BadProfile', models: [{ providerId: '00000000-0000-0000-0000-000000000099', model: 'm' }] }),
+        addProfile({
+          name: 'BadProfile',
+          models: [{ providerId: '00000000-0000-0000-0000-000000000099', model: 'm' }],
+        }),
       ).rejects.toThrow('unknown providerId');
       expect(await listProfiles()).toHaveLength(0);
     });

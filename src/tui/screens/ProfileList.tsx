@@ -24,7 +24,8 @@ export function ProfileList({ profiles, selected, status }: ProfileListProps): R
         selected={selected}
         renderItem={(profile, index, isSelected) => (
           <Text color={isSelected ? 'green' : undefined}>
-            {isSelected ? '▶ ' : '  '}{profile.name} ({profile.models.length} models)
+            {isSelected ? '▶ ' : '  '}
+            {profile.name} ({profile.models.length} models)
           </Text>
         )}
         emptyMessage="No profiles. Press 'a' to add."

@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addToGitExclude, findGitRoot, resolveGitCommonDir, toExcludePattern } from './git-exclude.js';
+import {
+  addToGitExclude,
+  findGitRoot,
+  resolveGitCommonDir,
+  toExcludePattern,
+} from './git-exclude.js';
 
 let dir: string;
 

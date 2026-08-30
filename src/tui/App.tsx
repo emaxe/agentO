@@ -44,7 +44,15 @@ export function App({ dev, onExec, launchError, agentStatusCache }: AppProps): R
   }
 
   if (screen === 'launch') {
-    return <LaunchAgent dev={dev} onBack={goBack} onExec={handleExec} launchError={launchError} agentStatusCache={agentStatusCache} />;
+    return (
+      <LaunchAgent
+        dev={dev}
+        onBack={goBack}
+        onExec={handleExec}
+        launchError={launchError}
+        agentStatusCache={agentStatusCache}
+      />
+    );
   }
 
   if (screen === 'providers') {

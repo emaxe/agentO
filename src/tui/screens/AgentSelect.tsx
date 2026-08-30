@@ -38,7 +38,8 @@ export function AgentSelect({
         <Box flexDirection="column" marginTop={1}>
           {agents.map((item, i) => {
             const state = checkProgress[item.id] ?? 'pending';
-            const icon = state === 'done' ? '✓' : state === 'checking' ? SPINNER_FRAMES[spinnerFrame] : '○';
+            const icon =
+              state === 'done' ? '✓' : state === 'checking' ? SPINNER_FRAMES[spinnerFrame] : '○';
             const color = state === 'done' ? 'green' : state === 'checking' ? 'yellow' : 'gray';
             return (
               <Text key={i} color={color} dimColor={state === 'pending'}>
@@ -65,12 +66,8 @@ export function AgentSelect({
           <Text color={isSelected ? 'green' : undefined}>
             {isSelected ? '▶ ' : '  '}
             {item.label}
-            {!installed && (
-              <Text dimColor> (not installed)</Text>
-            )}
-            {installed && isSelected && (
-              <Text dimColor> (u update, d delete)</Text>
-            )}
+            {!installed && <Text dimColor> (not installed)</Text>}
+            {installed && isSelected && <Text dimColor> (u update, d delete)</Text>}
           </Text>
         );
       }}

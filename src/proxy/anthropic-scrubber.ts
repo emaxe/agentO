@@ -43,9 +43,7 @@ async function readBody(req: http.IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-export async function startAnthropicScrubberProxy(
-  options: ProxyOptions,
-): Promise<ProxyServer> {
+export async function startAnthropicScrubberProxy(options: ProxyOptions): Promise<ProxyServer> {
   const denyList = new Set(options.denyList ?? DEFAULT_DENYLIST);
   const timeoutMs = options.timeoutMs ?? 120_000;
   const upstream = new URL(normalizeProxyUpstream(options.upstreamUrl));

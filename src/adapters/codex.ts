@@ -73,7 +73,13 @@ async function writeTomlFile(path: string, config: CodexConfig): Promise<void> {
 export class CodexAdapter implements AgentAdapter<CodexConfig> {
   readonly id = 'codex';
   readonly displayName = 'Codex CLI';
-  readonly supportedProviderTypes = ['openai-compatible', 'responses-compatible', 'fireworks', 'openrouter', 'custom-api'] as const;
+  readonly supportedProviderTypes = [
+    'openai-compatible',
+    'responses-compatible',
+    'fireworks',
+    'openrouter',
+    'custom-api',
+  ] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -89,19 +95,22 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
 
   async snapshotConfigFiles(scope: LaunchScope, cwd?: string): Promise<WriteBackupFile[]> {
     const paths = this.configPaths(cwd);
-    const filePaths = scope === 'project'
-      ? [paths.global, paths.project, profileConfigPath('default')]
-      : [paths.global, profileConfigPath('default')];
+    const filePaths =
+      scope === 'project'
+        ? [paths.global, paths.project, profileConfigPath('default')]
+        : [paths.global, profileConfigPath('default')];
 
-    return Promise.all(filePaths.map(async (path) => {
-      const content = await readTomlFile(path);
-      return {
-        path,
-        format: 'toml' as const,
-        hadFile: content !== null,
-        content,
-      };
-    }));
+    return Promise.all(
+      filePaths.map(async (path) => {
+        const content = await readTomlFile(path);
+        return {
+          path,
+          format: 'toml' as const,
+          hadFile: content !== null,
+          content,
+        };
+      }),
+    );
   }
 
   buildConfig(profile: Profile, providers: Provider[]): CodexConfig {
@@ -118,18 +127,24 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
         wireApi = 'responses';
         const resolved = resolveCustomApiUrl(provider, 'responses');
         if (!resolved) {
-          throw new Error(`Codex CLI requires a baseUrl for custom-api provider "${provider.name}"`);
+          throw new Error(
+            `Codex CLI requires a baseUrl for custom-api provider "${provider.name}"`,
+          );
         }
         baseUrl = resolved;
       } else if (provider.customApiModes?.openai) {
         wireApi = 'responses';
         const resolved = resolveCustomApiUrl(provider, 'openai');
         if (!resolved) {
-          throw new Error(`Codex CLI requires a baseUrl for custom-api provider "${provider.name}"`);
+          throw new Error(
+            `Codex CLI requires a baseUrl for custom-api provider "${provider.name}"`,
+          );
         }
         baseUrl = resolved;
       } else {
-        throw new Error(`Codex CLI: custom-api provider "${provider.name}" requires at least one compatible mode (openai or responses)`);
+        throw new Error(
+          `Codex CLI: custom-api provider "${provider.name}" requires at least one compatible mode (openai or responses)`,
+        );
       }
     } else {
       baseUrl = provider.baseUrl ?? DEFAULT_BASE_URLS[provider.type] ?? '';
@@ -190,7 +205,7 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
 
       // 1. Global config: only model_providers, never default_profile/profiles
       if (config.model_providers !== undefined) {
-        const existingGlobal = await readTomlFile(paths.global) ?? {};
+        const existingGlobal = (await readTomlFile(paths.global)) ?? {};
         const globalConfig: CodexConfig = {};
         // Copy everything from existing except legacy profile keys
         for (const key of Object.keys(existingGlobal)) {
@@ -222,7 +237,11 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
     }
   }
 
-  async restoreConfigFile(file: BackupManifestFile, scope: LaunchScope, cwd?: string): Promise<void> {
+  async restoreConfigFile(
+    file: BackupManifestFile,
+    scope: LaunchScope,
+    cwd?: string,
+  ): Promise<void> {
     const path = file.path || this.configPaths(cwd)[scope];
     if (file.hadFile) {
       await writeTomlFile(path, file.content as CodexConfig);

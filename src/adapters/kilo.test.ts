@@ -54,7 +54,12 @@ describe('KiloAdapter', () => {
   });
 
   it('openai-compatible uses normalized provider name as key', () => {
-    const openaiProvider = { ...testProvider, type: 'openai-compatible' as const, name: 'Fireworks AI', baseUrl: 'https://api.fireworks.ai/v1' };
+    const openaiProvider = {
+      ...testProvider,
+      type: 'openai-compatible' as const,
+      name: 'Fireworks AI',
+      baseUrl: 'https://api.fireworks.ai/v1',
+    };
     const config = adapter.buildConfig(testProfile, [openaiProvider]);
     expect(config.model).toBe('fireworks-ai/claude-3-opus');
     const provider = config.provider as Record<string, unknown>;
@@ -107,12 +112,22 @@ describe('KiloAdapter', () => {
   });
 
   it('supportedProviderTypes includes all six types', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['anthropic-compatible', 'openai-compatible', 'fireworks', 'openrouter', 'responses-compatible', 'custom-api']);
+    expect(adapter.supportedProviderTypes).toEqual([
+      'anthropic-compatible',
+      'openai-compatible',
+      'fireworks',
+      'openrouter',
+      'responses-compatible',
+      'custom-api',
+    ]);
   });
 
   it('includes modalities based on model capabilities (anthropic)', () => {
     const config = adapter.buildConfig(testProfile, [testProvider]);
-    const models = config.models as Record<string, { modalities: { input: string[]; output: string[] } }>;
+    const models = config.models as Record<
+      string,
+      { modalities: { input: string[]; output: string[] } }
+    >;
     expect(models['claude-3-opus'].modalities.input).toContain('text');
     expect(models['claude-3-opus'].modalities.input).toContain('image');
     expect(models['claude-3-opus'].modalities.output).toEqual(['text']);
@@ -121,7 +136,9 @@ describe('KiloAdapter', () => {
   it('excludes image from modalities when capability is false', () => {
     const noImageProvider: Provider = {
       ...testProvider,
-      models: [{ name: 'claude-3-opus', capabilities: { image: false, video: false, audio: true } }],
+      models: [
+        { name: 'claude-3-opus', capabilities: { image: false, video: false, audio: true } },
+      ],
     };
     const config = adapter.buildConfig(testProfile, [noImageProvider]);
     const models = config.models as Record<string, { modalities: { input: string[] } }>;
@@ -135,12 +152,19 @@ describe('KiloAdapter', () => {
       name: 'My Custom OpenRouter',
       type: 'openrouter',
       apiKey: 'sk-or-v1-test',
-      models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+      models: [
+        {
+          name: 'anthropic/claude-sonnet-4.6',
+          capabilities: { image: true, video: false, audio: false },
+        },
+      ],
     };
     const profile: Profile = {
       id: '00000000-0000-0000-0000-00000000000b',
       name: 'OR Profile',
-      models: [{ providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' }],
+      models: [
+        { providerId: openrouterProvider.id, model: 'anthropic/claude-sonnet-4.6', tier: 'base' },
+      ],
     };
     const config = adapter.buildConfig(profile, [openrouterProvider]);
     expect(config.model).toBe('openrouter/anthropic/claude-sonnet-4.6');
@@ -160,7 +184,12 @@ describe('KiloAdapter', () => {
       name: 'Fireworks',
       type: 'fireworks',
       apiKey: 'fw-test-key',
-      models: [{ name: 'llama-3.1-70b-instruct', capabilities: { image: true, video: false, audio: false } }],
+      models: [
+        {
+          name: 'llama-3.1-70b-instruct',
+          capabilities: { image: true, video: false, audio: false },
+        },
+      ],
     };
     const profile: Profile = {
       id: '00000000-0000-0000-0000-000000000005',
@@ -254,7 +283,9 @@ describe('KiloAdapter', () => {
       name: 'Custom',
       models: [{ providerId: customProvider.id, model: 'gpt-4', tier: 'base' }],
     };
-    expect(() => adapter.buildConfig(profile, [customProvider])).toThrow('requires at least one compatible mode');
+    expect(() => adapter.buildConfig(profile, [customProvider])).toThrow(
+      'requires at least one compatible mode',
+    );
   });
 
   describe('writeConfig merge', () => {

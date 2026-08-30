@@ -39,18 +39,21 @@ export const CLAUDE_API_KEY_ENV = 'AGENTO_ANTHROPIC_API_KEY';
  */
 const API_KEY_HELPER = `sh -c 'printf %s "$${CLAUDE_API_KEY_ENV}"'`;
 
-function pickByTier(
-  models: ProfileModel[],
-  tier: ModelTier,
-  fallback: ProfileModel,
-): ProfileModel {
+function pickByTier(models: ProfileModel[], tier: ModelTier, fallback: ProfileModel): ProfileModel {
   return models.find((m) => m.tier === tier) ?? fallback;
 }
 
 export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
   readonly id = 'claude-code';
   readonly displayName = 'Claude Code';
-  readonly supportedProviderTypes = ['anthropic-compatible', 'fireworks', 'openrouter', 'custom-api', 'openai-compatible', 'responses-compatible'] as const;
+  readonly supportedProviderTypes = [
+    'anthropic-compatible',
+    'fireworks',
+    'openrouter',
+    'custom-api',
+    'openai-compatible',
+    'responses-compatible',
+  ] as const;
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
@@ -78,7 +81,7 @@ export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
     const providerIds = new Set([small.providerId, base.providerId, smart.providerId]);
     if (providerIds.size > 1) {
       throw new Error(
-        `Claude Code supports only one provider per profile. Found providers for different tiers: ${[...providerIds].join(', ')}`
+        `Claude Code supports only one provider per profile. Found providers for different tiers: ${[...providerIds].join(', ')}`,
       );
     }
 
@@ -99,7 +102,9 @@ export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
         // Responses mode: proxy will rewrite /v1/messages → /v1/responses at runtime
         anthropicBase = baseProvider.baseUrl;
       } else {
-        throw new Error(`Claude Code requires anthropic, openai, or responses mode for custom-api provider "${baseProvider.name}"`);
+        throw new Error(
+          `Claude Code requires anthropic, openai, or responses mode for custom-api provider "${baseProvider.name}"`,
+        );
       }
     } else if (baseProvider.type === 'responses-compatible') {
       // Responses-compatible provider: proxy intercepts at URL level
@@ -157,7 +162,12 @@ export class ClaudeCodeAdapter implements AgentAdapter<ClaudeCodeConfig> {
    * conservative shallow merge: unknown top-level keys are preserved, generated
    * keys overwrite, nested objects are replaced whole, and `env` is merged flat.
    */
-  async writeConfig(config: ClaudeCodeConfig, scope: LaunchScope, cwd?: string, mergeEnabled?: boolean): Promise<void> {
+  async writeConfig(
+    config: ClaudeCodeConfig,
+    scope: LaunchScope,
+    cwd?: string,
+    mergeEnabled?: boolean,
+  ): Promise<void> {
     const path = this.configPaths(cwd)[scope];
     const dir = join(path, '..');
     await mkdir(dir, { recursive: true });

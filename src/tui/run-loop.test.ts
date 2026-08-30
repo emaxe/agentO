@@ -137,8 +137,13 @@ describe('runTuiLoop', () => {
 
     await runTuiLoop({ startTui: scriptedTui(req), spawnAgent, warn });
 
-    expect(warn).toHaveBeenCalledWith('Warning: added to .git/info/exclude: /.claude/settings.json');
-    expect(order).toEqual(['warn:Warning: added to .git/info/exclude: /.claude/settings.json', 'spawn']);
+    expect(warn).toHaveBeenCalledWith(
+      'Warning: added to .git/info/exclude: /.claude/settings.json',
+    );
+    expect(order).toEqual([
+      'warn:Warning: added to .git/info/exclude: /.claude/settings.json',
+      'spawn',
+    ]);
   });
 
   it('pauses stdin before every spawn', async () => {

@@ -10,7 +10,9 @@ const anthropicProvider: Provider = {
   type: 'anthropic-compatible',
   apiKey: 'sk-ant-test123',
   baseUrl: 'https://api.anthropic.com',
-  models: [{ name: 'claude-sonnet-4-6', capabilities: { image: true, video: false, audio: false } }],
+  models: [
+    { name: 'claude-sonnet-4-6', capabilities: { image: true, video: false, audio: false } },
+  ],
 };
 
 const fireworksProvider: Provider = {
@@ -18,7 +20,12 @@ const fireworksProvider: Provider = {
   name: 'Fireworks',
   type: 'fireworks',
   apiKey: 'fw_test',
-  models: [{ name: 'accounts/fireworks/models/llama-v3p1-70b-instruct', capabilities: { image: false, video: false, audio: false } }],
+  models: [
+    {
+      name: 'accounts/fireworks/models/llama-v3p1-70b-instruct',
+      capabilities: { image: false, video: false, audio: false },
+    },
+  ],
 };
 
 const openrouterProvider: Provider = {
@@ -27,7 +34,12 @@ const openrouterProvider: Provider = {
   type: 'openrouter',
   apiKey: 'sk-or-test',
   baseUrl: 'https://openrouter.ai/api/v1',
-  models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+  models: [
+    {
+      name: 'anthropic/claude-sonnet-4.6',
+      capabilities: { image: true, video: false, audio: false },
+    },
+  ],
 };
 
 const openaiCompatibleProvider: Provider = {
@@ -55,7 +67,14 @@ describe('CopilotAdapter', () => {
   });
 
   it('supports all four provider types', () => {
-    expect(adapter.supportedProviderTypes).toEqual(['openai-compatible', 'anthropic-compatible', 'fireworks', 'openrouter', 'responses-compatible', 'custom-api']);
+    expect(adapter.supportedProviderTypes).toEqual([
+      'openai-compatible',
+      'anthropic-compatible',
+      'fireworks',
+      'openrouter',
+      'responses-compatible',
+      'custom-api',
+    ]);
   });
 
   describe('configPaths', () => {
@@ -189,7 +208,11 @@ describe('CopilotAdapter', () => {
       // Simulates a future provider type added to supportedProviderTypes without
       // a corresponding DEFAULT_BASE_URLS entry — ensures we get a clear error
       // instead of silently setting COPILOT_PROVIDER_BASE_URL to an empty string.
-      const unknownProvider = { ...fireworksProvider, type: 'new-type' as ProviderType, baseUrl: undefined };
+      const unknownProvider = {
+        ...fireworksProvider,
+        type: 'new-type' as ProviderType,
+        baseUrl: undefined,
+      };
       const profile: Profile = {
         id: '00000000-0000-0000-0000-000000000099',
         name: 'Unknown Type',
@@ -291,7 +314,9 @@ describe('CopilotAdapter', () => {
         name: 'Custom',
         models: [{ providerId: customProvider.id, model: 'gpt-4' }],
       };
-      expect(() => adapter.buildEnv(profile, [customProvider])).toThrow('requires at least one compatible mode');
+      expect(() => adapter.buildEnv(profile, [customProvider])).toThrow(
+        'requires at least one compatible mode',
+      );
     });
   });
 

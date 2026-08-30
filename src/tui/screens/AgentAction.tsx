@@ -16,7 +16,12 @@ interface AgentActionProps {
   onDone: (result: InstallResult) => void;
 }
 
-export function AgentAction({ agentId, mode, onBack, onDone }: AgentActionProps): React.JSX.Element {
+export function AgentAction({
+  agentId,
+  mode,
+  onBack,
+  onDone,
+}: AgentActionProps): React.JSX.Element {
   const [subScreen, setSubScreen] = useState<SubScreen>('confirm');
   const [selectedChoice, setSelectedChoice] = useState(0);
   const [spinnerFrame, setSpinnerFrame] = useState(0);
@@ -46,17 +51,19 @@ export function AgentAction({ agentId, mode, onBack, onDone }: AgentActionProps)
 
     setSubScreen('running');
     const promise = mode === 'update' ? installer.update!() : installer.uninstall!();
-    promise.then((result) => {
-      if (result.success) {
-        setSubScreen('success');
-      } else {
-        setActionError(result.error ?? 'Неизвестная ошибка');
+    promise
+      .then((result) => {
+        if (result.success) {
+          setSubScreen('success');
+        } else {
+          setActionError(result.error ?? 'Неизвестная ошибка');
+          setSubScreen('error');
+        }
+      })
+      .catch((err: unknown) => {
+        setActionError(String(err));
         setSubScreen('error');
-      }
-    }).catch((err: unknown) => {
-      setActionError(String(err));
-      setSubScreen('error');
-    });
+      });
   };
 
   useKeyInput((_input, key) => {
@@ -103,11 +110,14 @@ export function AgentAction({ agentId, mode, onBack, onDone }: AgentActionProps)
     const choices = ['Да', 'Нет'];
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold>{actionVerb} {agentLabel}?</Text>
+        <Text bold>
+          {actionVerb} {agentLabel}?
+        </Text>
         <Box flexDirection="column" marginTop={1}>
           {choices.map((c, i) => (
             <Text key={i} color={i === selectedChoice ? 'green' : undefined}>
-              {i === selectedChoice ? '▶ ' : '  '}{c}
+              {i === selectedChoice ? '▶ ' : '  '}
+              {c}
             </Text>
           ))}
         </Box>
@@ -121,8 +131,12 @@ export function AgentAction({ agentId, mode, onBack, onDone }: AgentActionProps)
   if (subScreen === 'running') {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold>{actionVerb} {agentLabel}</Text>
-        <Text>{spinner} {runningText}</Text>
+        <Text bold>
+          {actionVerb} {agentLabel}
+        </Text>
+        <Text>
+          {spinner} {runningText}
+        </Text>
       </Box>
     );
   }
@@ -130,7 +144,9 @@ export function AgentAction({ agentId, mode, onBack, onDone }: AgentActionProps)
   if (subScreen === 'success') {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color="green">✓ {agentLabel} {successText}</Text>
+        <Text color="green">
+          ✓ {agentLabel} {successText}
+        </Text>
         <Box marginTop={1}>
           <Text dimColor>[Enter] Продолжить</Text>
         </Box>
@@ -147,7 +163,8 @@ export function AgentAction({ agentId, mode, onBack, onDone }: AgentActionProps)
         <Box flexDirection="column" marginTop={1}>
           {choices.map((c, i) => (
             <Text key={i} color={i === selectedChoice ? 'green' : undefined}>
-              {i === selectedChoice ? '▶ ' : '  '}{c}
+              {i === selectedChoice ? '▶ ' : '  '}
+              {c}
             </Text>
           ))}
         </Box>

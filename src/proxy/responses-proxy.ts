@@ -116,14 +116,18 @@ export async function startResponsesProxy(options: ResponsesProxyOptions): Promi
           const ct = Array.isArray(contentType) ? contentType[0] : contentType;
           const isStream = typeof ct === 'string' && ct.includes('text/event-stream');
           const isJson = typeof ct === 'string' && ct.includes('application/json');
-          const statusOk = (proxyRes.statusCode ?? 200) >= 200 && (proxyRes.statusCode ?? 200) < 300;
+          const statusOk =
+            (proxyRes.statusCode ?? 200) >= 200 && (proxyRes.statusCode ?? 200) < 300;
 
           if (isMessagesEndpoint && statusOk) {
             if (isStream) {
               const streamHeaders = { ...proxyRes.headers };
               delete streamHeaders['content-length'];
               delete streamHeaders['transfer-encoding'];
-              res.writeHead(proxyRes.statusCode ?? 200, { ...streamHeaders, 'content-type': 'text/event-stream' });
+              res.writeHead(proxyRes.statusCode ?? 200, {
+                ...streamHeaders,
+                'content-type': 'text/event-stream',
+              });
               const state = createStreamState('resp-proxy-' + Date.now(), 'unknown');
               let buffer = '';
               proxyRes.on('data', (chunk) => {
@@ -133,7 +137,9 @@ export async function startResponsesProxy(options: ResponsesProxyOptions): Promi
                 for (const block of blocks) {
                   for (const event of sseLineToEvent(block)) {
                     for (const ev of convertStreamChunk(event, state)) {
-                      res.write(`event: ${String(ev.type ?? 'unknown')}\ndata: ${JSON.stringify(ev)}\n\n`);
+                      res.write(
+                        `event: ${String(ev.type ?? 'unknown')}\ndata: ${JSON.stringify(ev)}\n\n`,
+                      );
                     }
                   }
                 }
@@ -142,7 +148,9 @@ export async function startResponsesProxy(options: ResponsesProxyOptions): Promi
                 if (buffer.trim()) {
                   for (const event of sseLineToEvent(buffer)) {
                     for (const ev of convertStreamChunk(event, state)) {
-                      res.write(`event: ${String(ev.type ?? 'unknown')}\ndata: ${JSON.stringify(ev)}\n\n`);
+                      res.write(
+                        `event: ${String(ev.type ?? 'unknown')}\ndata: ${JSON.stringify(ev)}\n\n`,
+                      );
                     }
                   }
                 }
@@ -167,7 +175,10 @@ export async function startResponsesProxy(options: ResponsesProxyOptions): Promi
                   const out = Buffer.from(JSON.stringify(converted), 'utf-8');
                   const responseHeaders = { ...proxyRes.headers };
                   delete responseHeaders['transfer-encoding'];
-                  res.writeHead(proxyRes.statusCode ?? 200, { ...responseHeaders, 'content-length': out.length });
+                  res.writeHead(proxyRes.statusCode ?? 200, {
+                    ...responseHeaders,
+                    'content-length': out.length,
+                  });
                   res.end(out);
                 } catch {
                   res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
@@ -176,7 +187,9 @@ export async function startResponsesProxy(options: ResponsesProxyOptions): Promi
               });
               proxyRes.on('error', (err) => {
                 if (!res.headersSent) res.writeHead(502, { 'content-type': 'application/json' });
-                res.end(JSON.stringify(convertError(err instanceof Error ? err.message : String(err))));
+                res.end(
+                  JSON.stringify(convertError(err instanceof Error ? err.message : String(err))),
+                );
               });
             } else {
               res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
@@ -197,7 +210,10 @@ export async function startResponsesProxy(options: ResponsesProxyOptions): Promi
                 const out = Buffer.from(JSON.stringify(convertError(parsed)), 'utf-8');
                 const responseHeaders = { ...proxyRes.headers };
                 delete responseHeaders['transfer-encoding'];
-                res.writeHead(proxyRes.statusCode ?? 200, { ...responseHeaders, 'content-length': out.length });
+                res.writeHead(proxyRes.statusCode ?? 200, {
+                  ...responseHeaders,
+                  'content-length': out.length,
+                });
                 res.end(out);
               } catch {
                 res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
@@ -206,7 +222,9 @@ export async function startResponsesProxy(options: ResponsesProxyOptions): Promi
             });
             proxyRes.on('error', (err) => {
               if (!res.headersSent) res.writeHead(502, { 'content-type': 'application/json' });
-              res.end(JSON.stringify(convertError(err instanceof Error ? err.message : String(err))));
+              res.end(
+                JSON.stringify(convertError(err instanceof Error ? err.message : String(err))),
+              );
             });
           } else {
             res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
@@ -226,7 +244,9 @@ export async function startResponsesProxy(options: ResponsesProxyOptions): Promi
       proxyReq.on('error', (err) => {
         if (!res.headersSent) {
           res.writeHead(502, { 'content-type': 'application/json' });
-          res.end(JSON.stringify(convertError({ error: { message: err.message, type: 'bad_gateway' } })));
+          res.end(
+            JSON.stringify(convertError({ error: { message: err.message, type: 'bad_gateway' } })),
+          );
         }
       });
 

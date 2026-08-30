@@ -10,7 +10,9 @@ import { restoreBackupManifest } from '../../config/backup-restore.js';
 import { getAgent, listAgents } from '../../agents/registry.js';
 import { LaunchScopeSchema } from '../../config/schema.js';
 
-const SUPPORTED_AGENT_IDS = listAgents({ dev: true }).map((agent) => agent.id).join(', ');
+const SUPPORTED_AGENT_IDS = listAgents({ dev: true })
+  .map((agent) => agent.id)
+  .join(', ');
 const SUPPORTED_SCOPES = LaunchScopeSchema.options.join(', ');
 
 /** Builds the `restore` CLI command. */

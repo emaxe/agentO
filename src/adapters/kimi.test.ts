@@ -13,7 +13,9 @@ const anthropicProvider: Provider = {
   type: 'anthropic-compatible',
   apiKey: 'sk-ant-test123',
   baseUrl: 'https://api.anthropic.com',
-  models: [{ name: 'claude-sonnet-4-6', capabilities: { image: true, video: false, audio: false } }],
+  models: [
+    { name: 'claude-sonnet-4-6', capabilities: { image: true, video: false, audio: false } },
+  ],
 };
 
 const openaiProvider: Provider = {
@@ -30,7 +32,12 @@ const fireworksProvider: Provider = {
   name: 'Fireworks',
   type: 'fireworks',
   apiKey: 'fw_test',
-  models: [{ name: 'accounts/fireworks/models/llama-v3p1-70b-instruct', capabilities: { image: false, video: false, audio: false } }],
+  models: [
+    {
+      name: 'accounts/fireworks/models/llama-v3p1-70b-instruct',
+      capabilities: { image: false, video: false, audio: false },
+    },
+  ],
 };
 
 const openrouterProvider: Provider = {
@@ -39,7 +46,12 @@ const openrouterProvider: Provider = {
   type: 'openrouter',
   apiKey: 'sk-or-test',
   baseUrl: 'https://openrouter.ai/api/v1',
-  models: [{ name: 'anthropic/claude-sonnet-4.6', capabilities: { image: true, video: false, audio: false } }],
+  models: [
+    {
+      name: 'anthropic/claude-sonnet-4.6',
+      capabilities: { image: true, video: false, audio: false },
+    },
+  ],
 };
 
 const customApiOpenAiProvider: Provider = {
@@ -77,7 +89,12 @@ const testProfileOpenAi: Profile = {
 const testProfileFireworks: Profile = {
   id: '00000000-0000-0000-0000-000000000012',
   name: 'Test Fireworks',
-  models: [{ providerId: fireworksProvider.id, model: 'accounts/fireworks/models/llama-v3p1-70b-instruct' }],
+  models: [
+    {
+      providerId: fireworksProvider.id,
+      model: 'accounts/fireworks/models/llama-v3p1-70b-instruct',
+    },
+  ],
 };
 
 const testProfileOpenRouter: Profile = {
@@ -185,7 +202,9 @@ describe('KimiAdapter', () => {
   it('buildConfig sets correct capabilities based on model capabilities', () => {
     const providerWithVideo: Provider = {
       ...anthropicProvider,
-      models: [{ name: 'claude-sonnet-4-6', capabilities: { image: true, video: true, audio: true } }],
+      models: [
+        { name: 'claude-sonnet-4-6', capabilities: { image: true, video: true, audio: true } },
+      ],
     };
     const config = adapter.buildConfig(testProfileAnthropic, [providerWithVideo]);
     const models = config.models as Record<string, Record<string, unknown>>;
@@ -197,13 +216,18 @@ describe('KimiAdapter', () => {
   it('buildConfig omits capabilities when all are false', () => {
     const providerNoCaps: Provider = {
       ...anthropicProvider,
-      models: [{ name: 'claude-sonnet-4-6', capabilities: { image: false, video: false, audio: false } }],
+      models: [
+        { name: 'claude-sonnet-4-6', capabilities: { image: false, video: false, audio: false } },
+      ],
     };
     const config = adapter.buildConfig(testProfileAnthropic, [providerNoCaps]);
     const models = config.models as Record<string, Record<string, unknown>>;
     const model = models['claude-sonnet-4-6'];
     // capabilities should be absent or empty
-    expect(model.capabilities === undefined || (Array.isArray(model.capabilities) && model.capabilities.length === 0)).toBe(true);
+    expect(
+      model.capabilities === undefined ||
+        (Array.isArray(model.capabilities) && model.capabilities.length === 0),
+    ).toBe(true);
   });
 
   it('supportedProviderTypes includes all six types', () => {

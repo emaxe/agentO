@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Key } from 'ink';
-import { readConfig, readAgentStatusCache, writeAgentStatusCache, readBackup, deleteBackup } from '../../config/store.js';
+import {
+  readConfig,
+  readAgentStatusCache,
+  writeAgentStatusCache,
+  readBackup,
+  deleteBackup,
+} from '../../config/store.js';
 import { restoreBackupManifest } from '../../config/backup-restore.js';
 import { listAgents } from '../../agents/registry.js';
 import { canRunProfile } from '../../agents/compatibility.js';
@@ -69,14 +75,18 @@ export function useLaunchWizard({
   const [selectedAgent, setSelectedAgent] = useState(0);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const [installStatuses, setInstallStatuses] = useState<Record<string, boolean>>(() => ({ ...agentStatusCache }));
+  const [installStatuses, setInstallStatuses] = useState<Record<string, boolean>>(() => ({
+    ...agentStatusCache,
+  }));
   const installStatusesRef = useRef(installStatuses);
   installStatusesRef.current = installStatuses;
   const [installAgentId, setInstallAgentId] = useState<AgentId | null>(null);
   const [actionAgentId, setActionAgentId] = useState<AgentId | null>(null);
   const [actionMode, setActionMode] = useState<'update' | 'uninstall' | null>(null);
   const [statusChecking, setStatusChecking] = useState(false);
-  const [checkProgress, setCheckProgress] = useState<Record<string, 'pending' | 'checking' | 'done'>>({});
+  const [checkProgress, setCheckProgress] = useState<
+    Record<string, 'pending' | 'checking' | 'done'>
+  >({});
   const [errorChoice, setErrorChoice] = useState(0);
 
   const currentProfile = profiles[selectedProfile];
@@ -98,7 +108,9 @@ export function useLaunchWizard({
           setInstallStatuses((prev) => ({ ...prev, ...cache }));
         }
       })
-      .catch(() => { /* ignore cache read errors */ });
+      .catch(() => {
+        /* ignore cache read errors */
+      });
   }, []);
 
   const launchErrorHandled = useRef(false);
@@ -121,7 +133,12 @@ export function useLaunchWizard({
     const agentsToCheck = agents.filter((a) => currentStatuses[a.id] !== true);
     const initialProgress: Record<string, 'pending' | 'checking' | 'done'> = {};
     for (const a of agents) {
-      initialProgress[a.id] = currentStatuses[a.id] === true ? 'done' : agentsToCheck.some((x) => x.id === a.id) ? 'pending' : 'done';
+      initialProgress[a.id] =
+        currentStatuses[a.id] === true
+          ? 'done'
+          : agentsToCheck.some((x) => x.id === a.id)
+            ? 'pending'
+            : 'done';
     }
     setCheckProgress(initialProgress);
 
@@ -154,7 +171,9 @@ export function useLaunchWizard({
             return next;
           });
         })
-        .catch(() => {/* assume installed on error */ })
+        .catch(() => {
+          /* assume installed on error */
+        })
         .finally(() => {
           setStatusChecking(false);
         });
@@ -166,16 +185,15 @@ export function useLaunchWizard({
       Object.assign(agentStatusCache, installStatuses);
     }
     if (Object.keys(installStatuses).length === 0) return;
-    writeAgentStatusCache(installStatuses).catch(() => { /* ignore write errors */ });
+    writeAgentStatusCache(installStatuses).catch(() => {
+      /* ignore write errors */
+    });
   }, [installStatuses, agentStatusCache]);
-
 
   const doLaunch = useCallback(() => {
     const agents = listAgents({ dev });
     const profile = profiles[selectedProfile];
-    const compatibleAgents = profile
-      ? getCompatibleAgents(agents, profile, providers)
-      : agents;
+    const compatibleAgents = profile ? getCompatibleAgents(agents, profile, providers) : agents;
     const agentEntry = compatibleAgents[selectedAgent];
 
     if (!profile || !agentEntry || !settings) {
@@ -225,9 +243,7 @@ export function useLaunchWizard({
   const overwriteAndLaunch = useCallback(() => {
     const agents = listAgents({ dev });
     const profile = profiles[selectedProfile];
-    const compatibleAgents = profile
-      ? getCompatibleAgents(agents, profile, providers)
-      : agents;
+    const compatibleAgents = profile ? getCompatibleAgents(agents, profile, providers) : agents;
     const agentEntry = compatibleAgents[selectedAgent];
     if (!agentEntry || !settings) {
       setError('Invalid selection');
@@ -251,87 +267,103 @@ export function useLaunchWizard({
       .catch((err) => setError(String(err)));
   }, [dev, profiles, providers, selectedProfile, selectedAgent, settings, doLaunch]);
 
-  const handleKey = useCallback((input: string, key: Key) => {
-    if (step === 'launching' && error) {
-      if (key.escape || input === 'q' || input === 'b') {
-        setError('');
-        setStep('agent');
-        setErrorChoice(0);
-        return;
-      }
-      if (key.upArrow) {
-        setErrorChoice((c) => Math.max(0, c - 1));
-        return;
-      }
-      if (key.downArrow) {
-        setErrorChoice((c) => Math.min(1, c + 1));
-        return;
-      }
-      if (key.return) {
-        if (errorChoice === 0) {
-          overwriteAndLaunch();
-        } else {
+  const handleKey = useCallback(
+    (input: string, key: Key) => {
+      if (step === 'launching' && error) {
+        if (key.escape || input === 'q' || input === 'b') {
           setError('');
           setStep('agent');
           setErrorChoice(0);
+          return;
+        }
+        if (key.upArrow) {
+          setErrorChoice((c) => Math.max(0, c - 1));
+          return;
+        }
+        if (key.downArrow) {
+          setErrorChoice((c) => Math.min(1, c + 1));
+          return;
+        }
+        if (key.return) {
+          if (errorChoice === 0) {
+            overwriteAndLaunch();
+          } else {
+            setError('');
+            setStep('agent');
+            setErrorChoice(0);
+          }
+          return;
         }
         return;
       }
-      return;
-    }
 
-    if (step === 'launching' && !error) return;
-    if (step === 'install') return;
-    if (step === 'action') return;
-    if (step === 'agent' && statusChecking) return;
+      if (step === 'launching' && !error) return;
+      if (step === 'install') return;
+      if (step === 'action') return;
+      if (step === 'agent' && statusChecking) return;
 
-    if (key.escape || input === 'q') {
-      if (step === 'profile') {
-        onBack();
-        return;
-      }
-      const steps: Step[] = ['profile', 'agent'];
-      const idx = steps.indexOf(step);
-      if (idx > 0) setStep(steps[idx - 1] as Step);
-      return;
-    }
-
-    const items = step === 'profile' ? profiles : visibleAgents;
-    const selected = step === 'profile' ? selectedProfile : selectedAgent;
-    const setSelected = step === 'profile' ? setSelectedProfile : setSelectedAgent;
-
-    if (key.upArrow) {
-      setSelected(Math.max(0, selected - 1));
-    } else if (key.downArrow) {
-      setSelected(Math.min(items.length - 1, selected + 1));
-    } else if (input === 'u' || input === 'd') {
-      if (step !== 'agent') return;
-      const agentEntry = visibleAgents[selectedAgent];
-      if (
-        agentEntry &&
-        agentEntry.installer &&
-        installStatuses[agentEntry.id] !== false &&
-        (input === 'u' ? agentEntry.installer.update : agentEntry.installer.uninstall)
-      ) {
-        setActionAgentId(agentEntry.id);
-        setActionMode(input === 'u' ? 'update' : 'uninstall');
-        setStep('action');
-      }
-      return;
-    } else if (key.return) {
-      if (step === 'profile' && profiles.length === 0) {
-        setError('No profiles configured. Add one first.');
+      if (key.escape || input === 'q') {
+        if (step === 'profile') {
+          onBack();
+          return;
+        }
+        const steps: Step[] = ['profile', 'agent'];
+        const idx = steps.indexOf(step);
+        if (idx > 0) setStep(steps[idx - 1] as Step);
         return;
       }
 
-      if (step === 'agent') {
-        doLaunch();
-      } else {
-        setSelectedAgent(0);
-        setStep('agent');
+      const items = step === 'profile' ? profiles : visibleAgents;
+      const selected = step === 'profile' ? selectedProfile : selectedAgent;
+      const setSelected = step === 'profile' ? setSelectedProfile : setSelectedAgent;
+
+      if (key.upArrow) {
+        setSelected(Math.max(0, selected - 1));
+      } else if (key.downArrow) {
+        setSelected(Math.min(items.length - 1, selected + 1));
+      } else if (input === 'u' || input === 'd') {
+        if (step !== 'agent') return;
+        const agentEntry = visibleAgents[selectedAgent];
+        if (
+          agentEntry &&
+          agentEntry.installer &&
+          installStatuses[agentEntry.id] !== false &&
+          (input === 'u' ? agentEntry.installer.update : agentEntry.installer.uninstall)
+        ) {
+          setActionAgentId(agentEntry.id);
+          setActionMode(input === 'u' ? 'update' : 'uninstall');
+          setStep('action');
+        }
+        return;
+      } else if (key.return) {
+        if (step === 'profile' && profiles.length === 0) {
+          setError('No profiles configured. Add one first.');
+          return;
+        }
+
+        if (step === 'agent') {
+          doLaunch();
+        } else {
+          setSelectedAgent(0);
+          setStep('agent');
+        }
       }
-    }
-  }, [step, error, errorChoice, statusChecking, onBack, profiles, visibleAgents, selectedProfile, selectedAgent, doLaunch, overwriteAndLaunch, installStatuses]);
+    },
+    [
+      step,
+      error,
+      errorChoice,
+      statusChecking,
+      onBack,
+      profiles,
+      visibleAgents,
+      selectedProfile,
+      selectedAgent,
+      doLaunch,
+      overwriteAndLaunch,
+      installStatuses,
+    ],
+  );
 
   const completeInstall = useCallback(() => {
     if (!installAgentId) return;
@@ -345,22 +377,25 @@ export function useLaunchWizard({
     setStep('agent');
   }, []);
 
-  const completeAction = useCallback((agentId: AgentId, mode: 'update' | 'uninstall', result: InstallResult) => {
-    if (result.success) {
-      setInstallStatuses((prev) => {
-        const next = { ...prev };
-        if (mode === 'update') {
-          next[agentId] = true;
-        } else {
-          next[agentId] = false;
-        }
-        return next;
-      });
-    }
-    setActionAgentId(null);
-    setActionMode(null);
-    setStep('agent');
-  }, []);
+  const completeAction = useCallback(
+    (agentId: AgentId, mode: 'update' | 'uninstall', result: InstallResult) => {
+      if (result.success) {
+        setInstallStatuses((prev) => {
+          const next = { ...prev };
+          if (mode === 'update') {
+            next[agentId] = true;
+          } else {
+            next[agentId] = false;
+          }
+          return next;
+        });
+      }
+      setActionAgentId(null);
+      setActionMode(null);
+      setStep('agent');
+    },
+    [],
+  );
 
   const cancelAction = useCallback(() => {
     setActionAgentId(null);

@@ -38,7 +38,9 @@ describe('getCompatibleAgents', () => {
     const ids = getCompatibleAgents(agents, single, [p]).map((a) => a.id);
 
     const declared = agents
-      .filter((a) => (a.adapter.supportedProviderTypes as readonly string[]).includes('openai-compatible'))
+      .filter((a) =>
+        (a.adapter.supportedProviderTypes as readonly string[]).includes('openai-compatible'),
+      )
       .map((a) => a.id);
     expect(ids).toEqual(declared);
   });
@@ -56,12 +58,20 @@ describe('getCompatibleAgents', () => {
   it('hides an agent whose adapter cannot build a config, even when the type matches', () => {
     // custom-api is declared supported everywhere, but a provider with no
     // enabled mode cannot produce a usable config for any of them.
-    const p = provider({ type: 'custom-api', baseUrl: 'https://gw.example.com', customApiModes: { openai: false, anthropic: false, responses: false } });
+    const p = provider({
+      type: 'custom-api',
+      baseUrl: 'https://gw.example.com',
+      customApiModes: { openai: false, anthropic: false, responses: false },
+    });
     expect(getCompatibleAgents(agents, single, [p])).toEqual([]);
   });
 
   it('offers agents again once the custom-api provider enables a mode', () => {
-    const p = provider({ type: 'custom-api', baseUrl: 'https://gw.example.com', customApiModes: { openai: true, anthropic: false, responses: false } });
+    const p = provider({
+      type: 'custom-api',
+      baseUrl: 'https://gw.example.com',
+      customApiModes: { openai: true, anthropic: false, responses: false },
+    });
     const ids = getCompatibleAgents(agents, single, [p]).map((a) => a.id);
     expect(ids).toContain('qwen');
     expect(ids).toContain('claude-code');
@@ -69,14 +79,20 @@ describe('getCompatibleAgents', () => {
 
   it('hides Claude Code when tiers span two providers', () => {
     const a = provider({ id: PROVIDER_ID, type: 'openai-compatible' });
-    const b = provider({ id: '00000000-0000-0000-0000-000000000003', name: 'Q', type: 'openai-compatible' });
+    const b = provider({
+      id: '00000000-0000-0000-0000-000000000003',
+      name: 'Q',
+      type: 'openai-compatible',
+    });
     const mixed = profile([
       { providerId: a.id, model: 'm', tier: 'base' },
       { providerId: b.id, model: 'm2', tier: 'small' },
     ]);
 
     // The type check passes for both providers, so only buildConfig can reject it.
-    expect(getCompatibleAgents(agents, mixed, [a, b]).map((x) => x.id)).not.toContain('claude-code');
+    expect(getCompatibleAgents(agents, mixed, [a, b]).map((x) => x.id)).not.toContain(
+      'claude-code',
+    );
   });
 
   it('requires every provider in the profile to be supported, not just the first', () => {
@@ -94,7 +110,9 @@ describe('getCompatibleAgents', () => {
 
     // qwen supports openai-compatible but not anthropic-compatible, so the
     // second model must disqualify it.
-    expect(getCompatibleAgents(agents, mixed, [openai, anthropic]).map((a) => a.id)).not.toContain('qwen');
+    expect(getCompatibleAgents(agents, mixed, [openai, anthropic]).map((a) => a.id)).not.toContain(
+      'qwen',
+    );
   });
 
   it('ignores models whose provider no longer exists', () => {

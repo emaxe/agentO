@@ -115,7 +115,10 @@ export function listAgents(options: AgentRegistryOptions = {}): readonly AgentRe
   return AGENTS.filter((entry) => isVisible(entry, options));
 }
 
-export function getAgent(id: string, options: AgentRegistryOptions = {}): AgentRegistryEntry | undefined {
+export function getAgent(
+  id: string,
+  options: AgentRegistryOptions = {},
+): AgentRegistryEntry | undefined {
   return AGENTS.find((entry) => entry.id === id && isVisible(entry, options));
 }
 
@@ -123,7 +126,10 @@ export function listAdapters(options: AgentRegistryOptions = {}): readonly Agent
   return listAgents(options).map((entry) => entry.adapter);
 }
 
-export function getAgentCommand(id: string, options: AgentRegistryOptions = {}): AgentCommand | undefined {
+export function getAgentCommand(
+  id: string,
+  options: AgentRegistryOptions = {},
+): AgentCommand | undefined {
   const entry = getAgent(id, options);
   if (!entry) return undefined;
   return {
@@ -133,6 +139,9 @@ export function getAgentCommand(id: string, options: AgentRegistryOptions = {}):
   };
 }
 
-export function getAgentInstaller(id: string, options: AgentRegistryOptions = {}): AgentInstaller | undefined {
+export function getAgentInstaller(
+  id: string,
+  options: AgentRegistryOptions = {},
+): AgentInstaller | undefined {
   return getAgent(id, options)?.installer;
 }

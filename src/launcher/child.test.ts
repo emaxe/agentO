@@ -13,7 +13,7 @@ vi.mock('../config/store.js', () => ({
   writeBackup: vi.fn(),
   readBackup: vi.fn(),
   deleteBackup: vi.fn().mockResolvedValue(undefined),
-  inferBackupFileFormat: vi.fn((path: string) => path.endsWith('.toml') ? 'toml' : 'json'),
+  inferBackupFileFormat: vi.fn((path: string) => (path.endsWith('.toml') ? 'toml' : 'json')),
   readConfig: vi.fn().mockResolvedValue({ settings: { mergeAgentConfigs: true } }),
 }));
 
@@ -58,7 +58,9 @@ function makeAdapter(currentConfig: Record<string, unknown> | null = null): Agen
     readConfig: vi.fn().mockResolvedValue(currentConfig),
     writeConfig: vi.fn().mockResolvedValue(undefined),
     buildConfig: vi.fn().mockReturnValue({ env: { TEST: 'value' } }),
-    configPaths: vi.fn().mockReturnValue({ global: '/home/user/.config/test.json', project: '/project/.test.json' }),
+    configPaths: vi
+      .fn()
+      .mockReturnValue({ global: '/home/user/.config/test.json', project: '/project/.test.json' }),
   } as unknown as AgentAdapter;
 }
 
@@ -85,23 +87,30 @@ describe('prepareChild', () => {
     mockSpawn.mockReset();
   });
 
-  afterEach(() => {
-  });
+  afterEach(() => {});
 
   it('backs up current config before writing new one', async () => {
     const existingConfig = { mcpServers: {} };
     const adapter = makeAdapter(existingConfig);
 
-    await prepareChild({ adapter, profile: testProfile, providers: [testProvider], scope: 'global', command: 'claude' });
+    await prepareChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+    });
 
     expect(mockWriteBackup).toHaveBeenCalledWith('test-agent', 'global', {
       cwd: undefined,
-      files: [{
-        path: '/home/user/.config/test.json',
-        format: 'json',
-        hadFile: true,
-        content: existingConfig,
-      }],
+      files: [
+        {
+          path: '/home/user/.config/test.json',
+          format: 'json',
+          hadFile: true,
+          content: existingConfig,
+        },
+      ],
     });
     expect(adapter.writeConfig).toHaveBeenCalledTimes(1);
   });
@@ -109,30 +118,42 @@ describe('prepareChild', () => {
   it('records hadFile=false when no config exists', async () => {
     const adapter = makeAdapter(null);
 
-    await prepareChild({ adapter, profile: testProfile, providers: [testProvider], scope: 'global', command: 'claude' });
-
-    expect(mockWriteBackup).toHaveBeenCalledWith('test-agent', 'global', {
-      cwd: undefined,
-      files: [{
-        path: '/home/user/.config/test.json',
-        format: 'json',
-        hadFile: false,
-        content: null,
-      }],
-    });
-  });
-
-  it('does not write new config when active backup already exists', async () => {
-    const adapter = makeAdapter({ original: true });
-    mockWriteBackup.mockRejectedValue(new Error('Active backup already exists for test-agent (global)'));
-
-    await expect(prepareChild({
+    await prepareChild({
       adapter,
       profile: testProfile,
       providers: [testProvider],
       scope: 'global',
       command: 'claude',
-    })).rejects.toThrow('Active backup already exists');
+    });
+
+    expect(mockWriteBackup).toHaveBeenCalledWith('test-agent', 'global', {
+      cwd: undefined,
+      files: [
+        {
+          path: '/home/user/.config/test.json',
+          format: 'json',
+          hadFile: false,
+          content: null,
+        },
+      ],
+    });
+  });
+
+  it('does not write new config when active backup already exists', async () => {
+    const adapter = makeAdapter({ original: true });
+    mockWriteBackup.mockRejectedValue(
+      new Error('Active backup already exists for test-agent (global)'),
+    );
+
+    await expect(
+      prepareChild({
+        adapter,
+        profile: testProfile,
+        providers: [testProvider],
+        scope: 'global',
+        command: 'claude',
+      }),
+    ).rejects.toThrow('Active backup already exists');
 
     expect(adapter.writeConfig).not.toHaveBeenCalled();
   });
@@ -163,15 +184,23 @@ describe('prepareChild', () => {
       agentId: 'test-agent',
       scope: 'global',
       createdAt: '2026-05-13T00:00:00.000Z',
-      files: [{
-        path: '/home/user/.config/test.json',
-        format: 'json',
-        hadFile: true,
-        content: existingConfig,
-      }],
+      files: [
+        {
+          path: '/home/user/.config/test.json',
+          format: 'json',
+          hadFile: true,
+          content: existingConfig,
+        },
+      ],
     });
 
-    const { cleanup } = await prepareChild({ adapter, profile: testProfile, providers: [testProvider], scope: 'global', command: 'claude' });
+    const { cleanup } = await prepareChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+    });
     await cleanup();
 
     expect(mockReadBackup).toHaveBeenCalledWith('test-agent', 'global', undefined);
@@ -186,15 +215,23 @@ describe('prepareChild', () => {
       agentId: 'test-agent',
       scope: 'global',
       createdAt: '2026-05-13T00:00:00.000Z',
-      files: [{
-        path: '/home/user/.config/test.json',
-        format: 'json',
-        hadFile: false,
-        content: null,
-      }],
+      files: [
+        {
+          path: '/home/user/.config/test.json',
+          format: 'json',
+          hadFile: false,
+          content: null,
+        },
+      ],
     });
 
-    const { cleanup } = await prepareChild({ adapter, profile: testProfile, providers: [testProvider], scope: 'global', command: 'claude' });
+    const { cleanup } = await prepareChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+    });
     const callsBefore = vi.mocked(adapter.writeConfig).mock.calls.length;
     await cleanup();
 
@@ -214,15 +251,23 @@ describe('prepareChild', () => {
       agentId: 'test-agent',
       scope: 'global',
       createdAt: '2026-05-13T00:00:00.000Z',
-      files: [{
-        path: '/home/user/.config/test.json',
-        format: 'json',
-        hadFile: false,
-        content: null,
-      }],
+      files: [
+        {
+          path: '/home/user/.config/test.json',
+          format: 'json',
+          hadFile: false,
+          content: null,
+        },
+      ],
     });
 
-    const { cleanup } = await prepareChild({ adapter, profile: testProfile, providers: [testProvider], scope: 'global', command: 'claude' });
+    const { cleanup } = await prepareChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+    });
 
     await expect(cleanup()).resolves.toBeUndefined();
   });
@@ -305,7 +350,6 @@ describe('prepareChild', () => {
     child.emit('exit', 130);
     await vi.waitFor(() => expect(mockReadBackup).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1));
-
   });
 
   it('restores the config only once when a signal is followed by the agent exiting', async () => {
@@ -328,7 +372,6 @@ describe('prepareChild', () => {
 
     await vi.waitFor(() => expect(mockReadBackup).toHaveBeenCalledTimes(1));
     expect(mockReadBackup).toHaveBeenCalledTimes(1);
-
   });
 
   it('escalates to SIGKILL when a second signal arrives', async () => {

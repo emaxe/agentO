@@ -17,7 +17,11 @@ export function convertRequest(req: Record<string, unknown>): Record<string, unk
 
     if (role === 'user') {
       if (typeof content === 'string') {
-        input.push({ type: 'message', role: 'user', content: [{ type: 'input_text', text: content }] });
+        input.push({
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: content }],
+        });
       } else if (Array.isArray(content)) {
         const textParts: Array<Record<string, unknown>> = [];
         for (const block of content) {
@@ -27,9 +31,12 @@ export function convertRequest(req: Record<string, unknown>): Record<string, unk
           } else if (block.type === 'tool_result') {
             let output: string;
             try {
-              output = typeof block.content === 'string'
-                ? block.content
-                : (block.content === undefined ? '' : JSON.stringify(block.content));
+              output =
+                typeof block.content === 'string'
+                  ? block.content
+                  : block.content === undefined
+                    ? ''
+                    : JSON.stringify(block.content);
             } catch {
               output = '';
             }
@@ -37,7 +44,11 @@ export function convertRequest(req: Record<string, unknown>): Record<string, unk
               input.push({ type: 'message', role: 'user', content: [...textParts] });
               textParts.length = 0;
             }
-            input.push({ type: 'function_call_output', call_id: String(block.tool_use_id ?? ''), output });
+            input.push({
+              type: 'function_call_output',
+              call_id: String(block.tool_use_id ?? ''),
+              output,
+            });
           }
         }
         if (textParts.length > 0) {
@@ -46,7 +57,11 @@ export function convertRequest(req: Record<string, unknown>): Record<string, unk
       }
     } else if (role === 'assistant') {
       if (typeof content === 'string') {
-        input.push({ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: content }] });
+        input.push({
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'output_text', text: content }],
+        });
       } else if (Array.isArray(content)) {
         const textParts: Array<Record<string, unknown>> = [];
         for (const block of content) {
@@ -88,7 +103,8 @@ export function convertRequest(req: Record<string, unknown>): Record<string, unk
   if (typeof req.max_tokens === 'number') result.max_output_tokens = req.max_tokens;
   if (typeof req.temperature === 'number') result.temperature = req.temperature;
   if (typeof req.system === 'string') result.instructions = req.system;
-  if (Array.isArray(req.tools)) result.tools = (req.tools as Array<Record<string, unknown>>).map(convertTool);
+  if (Array.isArray(req.tools))
+    result.tools = (req.tools as Array<Record<string, unknown>>).map(convertTool);
 
   if (isRecord(req.thinking) && req.thinking.type === 'enabled') {
     const budget = typeof req.thinking.budget_tokens === 'number' ? req.thinking.budget_tokens : 0;
@@ -170,7 +186,10 @@ export function convertError(err: unknown): Record<string, unknown> {
       },
     };
   }
-  return { type: 'error', error: { type: 'api_error', message: String(err.message ?? 'Unknown error') } };
+  return {
+    type: 'error',
+    error: { type: 'api_error', message: String(err.message ?? 'Unknown error') },
+  };
 }
 
 /** Mutable state for streaming a Responses API SSE stream into Anthropic SSE events. */
@@ -199,7 +218,10 @@ export function createStreamState(id: string, model: string): StreamState {
 }
 
 /** Convert one Responses API SSE event into zero or more Anthropic SSE event objects. Mutates state. */
-export function convertStreamChunk(event: Record<string, unknown>, state: StreamState): Array<Record<string, unknown>> {
+export function convertStreamChunk(
+  event: Record<string, unknown>,
+  state: StreamState,
+): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = [];
   const type = String(event.type ?? '');
 
@@ -227,13 +249,18 @@ export function convertStreamChunk(event: Record<string, unknown>, state: Stream
   switch (type) {
     case 'response.output_item.added': {
       const item = isRecord(event.item) ? event.item : {};
-      const outputIndex = typeof event.output_index === 'number' ? event.output_index : state.nextBlockIndex;
+      const outputIndex =
+        typeof event.output_index === 'number' ? event.output_index : state.nextBlockIndex;
       const itemType = String(item.type ?? '');
       const blockIndex = state.nextBlockIndex++;
       state.itemIndexMap.set(outputIndex, blockIndex);
 
       if (itemType === 'message') {
-        out.push({ type: 'content_block_start', index: blockIndex, content_block: { type: 'text', text: '' } });
+        out.push({
+          type: 'content_block_start',
+          index: blockIndex,
+          content_block: { type: 'text', text: '' },
+        });
       } else if (itemType === 'function_call') {
         out.push({
           type: 'content_block_start',
@@ -282,7 +309,11 @@ export function convertStreamChunk(event: Record<string, unknown>, state: Stream
       if (blockIndex === undefined) {
         blockIndex = state.nextBlockIndex++;
         state.itemIndexMap.set(REASONING_KEY, blockIndex);
-        out.push({ type: 'content_block_start', index: blockIndex, content_block: { type: 'thinking', thinking: '' } });
+        out.push({
+          type: 'content_block_start',
+          index: blockIndex,
+          content_block: { type: 'thinking', thinking: '' },
+        });
       }
       out.push({
         type: 'content_block_delta',
@@ -315,7 +346,9 @@ export function convertStreamChunk(event: Record<string, unknown>, state: Stream
       }
 
       const responseOutput = Array.isArray(response.output) ? response.output : [];
-      const hasToolUse = responseOutput.some((item: unknown) => isRecord(item) && item.type === 'function_call');
+      const hasToolUse = responseOutput.some(
+        (item: unknown) => isRecord(item) && item.type === 'function_call',
+      );
 
       out.push({
         type: 'message_delta',

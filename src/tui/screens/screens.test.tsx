@@ -38,7 +38,11 @@ const providers: Provider[] = [
 ];
 
 const profiles: Profile[] = [
-  { id: '00000000-0000-0000-0000-000000000010', name: 'solo', models: [{ providerId: providers[0]!.id, model: 'llama-70b' }] },
+  {
+    id: '00000000-0000-0000-0000-000000000010',
+    name: 'solo',
+    models: [{ providerId: providers[0]!.id, model: 'llama-70b' }],
+  },
   {
     id: '00000000-0000-0000-0000-000000000011',
     name: 'tiered',
@@ -52,7 +56,14 @@ const profiles: Profile[] = [
 describe('ProfileList', () => {
   it('lists profiles with their model count and marks the selection', () => {
     const { lastFrame } = render(
-      <ProfileList profiles={profiles} selected={1} onSelect={noop} onAdd={noop} onDelete={noop} onBack={noop} />,
+      <ProfileList
+        profiles={profiles}
+        selected={1}
+        onSelect={noop}
+        onAdd={noop}
+        onDelete={noop}
+        onBack={noop}
+      />,
     );
     const frame = lastFrame() ?? '';
     expect(frame).toContain('solo (1 models)');
@@ -62,14 +73,29 @@ describe('ProfileList', () => {
 
   it('shows the empty state rather than a blank screen', () => {
     const { lastFrame } = render(
-      <ProfileList profiles={[]} selected={0} onSelect={noop} onAdd={noop} onDelete={noop} onBack={noop} />,
+      <ProfileList
+        profiles={[]}
+        selected={0}
+        onSelect={noop}
+        onAdd={noop}
+        onDelete={noop}
+        onBack={noop}
+      />,
     );
     expect(lastFrame()).toContain('No profiles');
   });
 
   it('renders the status line when one is set', () => {
     const { lastFrame } = render(
-      <ProfileList profiles={profiles} selected={0} status="Saved." onSelect={noop} onAdd={noop} onDelete={noop} onBack={noop} />,
+      <ProfileList
+        profiles={profiles}
+        selected={0}
+        status="Saved."
+        onSelect={noop}
+        onAdd={noop}
+        onDelete={noop}
+        onBack={noop}
+      />,
     );
     expect(lastFrame()).toContain('Saved.');
   });
@@ -78,7 +104,15 @@ describe('ProfileList', () => {
 describe('ProviderList', () => {
   it('never renders the full API key', () => {
     const { lastFrame } = render(
-      <ProviderList providers={providers} selected={0} onSelect={noop} onAdd={noop} onEdit={noop} onDelete={noop} onBack={noop} />,
+      <ProviderList
+        providers={providers}
+        selected={0}
+        onSelect={noop}
+        onAdd={noop}
+        onEdit={noop}
+        onDelete={noop}
+        onBack={noop}
+      />,
     );
     const frame = lastFrame() ?? '';
     expect(frame).not.toContain('fw-super-secret-key-value');
@@ -87,7 +121,15 @@ describe('ProviderList', () => {
 
   it('shows capability markers for the selected provider only', () => {
     const { lastFrame } = render(
-      <ProviderList providers={providers} selected={0} onSelect={noop} onAdd={noop} onEdit={noop} onDelete={noop} onBack={noop} />,
+      <ProviderList
+        providers={providers}
+        selected={0}
+        onSelect={noop}
+        onAdd={noop}
+        onEdit={noop}
+        onDelete={noop}
+        onBack={noop}
+      />,
     );
     const frame = lastFrame() ?? '';
     expect(frame).toContain('[i--] llama-70b');
@@ -99,7 +141,15 @@ describe('ProviderList', () => {
 
   it('renders a provider with no baseUrl without crashing', () => {
     const { lastFrame } = render(
-      <ProviderList providers={providers} selected={1} onSelect={noop} onAdd={noop} onEdit={noop} onDelete={noop} onBack={noop} />,
+      <ProviderList
+        providers={providers}
+        selected={1}
+        onSelect={noop}
+        onAdd={noop}
+        onEdit={noop}
+        onDelete={noop}
+        onBack={noop}
+      />,
     );
     const frame = lastFrame() ?? '';
     expect(frame).toContain('[iva] claude');
@@ -108,7 +158,15 @@ describe('ProviderList', () => {
 
   it('offers the add row when the list is empty', () => {
     const { lastFrame } = render(
-      <ProviderList providers={[]} selected={0} onSelect={noop} onAdd={noop} onEdit={noop} onDelete={noop} onBack={noop} />,
+      <ProviderList
+        providers={[]}
+        selected={0}
+        onSelect={noop}
+        onAdd={noop}
+        onEdit={noop}
+        onDelete={noop}
+        onBack={noop}
+      />,
     );
     const frame = lastFrame() ?? '';
     expect(frame).toContain('No providers');

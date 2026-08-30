@@ -31,8 +31,10 @@ export function describeIncompatibility(
     (type) => !(adapter.supportedProviderTypes as readonly string[]).includes(type),
   );
   if (unsupported.length > 0) {
-    return `${adapter.displayName} does not support provider type(s): ${unsupported.join(', ')}. `
-      + `Supported: ${adapter.supportedProviderTypes.join(', ')}`;
+    return (
+      `${adapter.displayName} does not support provider type(s): ${unsupported.join(', ')}. ` +
+      `Supported: ${adapter.supportedProviderTypes.join(', ')}`
+    );
   }
 
   try {
