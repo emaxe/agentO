@@ -2,6 +2,7 @@ import { unlink } from 'node:fs/promises';
 import type { AgentAdapter } from '../adapters/base.js';
 import type { LaunchScope } from './schema.js';
 import type { BackupManifest, BackupManifestFile } from './store.js';
+import { deleteBackup, readBackup } from './store.js';
 
 function missingFile(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
@@ -77,4 +78,25 @@ export async function restoreBackupManifest(
   }
 
   await restorePrimaryBackupFile(adapter, manifest, scope, restoreCwd);
+}
+
+/**
+ * Reads the active backup for an agent/scope, restores *every* file described
+ * by the manifest, and deletes the backup. Shared by the TUI Agents screen so
+ * multi-file manifests (e.g. Codex project scope) are restored completely —
+ * restoring only the primary file and then deleting the manifest leaves the
+ * remaining files patched with no way back.
+ *
+ * @returns `true` when a backup existed and was restored, `false` otherwise.
+ */
+export async function restoreBackupForAgent(
+  adapter: AgentAdapter,
+  scope: LaunchScope,
+  cwd?: string,
+): Promise<boolean> {
+  const manifest = await readBackup(adapter.id, scope, cwd);
+  if (!manifest) return false;
+  await restoreBackupManifest(adapter, manifest, scope, cwd);
+  await deleteBackup(adapter.id, scope, cwd);
+  return true;
 }

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
-import { backupExists, readBackup, deleteBackup } from '../../config/store.js';
-import { restorePrimaryBackupFile } from '../../config/backup-restore.js';
+import { backupExists } from '../../config/store.js';
+import { restoreBackupForAgent } from '../../config/backup-restore.js';
 import { listAdapters } from '../../agents/registry.js';
+import { StatusLine } from '../components/StatusLine.js';
 
 const SCOPES: Array<'global' | 'project'> = ['global', 'project'];
 
@@ -63,16 +64,12 @@ export function Agents({ dev, onBack }: AgentsProps): React.JSX.Element {
       const adapter = listAdapters({ dev }).find((a) => a.id === s.adapterId);
       if (!adapter) return;
       const restoreCwd = process.cwd();
-      readBackup(s.adapterId, s.scope, restoreCwd)
-        .then(async (backup) => {
-          if (!backup) {
+      restoreBackupForAgent(adapter, s.scope, restoreCwd)
+        .then((restored) => {
+          if (!restored) {
             setStatus('No backup found');
             return;
           }
-          await restorePrimaryBackupFile(adapter, backup, s.scope, restoreCwd);
-          await deleteBackup(s.adapterId, s.scope, restoreCwd);
-        })
-        .then(() => {
           setStatus(`Restored ${s.displayName} [${s.scope}]`);
           loadStatuses();
         })
@@ -84,7 +81,7 @@ export function Agents({ dev, onBack }: AgentsProps): React.JSX.Element {
     <Box flexDirection="column" padding={1}>
       <Text bold>Agent Config Status</Text>
       <Text dimColor>↑↓ navigate | r: restore (if modified) | Esc: back</Text>
-      {status && <Text color="green">{status}</Text>}
+      <StatusLine message={status} />
       <Box flexDirection="column" marginTop={1}>
         {statuses.map((s, i) => (
           <Box key={`${s.adapterId}-${s.scope}`} flexDirection="column">
@@ -96,6 +93,12 @@ export function Agents({ dev, onBack }: AgentsProps): React.JSX.Element {
               </Text>
               {s.modified && i === selectedIndex && <Text dimColor> (press r to restore)</Text>}
             </Text>
+            {i === selectedIndex && (
+              <Text dimColor>
+                {' → '}
+                {s.configPath}
+              </Text>
+            )}
           </Box>
         ))}
       </Box>

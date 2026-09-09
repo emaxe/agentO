@@ -37,6 +37,13 @@ export function MainMenu({ onSelect, onExit }: MainMenuProps): React.JSX.Element
       if (item) onSelect(item.screen);
     } else if (input === 'q' || key.escape) {
       onExit();
+    } else if (/^[1-9]$/.test(input)) {
+      const idx = Number(input) - 1;
+      const item = MENU_ITEMS[idx];
+      if (item) {
+        setSelectedIndex(idx);
+        onSelect(item.screen);
+      }
     }
   });
 
@@ -49,10 +56,14 @@ export function MainMenu({ onSelect, onExit }: MainMenuProps): React.JSX.Element
       <Box flexDirection="column">
         {MENU_ITEMS.map((item, i) => (
           <Text key={item.screen} color={i === selectedIndex ? 'green' : undefined}>
-            {i === selectedIndex ? '▶  ' : '   '}
+            {i === selectedIndex ? '▶' : `${i + 1}`}
+            {'  '}
             {item.label}
           </Text>
         ))}
+      </Box>
+      <Box marginTop={1}>
+        <Text dimColor>↑↓ navigate | Enter open | 1-5 jump | q/Esc quit</Text>
       </Box>
     </Box>
   );

@@ -143,11 +143,11 @@ agento provider add \
 
 ```bash
 # Single model profile
-agento profile add -n "default" -m "provider-id:claude-sonnet-4-20250514"
+agento profile add -n "default" -m "my-provider:claude-sonnet-4-20250514"
 
 # Multi-tier profile (requires tiers: small/base/smart)
-# All models in a profile must belong to the same provider
-agento profile add -n "multi" -m "provider-id:claude-3-5-haiku-20241022:small,provider-id:claude-sonnet-4-20250514:base,provider-id:claude-opus-4-20250514:smart"
+# `my-provider` is a provider name or UUID; all models must belong to the same provider
+agento profile add -n "multi" -m "my-provider:claude-3-5-haiku-20241022:small,my-provider:claude-sonnet-4-20250514:base,my-provider:claude-opus-4-20250514:smart"
 ```
 
 ### 3. Launch an Agent
@@ -173,33 +173,37 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 ### Main Menu
 
 ```
-┌────────── AgentO v0.8.0 ──────────┐
+┌────────── AgentO v0.9.0 ──────────┐
 │                                   │
-│ ▶  Launch Agent                   │
-│    Providers                      │
-│    Profiles                       │
-│    Agents                         │
-│    Settings                       │
+│   ▶  Launch Agent                 │
+│   2  Providers                    │
+│   3  Profiles                     │
+│   4  Agents                       │
+│   5  Settings                     │
 │                                   │
+│   ↑↓ navigate | Enter open        │
+│   1-5 jump | q/Esc quit           │
 └───────────────────────────────────┘
 ```
 
-**Navigation:** **↑↓** to move, **Enter** to select, **Esc / q** to quit.
+**Navigation:** **↑↓** to move, **Enter** to select, **1-5** to jump, **Esc / q** to quit.
 
 ### Screens Overview
 
 | Screen | What You Can Do | Key Shortcuts |
 |--------|----------------|---------------|
-| **Launch Agent** | Select profile → select agent (with install hints) → launch; opens Install Wizard for uninstalled agents; install statuses cached on disk. On installed agents: `u` to update, `d` to delete | **Enter** select, **Esc** back, **u** update, **d** delete |
+| **Launch Agent** | Select profile → select agent (with install hints) → launch; opens Install Wizard for uninstalled agents; install statuses (with detected versions) cached on disk. A footer shows the effective profile/mode/scope; installed agents show `u` update, `d` delete | **Enter** select, **Esc** back, **u** update, **d** delete, **m** mode, **s** scope |
 | **Providers** | View, add, edit, delete API providers; toggle model capabilities | **Enter** details / add model, **a** add provider, **e** edit, **d** delete, **i/v/a** toggle capability, **Esc** back |
 | **Profiles** | View, add, delete profiles. In profile details: add/remove/edit models | **Enter** details, **a** add, **d** delete, **Esc** back |
-| **Agents** | Check config status (global/project), backup availability | **Enter** details, **Esc** back |
-| **Settings** | Change default launch mode, default config scope; selected setting shows inline description of the current value | **↑↓** navigate, **Enter/Space** toggle, **Esc** save & back |
+| **Agents** | Check config status (global/project), backup availability; selected row shows the config path and offers restore | **r** restore (if modified), **↑↓** navigate, **Esc** back |
+| **Settings** | Change default launch mode, default config scope, and whether to merge (keep unknown keys from) agent configs; selected setting shows an inline description of the current value | **↑↓** navigate, **Enter/Space** toggle, **Esc** save & back |
 
 ### Launch Agent Workflow
 
 1. **Select Profile** — Choose from your saved profiles
-2. **Select Agent** — AgentO checks install status of all agents (spinner while checking). Uninstalled agents show a `(not installed)` hint. Installed agents show `(u update, d delete)` when selected. Statuses are cached to `~/.agento/agent-status.json` so already-known-installed agents are skipped on the next launch.
+2. **Select Agent** — AgentO checks install status of all agents (spinner while checking). Uninstalled agents show a `(not installed)` hint; installed agents show their detected version (`v1.2.3`) and, when selected, `(u update, d delete)`. Statuses (installed + version) are cached to `~/.agento/agent-status.json` so already-known-installed agents are skipped on the next launch.
+
+   A footer under both steps shows the effective `Profile / mode / scope`; press **m** to toggle child/independent or **s** to toggle project/global for this launch without leaving the wizard.
    - If the selected agent **is installed** → press **Enter** to launch, **u** to update, or **d** to delete
    - If the selected agent **is not installed** → opens the **Install Wizard**
    - If the command is not found at launch time (ENOENT) → TUI relaunches with the error shown and the agent marked as not installed
@@ -207,7 +211,7 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
    - **Auto-install** — checks environment (requires npm/brew/uv), then installs via the agent's native package manager
    - **Manual install** — shows the exact command and a docs URL
 4. **Update / Delete Agent** (if triggered with `u`/`d` on an installed agent):
-   - Confirmation prompt (`Да`/`Нет`)
+   - Confirmation prompt (`Yes`/`No`)
    - Runs the appropriate command (`npm update -g`, `brew upgrade`, `uv tool uninstall`, etc.) with live spinner
    - On success → returns to agent list with updated install status
    - On error → shows stderr; options to retry or go back
@@ -352,7 +356,8 @@ agento provider remove <name>                 # Remove a provider
 agento profile list                           # List all profiles
 agento profile add [options]                  # Add a new profile
   -n, --name <name>         Profile name (required)
-  -m, --models <models>     Comma-separated list of providerId:modelName[:tier] (required)
+  -m, --models <models>     Comma-separated list of provider:modelName[:tier] (required)
+                            `provider` is a provider name (case-insensitive) or UUID.
                             Tier is optional for single-model profiles.
                             For multi-model: tier must be small|base|smart, at least one base.
 agento profile remove <name>                  # Remove a profile

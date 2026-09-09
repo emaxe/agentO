@@ -271,19 +271,42 @@ export function getBackupPath(agentId: string, scope: string, cwd?: string): str
   return join(getBackupDir(agentId, scope as LaunchScope, cwd), `${scope}.bak.json`);
 }
 
-/** Reads cached agent install statuses from disk. */
-export async function readAgentStatusCache(): Promise<Record<string, boolean>> {
+/** Install status of an agent as shown in the launch wizard. */
+export interface AgentInstallStatus {
+  installed: boolean;
+  version?: string;
+}
+
+/** Reads cached agent install statuses from disk (legacy `boolean` values are normalized). */
+export async function readAgentStatusCache(): Promise<Record<string, AgentInstallStatus>> {
   if (!existsSync(AGENT_STATUS_PATH)) return {};
   const raw = await readFile(AGENT_STATUS_PATH, 'utf-8');
   try {
-    return JSON.parse(raw) as Record<string, boolean>;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const out: Record<string, AgentInstallStatus> = {};
+    for (const [id, value] of Object.entries(parsed)) {
+      if (typeof value === 'boolean') {
+        out[id] = { installed: value };
+      } else if (typeof value === 'object' && value !== null) {
+        const v = value as { installed?: unknown; version?: unknown };
+        if (typeof v.installed === 'boolean') {
+          out[id] = {
+            installed: v.installed,
+            ...(typeof v.version === 'string' ? { version: v.version } : {}),
+          };
+        }
+      }
+    }
+    return out;
   } catch {
     return {};
   }
 }
 
 /** Writes agent install statuses cache to disk. */
-export async function writeAgentStatusCache(statuses: Record<string, boolean>): Promise<void> {
+export async function writeAgentStatusCache(
+  statuses: Record<string, AgentInstallStatus>,
+): Promise<void> {
   await mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
   await writeJsonAtomic(AGENT_STATUS_PATH, statuses);
 }

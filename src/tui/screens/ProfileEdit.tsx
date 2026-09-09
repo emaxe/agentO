@@ -72,14 +72,15 @@ export function ProfileEdit({
 
   useKeyInput((input, key) => {
     if (confirmEmptyModels) {
-      if (input === 'y') {
+      const lower = input.toLowerCase();
+      if (key.return || lower === 'y') {
         setConfirmEmptyModels(false);
         // Signal to parent that profile should be deleted
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onSave({ name: editName.trim(), models: [], _deleteProfile: true } as any);
         return;
       }
-      if (input === 'n' || key.escape) {
+      if (lower === 'n' || key.escape) {
         setConfirmEmptyModels(false);
         return;
       }
@@ -284,7 +285,7 @@ export function ProfileEdit({
           <Text dimColor>Cannot save profile without at least one model.</Text>
         </Box>
         <Box marginTop={1}>
-          <Text>Delete this profile permanently? (y/n)</Text>
+          <Text>Delete this profile permanently? y/Enter: confirm | n/Esc: cancel</Text>
         </Box>
         {status && (
           <Box marginTop={1}>

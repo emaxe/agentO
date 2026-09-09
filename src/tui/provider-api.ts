@@ -90,7 +90,7 @@ export async function fetchProviderModels(
     return { ok: true, models };
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
-      return { ok: false, error: 'Запрос отменён.' };
+      return { ok: false, error: 'Request cancelled.' };
     }
     return { ok: false, error: String(err) };
   }

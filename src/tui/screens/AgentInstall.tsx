@@ -37,7 +37,7 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
 
   const runAutoInstall = (): void => {
     if (!installer) {
-      setInstallError('Установщик не найден');
+      setInstallError('Installer not found');
       setSubScreen('error-install');
       return;
     }
@@ -59,7 +59,7 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
             if (result.success) {
               setSubScreen('success');
             } else {
-              setInstallError(result.error ?? 'Неизвестная ошибка');
+              setInstallError(result.error ?? 'Unknown error');
               setSubScreen('error-install');
             }
           })
@@ -140,11 +140,11 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
   const spinner = SPINNER_FRAMES[spinnerFrame];
 
   if (subScreen === 'choice') {
-    const choices = ['Авто-установка', 'Ручная установка'];
+    const choices = ['Auto-install', 'Manual install'];
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold>Установка: {agentLabel}</Text>
-        <Text>Агент не установлен.</Text>
+        <Text bold>Install: {agentLabel}</Text>
+        <Text>Agent is not installed.</Text>
         <Box flexDirection="column" marginTop={1}>
           {choices.map((c, i) => (
             <Text key={i} color={i === selectedChoice ? 'green' : undefined}>
@@ -154,7 +154,7 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
           ))}
         </Box>
         <Box marginTop={1}>
-          <Text dimColor>[Esc] Назад</Text>
+          <Text dimColor>[Esc] Back</Text>
         </Box>
       </Box>
     );
@@ -163,8 +163,8 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
   if (subScreen === 'auto-checking') {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold>Установка: {agentLabel}</Text>
-        <Text>{spinner} Проверка среды...</Text>
+        <Text bold>Install: {agentLabel}</Text>
+        <Text>{spinner} Checking environment...</Text>
       </Box>
     );
   }
@@ -172,8 +172,8 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
   if (subScreen === 'installing') {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold>Установка: {agentLabel}</Text>
-        <Text>{spinner} Устанавливается...</Text>
+        <Text bold>Install: {agentLabel}</Text>
+        <Text>{spinner} Installing...</Text>
       </Box>
     );
   }
@@ -181,9 +181,9 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
   if (subScreen === 'success') {
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color="green">✓ {agentLabel} успешно установлен!</Text>
+        <Text color="green">✓ {agentLabel} installed successfully!</Text>
         <Box marginTop={1}>
-          <Text dimColor>[Enter] Продолжить</Text>
+          <Text dimColor>[Enter] Continue</Text>
         </Box>
       </Box>
     );
@@ -191,12 +191,12 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
 
   if (subScreen === 'error-env') {
     const missing = missingDeps.join(', ');
-    const choices = ['Ручная установка', 'Назад'];
+    const choices = ['Manual install', 'Back'];
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color="red">✗ Не найдено: {missing}</Text>
-        <Text>Для авто-установки требуется {missing}.</Text>
-        <Text>Используй ручную установку.</Text>
+        <Text color="red">✗ Missing: {missing}</Text>
+        <Text>Auto-install requires {missing}.</Text>
+        <Text>Use manual install instead.</Text>
         <Box flexDirection="column" marginTop={1}>
           {choices.map((c, i) => (
             <Text key={i} color={i === selectedChoice ? 'green' : undefined}>
@@ -210,10 +210,10 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
   }
 
   if (subScreen === 'error-install') {
-    const choices = ['Повторить', 'Ручная установка'];
+    const choices = ['Retry', 'Manual install'];
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color="red">✗ Ошибка установки</Text>
+        <Text color="red">✗ Install failed</Text>
         <Text dimColor>{installError}</Text>
         <Box flexDirection="column" marginTop={1}>
           {choices.map((c, i) => (
@@ -231,9 +231,9 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
     const instructions = installer?.manualInstructions;
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold>Ручная установка: {agentLabel}</Text>
+        <Text bold>Manual install: {agentLabel}</Text>
         <Box marginTop={1} flexDirection="column">
-          <Text>Выполни команды:</Text>
+          <Text>Run these commands:</Text>
           <Box marginTop={1} flexDirection="column">
             {instructions?.commands.map((cmd, i) => (
               <Text key={i} color="cyan">
@@ -245,12 +245,12 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
         </Box>
         {instructions?.docsUrl && (
           <Box marginTop={1} flexDirection="column">
-            <Text>Документация:</Text>
+            <Text>Documentation:</Text>
             <Text color="blue"> {instructions.docsUrl}</Text>
           </Box>
         )}
         <Box marginTop={1}>
-          <Text dimColor>[Esc] Назад</Text>
+          <Text dimColor>[Esc] Back</Text>
         </Box>
       </Box>
     );

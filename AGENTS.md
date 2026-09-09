@@ -69,17 +69,18 @@ AgentO — CLI-инструмент для управления конфигур
 │   ├── providers/             # Управление провайдерами
 │   │   └── provider-manager.ts
 │   └── tui/                   # Terminal UI (Ink/React)
-│       ├── App.tsx            # Корневой компонент, роутинг экранов
-│       ├── start.ts           # Точка входа в TUI
-│       ├── use-key-input.ts   # Хук для обработки клавиш
-│       └── screens/           # Экраны TUI
-│           ├── MainMenu.tsx
-│           ├── LaunchAgent.tsx
-│           ├── AgentInstall.tsx # Мастер установки агента
-│           ├── Providers.tsx
-│           ├── Profiles.tsx
-│           ├── Agents.tsx
-│           └── Settings.tsx
+│   ├── tui/                   # Terminal UI (Ink/React)
+│   │   ├── App.tsx            # Корневой компонент, роутинг экранов
+│   │   ├── start.ts           # Точка входа в TUI
+│   │   ├── run-loop.ts        # Цикл TUI → spawn агента → cleanup → relaunch
+│   │   ├── use-key-input.ts   # Хук для обработки клавиш (ЙЦУКЕН → QWERTY)
+│   │   ├── provider-api.ts    # Сетевой слой формы провайдера (test API / fetch models)
+│   │   ├── components/        # SelectList, TextField, StatusLine (общие компоненты)
+│   │   ├── hooks/
+│   │   │   └── useLaunchWizard.ts # Машина состояний мастера запуска (step/profile/agent/install/action)
+│   │   ├── wizards/
+│   │   │   └── ProfileWizard.tsx  # Мастер добавления профиля
+│   │   └── screens/           # Экраны TUI (MainMenu, LaunchAgent, Providers, Profiles, Agents, Settings, формы)
 ```
 
 ## Система конфигурации
@@ -247,7 +248,8 @@ agento provider remove <name>
 
 ```bash
 agento profile list
-agento profile add -n "default" -m "providerId:modelName:base,providerId:model2:smart"
+agento profile add -n "default" -m "providerNameOrId:modelName:base,providerNameOrId:model2:smart"
+# provider — имя провайдера (регистронезависимо) или UUID; обе формы валидны
 agento profile remove <name>
 ```
 
@@ -288,12 +290,14 @@ Independent mode использует тот же `src/launcher/transaction.ts` 
 
 Запускается по умолчанию при вызове `agento` без аргументов.
 
-- **MainMenu**: Выбор раздела (↑↓, Enter, Esc/q)
-- **LaunchAgent**: Двухшаговый выбор (профиль → агент → запуск)
+- **MainMenu**: Выбор раздела (↑↓, Enter, 1-5 jump, Esc/q), снизу — строка-подсказка клавиш
+- **LaunchAgent**: Двухшаговый выбор (профиль → агент → запуск). Внизу обоих шагов футер `Profile / mode (m) / scope (s)` — `m`/`s` переключают child/independent и project/global для этого запуска (дефолты берутся из Settings). `AgentSelect` показывает версию установленного агента (`v1.2.3`). При ошибке запуска вариант `Overwrite and launch` предлагается только для `Active backup already exists`
 - **Providers**: ↑↓ navigate | Enter/a: add | e: edit | d: delete | Esc: back. В режиме edit: `[+ add model]` row → Enter добавляет модель, `i`/`v`/`a` переключают image/video/audio для выделенной модели, `e` редактирует имя, `d` удаляет
 - **Profiles**: В списке ↑↓ navigate | Enter: детали | a: add | d: delete | Esc: back. В деталях профиля: ↑↓ navigate models | a: add model | d: delete model | e: edit | Esc: back. При выборе модели в add/edit wizard рядом с именем отображаются capability-маркеры
-- **Agents**: Просмотр статуса конфигов (global/project, backup наличие)
-- **Settings**: Настройки по умолчанию
+- **Agents**: Просмотр статуса конфигов (global/project, backup наличие); выделенная строка показывает путь к конфигу, `r` — restore через `restoreBackupForAgent` (полный манифест, multi-file безопасен)
+- **Settings**: Настройки по умолчанию: `defaultLaunchMode`, `defaultConfigScope`, `mergeAgentConfigs`
+
+Конвенция: **все UI-строки TUI на английском** (ЙЦУКЕН-маппинг прозрачен для пользователя); guard-тест `src/tui/english-ui.test.ts` не допускает кириллицу в rendered-строках `src/tui` (кроме самой карты маппинга). Подтверждения удаления/отмены: `y`/`Y`/Enter — подтвердить, `n`/`N`/Esc — отменить, остальной ввод игнорируется. Статус-сообщения — через общий `StatusLine` (красный для `Error: ...`, авто-скрытие). Кэш статусов `~/.agento/agent-status.json` хранит `{installed, version?}` (старые boolean нормализуются при чтении).
 
 Важно: перед передачей управления child process TUI вызывает `process.stdin.pause()` чтобы сбросить состояние stdin.
 

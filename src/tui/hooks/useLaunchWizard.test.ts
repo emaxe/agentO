@@ -6,7 +6,7 @@
  * throws the moment it tries to build a config.
  */
 import { describe, it, expect } from 'vitest';
-import { getCompatibleAgents } from './useLaunchWizard.js';
+import { getCompatibleAgents, isBackupConflictError } from './useLaunchWizard.js';
 import { listAgents } from '../../agents/registry.js';
 import type { Profile, Provider } from '../../config/schema.js';
 
@@ -120,5 +120,21 @@ describe('getCompatibleAgents', () => {
     // No provider types collected, so nothing is filtered out by the type gate;
     // adapters that throw on the missing provider are still dropped.
     expect(getCompatibleAgents(agents, orphan, [])).toEqual([]);
+  });
+});
+
+describe('isBackupConflictError', () => {
+  it('recognizes the active-backup message that overwrite can fix', () => {
+    expect(
+      isBackupConflictError(
+        'Error: Active backup already exists for codex (project). Run "agento restore -a codex -s project" before launching again.',
+      ),
+    ).toBe(true);
+  });
+
+  it('does not treat unrelated launch failures as a backup conflict', () => {
+    expect(isBackupConflictError('Error: EACCES: permission denied, open settings.json')).toBe(
+      false,
+    );
   });
 });

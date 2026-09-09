@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { SelectList } from '../components/SelectList.js';
 import type { AgentRegistryEntry } from '../../agents/registry.js';
+import type { AgentInstallStatus } from '../../config/store.js';
 
 interface AgentSelectProps {
   agents: readonly AgentRegistryEntry[];
   selected: number;
-  installStatuses: Record<string, boolean>;
+  installStatuses: Record<string, AgentInstallStatus>;
   checkProgress: Record<string, 'pending' | 'checking' | 'done'>;
   statusChecking: boolean;
   onSelect: (index: number) => void;
@@ -58,14 +59,16 @@ export function AgentSelect({
       items={agents}
       selected={selected}
       title="Select Agent"
-      hint="↑↓ navigate, Enter select, Esc back, u update, d delete"
+      hint="↑↓ navigate, Enter select, Esc back, u update, d delete, m mode, s scope"
       emptyMessage="No items available"
       renderItem={(item, index, isSelected) => {
-        const installed = installStatuses[item.id] !== false;
+        const status = installStatuses[item.id];
+        const installed = status?.installed !== false;
         return (
           <Text color={isSelected ? 'green' : undefined}>
             {isSelected ? '▶ ' : '  '}
             {item.label}
+            {installed && status?.version ? <Text dimColor> v{status.version}</Text> : null}
             {!installed && <Text dimColor> (not installed)</Text>}
             {installed && isSelected && <Text dimColor> (u update, d delete)</Text>}
           </Text>

@@ -66,7 +66,8 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
     }
 
     if (mode === 'confirm-delete') {
-      if (input === 'y' && profiles[selectedIndex]) {
+      const lower = input.toLowerCase();
+      if ((key.return || lower === 'y') && profiles[selectedIndex]) {
         removeProfile(profiles[selectedIndex].id)
           .then(() => {
             setStatus('Deleted');
@@ -74,7 +75,7 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
             setMode('list');
           })
           .catch((err) => setStatus(`Error: ${String(err)}`));
-      } else {
+      } else if (key.escape || lower === 'n' || input === 'q') {
         setMode('list');
       }
       return;
@@ -88,6 +89,10 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
       if (input === 'd') {
         if (detailProfile.models.length === 0) {
           setStatus('No models to delete');
+          return;
+        }
+        if (detailProfile.models.length === 1) {
+          setStatus("Cannot remove the last model; press 'e' and edit the model list");
           return;
         }
         const newModels = detailProfile.models.filter((_, i) => i !== detailModelIndex);
@@ -126,7 +131,8 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
     return (
       <Box flexDirection="column" padding={1}>
         <Text>
-          Delete profile <Text bold>"{profiles[selectedIndex]?.name}"</Text>? (y/n)
+          Delete profile <Text bold>"{profiles[selectedIndex]?.name}"</Text>? y/Enter: confirm |
+          n/Esc: cancel
         </Text>
       </Box>
     );
@@ -189,6 +195,7 @@ export function Profiles({ onBack }: ProfilesProps): React.JSX.Element {
         profile={detailProfile}
         providers={providers}
         selectedModel={detailModelIndex}
+        status={status}
         onBack={() => setMode('list')}
         onAddModel={() => setMode('edit')}
         onDeleteModel={() => {}}

@@ -31,9 +31,9 @@ export function AgentAction({
   const agentLabel = agent?.label ?? agentId;
   const installer = agent?.installer;
 
-  const actionVerb = mode === 'update' ? 'Обновить' : 'Удалить';
-  const runningText = mode === 'update' ? 'Обновление...' : 'Удаление...';
-  const successText = mode === 'update' ? 'Успешно обновлено' : 'Успешно удалено';
+  const actionVerb = mode === 'update' ? 'Update' : 'Uninstall';
+  const runningText = mode === 'update' ? 'Updating...' : 'Uninstalling...';
+  const successText = mode === 'update' ? 'updated successfully' : 'uninstalled successfully';
 
   useEffect(() => {
     if (subScreen === 'running') {
@@ -44,7 +44,7 @@ export function AgentAction({
 
   const runAction = (): void => {
     if (!installer) {
-      setActionError('Установщик не найден');
+      setActionError('Installer not found');
       setSubScreen('error');
       return;
     }
@@ -56,7 +56,7 @@ export function AgentAction({
         if (result.success) {
           setSubScreen('success');
         } else {
-          setActionError(result.error ?? 'Неизвестная ошибка');
+          setActionError(result.error ?? 'Unknown error');
           setSubScreen('error');
         }
       })
@@ -107,7 +107,7 @@ export function AgentAction({
   const spinner = SPINNER_FRAMES[spinnerFrame];
 
   if (subScreen === 'confirm') {
-    const choices = ['Да', 'Нет'];
+    const choices = ['Yes', 'No'];
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>
@@ -148,17 +148,17 @@ export function AgentAction({
           ✓ {agentLabel} {successText}
         </Text>
         <Box marginTop={1}>
-          <Text dimColor>[Enter] Продолжить</Text>
+          <Text dimColor>[Enter] Continue</Text>
         </Box>
       </Box>
     );
   }
 
   if (subScreen === 'error') {
-    const choices = ['Повторить', 'Назад'];
+    const choices = ['Retry', 'Back'];
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color="red">✗ Ошибка</Text>
+        <Text color="red">✗ Error</Text>
         <Text dimColor>{actionError}</Text>
         <Box flexDirection="column" marginTop={1}>
           {choices.map((c, i) => (

@@ -4,15 +4,21 @@ import {
   readConfig,
   readAgentStatusCache,
   writeAgentStatusCache,
-  readBackup,
-  deleteBackup,
+  type AgentInstallStatus,
 } from '../../config/store.js';
-import { restoreBackupManifest } from '../../config/backup-restore.js';
+import { restoreBackupForAgent } from '../../config/backup-restore.js';
 import { listAgents } from '../../agents/registry.js';
 import { canRunProfile } from '../../agents/compatibility.js';
 import { prepareChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
-import type { AgentId, Profile, Provider, Settings } from '../../config/schema.js';
+import type {
+  AgentId,
+  LaunchMode,
+  LaunchScope,
+  Profile,
+  Provider,
+  Settings,
+} from '../../config/schema.js';
 import type { AgentRegistryEntry } from '../../agents/registry.js';
 import type { ExecRequest } from '../../launcher/independent.js';
 import type { InstallResult } from '../../installers/base.js';
@@ -24,7 +30,7 @@ interface LaunchWizardProps {
   onBack: () => void;
   onExec?: (req: ExecRequest) => void;
   launchError?: { agentId: string; profileId?: string; error?: string };
-  agentStatusCache?: Record<string, boolean>;
+  agentStatusCache?: Record<string, AgentInstallStatus>;
 }
 
 export interface LaunchWizardState {
@@ -60,6 +66,15 @@ export function getCompatibleAgents(
   return agents.filter((a) => canRunProfile(a.adapter, profile, providers));
 }
 
+/**
+ * True when a launch failed because an active backup blocks patching the config —
+ * the one failure the "Overwrite and launch" recovery actually fixes. Other
+ * launch errors (permissions, unreadable configs) must not offer it.
+ */
+export function isBackupConflictError(message: string): boolean {
+  return message.includes('Active backup already exists');
+}
+
 export function useLaunchWizard({
   dev,
   onBack,
@@ -75,9 +90,11 @@ export function useLaunchWizard({
   const [selectedAgent, setSelectedAgent] = useState(0);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
-  const [installStatuses, setInstallStatuses] = useState<Record<string, boolean>>(() => ({
-    ...agentStatusCache,
-  }));
+  const [installStatuses, setInstallStatuses] = useState<Record<string, AgentInstallStatus>>(
+    () => ({
+      ...agentStatusCache,
+    }),
+  );
   const installStatusesRef = useRef(installStatuses);
   installStatusesRef.current = installStatuses;
   const [installAgentId, setInstallAgentId] = useState<AgentId | null>(null);
@@ -88,6 +105,17 @@ export function useLaunchWizard({
     Record<string, 'pending' | 'checking' | 'done'>
   >({});
   const [errorChoice, setErrorChoice] = useState(0);
+  const [launchMode, setLaunchMode] = useState<LaunchMode>('child');
+  const [launchScope, setLaunchScope] = useState<LaunchScope>('project');
+
+  const toggleMode = useCallback(
+    () => setLaunchMode((m) => (m === 'child' ? 'independent' : 'child')),
+    [],
+  );
+  const toggleScope = useCallback(
+    () => setLaunchScope((s) => (s === 'project' ? 'global' : 'project')),
+    [],
+  );
 
   const currentProfile = profiles[selectedProfile];
   const visibleAgents = currentProfile
@@ -100,6 +128,8 @@ export function useLaunchWizard({
         setProfiles(config.profiles);
         setProviders(config.providers);
         setSettings(config.settings);
+        setLaunchMode(config.settings.defaultLaunchMode);
+        setLaunchScope(config.settings.defaultConfigScope);
       })
       .catch((err) => setError(String(err)));
     readAgentStatusCache()
@@ -120,7 +150,7 @@ export function useLaunchWizard({
     launchErrorHandled.current = true;
     const idx = profiles.findIndex((p) => p.id === launchError.profileId);
     if (idx >= 0) setSelectedProfile(idx);
-    setInstallStatuses((prev) => ({ ...prev, [launchError.agentId]: false }));
+    setInstallStatuses((prev) => ({ ...prev, [launchError.agentId]: { installed: false } }));
     setError(launchError.error || `Agent ${launchError.agentId} not installed`);
     setStep('agent');
   }, [profiles, launchError]);
@@ -130,11 +160,11 @@ export function useLaunchWizard({
 
     const currentStatuses = installStatusesRef.current;
     const agents = listAgents({ dev });
-    const agentsToCheck = agents.filter((a) => currentStatuses[a.id] !== true);
+    const agentsToCheck = agents.filter((a) => currentStatuses[a.id]?.installed !== true);
     const initialProgress: Record<string, 'pending' | 'checking' | 'done'> = {};
     for (const a of agents) {
       initialProgress[a.id] =
-        currentStatuses[a.id] === true
+        currentStatuses[a.id]?.installed === true
           ? 'done'
           : agentsToCheck.some((x) => x.id === a.id)
             ? 'pending'
@@ -155,16 +185,19 @@ export function useLaunchWizard({
         const installer = a.installer;
         if (!installer) {
           setCheckProgress((prev) => ({ ...prev, [a.id]: 'done' }));
-          return [a.id, true] as const;
+          return [a.id, { installed: true }] as const;
         }
         const result = await installer.checkInstalled();
         setCheckProgress((prev) => ({ ...prev, [a.id]: 'done' }));
-        return [a.id, result.installed] as const;
+        return [
+          a.id,
+          { installed: result.installed, ...(result.version ? { version: result.version } : {}) },
+        ] as const;
       });
 
       Promise.all([...checks, new Promise<void>((r) => setTimeout(r, 200))])
         .then((results) => {
-          const agentResults = results.slice(0, -1) as [string, boolean][];
+          const agentResults = results.slice(0, -1) as [string, AgentInstallStatus][];
           setInstallStatuses((prev) => {
             const next = { ...prev };
             for (const [id, installed] of agentResults) next[id] = installed;
@@ -201,7 +234,7 @@ export function useLaunchWizard({
       return;
     }
 
-    if (installStatuses[agentEntry.id] === false) {
+    if (installStatuses[agentEntry.id]?.installed === false) {
       setInstallAgentId(agentEntry.id);
       setStep('install');
       return;
@@ -212,8 +245,8 @@ export function useLaunchWizard({
     setErrorChoice(0);
     setStatus(`Launching ${agentEntry.label}...`);
 
-    const scope = settings.defaultConfigScope;
-    const mode = settings.defaultLaunchMode;
+    const scope = launchScope;
+    const mode = launchMode;
 
     const launchOptions = {
       adapter: agentEntry.adapter,
@@ -238,7 +271,18 @@ export function useLaunchWizard({
         })
         .catch((err) => setError(String(err)));
     }
-  }, [dev, profiles, providers, selectedProfile, selectedAgent, settings, installStatuses, onExec]);
+  }, [
+    dev,
+    profiles,
+    providers,
+    selectedProfile,
+    selectedAgent,
+    settings,
+    launchMode,
+    launchScope,
+    installStatuses,
+    onExec,
+  ]);
 
   const overwriteAndLaunch = useCallback(() => {
     const agents = listAgents({ dev });
@@ -249,33 +293,28 @@ export function useLaunchWizard({
       setError('Invalid selection');
       return;
     }
-    const scope = settings.defaultConfigScope;
+    const scope = launchScope;
     const restoreCwd = process.cwd();
     setStatus('Restoring backup...');
     setError('');
-    readBackup(agentEntry.adapter.id, scope, restoreCwd)
-      .then((backup) => {
-        if (backup !== null) {
-          return restoreBackupManifest(agentEntry.adapter, backup, scope, restoreCwd).then(() =>
-            deleteBackup(agentEntry.adapter.id, scope, restoreCwd),
-          );
-        }
-      })
+    restoreBackupForAgent(agentEntry.adapter, scope, restoreCwd)
       .then(() => {
         doLaunch();
       })
       .catch((err) => setError(String(err)));
-  }, [dev, profiles, providers, selectedProfile, selectedAgent, settings, doLaunch]);
+  }, [dev, profiles, providers, selectedProfile, selectedAgent, settings, launchScope, doLaunch]);
 
   const handleKey = useCallback(
     (input: string, key: Key) => {
       if (step === 'launching' && error) {
+        const canOverwrite = isBackupConflictError(error);
         if (key.escape || input === 'q' || input === 'b') {
           setError('');
           setStep('agent');
           setErrorChoice(0);
           return;
         }
+        if (!canOverwrite) return;
         if (key.upArrow) {
           setErrorChoice((c) => Math.max(0, c - 1));
           return;
@@ -313,6 +352,17 @@ export function useLaunchWizard({
         return;
       }
 
+      if (step === 'profile' || (step === 'agent' && !statusChecking)) {
+        if (input === 'm') {
+          toggleMode();
+          return;
+        }
+        if (input === 's') {
+          toggleScope();
+          return;
+        }
+      }
+
       const items = step === 'profile' ? profiles : visibleAgents;
       const selected = step === 'profile' ? selectedProfile : selectedAgent;
       const setSelected = step === 'profile' ? setSelectedProfile : setSelectedAgent;
@@ -327,7 +377,7 @@ export function useLaunchWizard({
         if (
           agentEntry &&
           agentEntry.installer &&
-          installStatuses[agentEntry.id] !== false &&
+          installStatuses[agentEntry.id]?.installed !== false &&
           (input === 'u' ? agentEntry.installer.update : agentEntry.installer.uninstall)
         ) {
           setActionAgentId(agentEntry.id);
@@ -362,12 +412,14 @@ export function useLaunchWizard({
       doLaunch,
       overwriteAndLaunch,
       installStatuses,
+      toggleMode,
+      toggleScope,
     ],
   );
 
   const completeInstall = useCallback(() => {
     if (!installAgentId) return;
-    setInstallStatuses((prev) => ({ ...prev, [installAgentId]: true }));
+    setInstallStatuses((prev) => ({ ...prev, [installAgentId]: { installed: true } }));
     setInstallAgentId(null);
     setStep('agent');
   }, [installAgentId]);
@@ -382,11 +434,7 @@ export function useLaunchWizard({
       if (result.success) {
         setInstallStatuses((prev) => {
           const next = { ...prev };
-          if (mode === 'update') {
-            next[agentId] = true;
-          } else {
-            next[agentId] = false;
-          }
+          next[agentId] = { installed: mode === 'update' };
           return next;
         });
       }
@@ -420,6 +468,8 @@ export function useLaunchWizard({
       installAgentId,
       actionAgentId,
       actionMode,
+      launchMode,
+      launchScope,
     },
     actions: {
       handleKey,
@@ -433,6 +483,7 @@ export function useLaunchWizard({
     computed: {
       currentProfile,
       visibleAgents,
+      canOverwrite: step === 'launching' && error !== '' && isBackupConflictError(error),
     },
   };
 }

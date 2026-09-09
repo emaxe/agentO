@@ -10,6 +10,7 @@ import { Profiles } from './screens/Profiles.js';
 import { Agents } from './screens/Agents.js';
 import { Settings } from './screens/Settings.js';
 import type { ExecRequest } from '../launcher/independent.js';
+import type { AgentInstallStatus } from '../config/store.js';
 
 /** Available screens in the TUI. */
 export type Screen = 'main' | 'launch' | 'providers' | 'profiles' | 'agents' | 'settings';
@@ -18,7 +19,7 @@ interface AppProps {
   dev?: boolean;
   onExec?: (req: ExecRequest) => void;
   launchError?: { agentId: string; profileId?: string; error?: string };
-  agentStatusCache?: Record<string, boolean>;
+  agentStatusCache?: Record<string, AgentInstallStatus>;
 }
 
 /** Root Ink component that switches between TUI screens. */

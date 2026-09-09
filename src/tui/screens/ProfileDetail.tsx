@@ -1,11 +1,13 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { StatusLine } from '../components/StatusLine.js';
 import type { Profile, Provider } from '../../config/schema.js';
 
 interface ProfileDetailProps {
   profile: Profile;
   providers: Provider[];
   selectedModel: number;
+  status?: string;
   onBack: () => void;
   onAddModel: () => void;
   onDeleteModel: () => void;
@@ -16,11 +18,13 @@ export function ProfileDetail({
   profile,
   providers,
   selectedModel,
+  status,
 }: ProfileDetailProps): React.JSX.Element {
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold>{profile.name}</Text>
       <Text dimColor>↑↓ navigate | a: add | d: delete | e: edit | Esc back</Text>
+      <StatusLine message={status ?? ''} />
       <Box flexDirection="column" marginTop={1}>
         {profile.models.map((m, i) => {
           const p = providers.find((pr) => pr.id === m.providerId);

@@ -337,3 +337,32 @@ describe('config store', () => {
     });
   });
 });
+
+describe('agent status cache', () => {
+  it('round-trips install statuses with versions', async () => {
+    const { readAgentStatusCache, writeAgentStatusCache } = await getStore();
+    await writeAgentStatusCache({
+      'claude-code': { installed: true, version: '1.0.7' },
+      qwen: { installed: false },
+    });
+    expect(await readAgentStatusCache()).toEqual({
+      'claude-code': { installed: true, version: '1.0.7' },
+      qwen: { installed: false },
+    });
+  });
+
+  it('normalizes the legacy boolean-only file', async () => {
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    await mkdir(join(testDir, '.agento'), { recursive: true });
+    await writeFile(
+      join(testDir, '.agento', 'agent-status.json'),
+      JSON.stringify({ 'claude-code': true, codex: false }),
+      'utf-8',
+    );
+    const { readAgentStatusCache } = await getStore();
+    expect(await readAgentStatusCache()).toEqual({
+      'claude-code': { installed: true },
+      codex: { installed: false },
+    });
+  });
+});

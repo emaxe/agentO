@@ -12,6 +12,7 @@ import { render } from 'ink-testing-library';
 import { ProfileList } from './ProfileList.js';
 import { ProviderList } from './ProviderList.js';
 import { ProfileSelect } from './ProfileSelect.js';
+import { AgentSelect } from './AgentSelect.js';
 import type { Profile, Provider } from '../../config/schema.js';
 
 const noop = (): void => {};
@@ -184,5 +185,33 @@ describe('ProfileSelect', () => {
 
   it('handles an empty profile list', () => {
     expect(() => render(<ProfileSelect profiles={[]} selected={0} />)).not.toThrow();
+  });
+});
+
+const registryAgents = await listAgentsPromise();
+async function listAgentsPromise() {
+  const { listAgents } = await import('../../agents/registry.js');
+  return listAgents({ dev: true }).slice(0, 2);
+}
+
+describe('AgentSelect', () => {
+  it('shows the installed version next to an installed agent', () => {
+    const { lastFrame } = render(
+      <AgentSelect
+        agents={registryAgents}
+        selected={0}
+        installStatuses={{
+          [registryAgents[0]!.id]: { installed: true, version: '1.2.3' },
+          [registryAgents[1]!.id]: { installed: false },
+        }}
+        checkProgress={{}}
+        statusChecking={false}
+        onSelect={() => {}}
+        onBack={() => {}}
+      />,
+    );
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('v1.2.3');
+    expect(frame).toContain('(not installed)');
   });
 });

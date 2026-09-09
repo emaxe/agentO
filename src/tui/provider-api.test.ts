@@ -121,6 +121,6 @@ describe('fetchProviderModels', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(abort));
 
     const result = await fetchProviderModels('https://api.example.com/v1', 'sk-x');
-    expect(result).toEqual({ ok: false, error: 'Запрос отменён.' });
+    expect(result).toEqual({ ok: false, error: 'Request cancelled.' });
   });
 });

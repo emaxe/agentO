@@ -43,6 +43,9 @@ const INITIAL_FORM: FormState = {
   models: [],
 };
 
+/** How many fetched models are visible at once in the selection list. */
+const MODEL_VIEWPORT = 20;
+
 interface ProviderFormProps {
   provider?: Provider;
   providers: Provider[];
@@ -75,7 +78,7 @@ function labelFor(f: FieldName): string {
     case 'apiTest':
       return 'API:     ';
     case 'fetchModels':
-      return 'Модели:  ';
+      return 'Fetch:   ';
     case 'save':
       return 'Save:    ';
   }
@@ -121,9 +124,20 @@ export function ProviderForm({
   // --- Model-selection sub-mode state ---
   const [modelSelectionCursor, setModelSelectionCursor] = useState(0);
   const [modelSelectionSelected, setModelSelectionSelected] = useState<Set<string>>(new Set());
+  const [modelFilter, setModelFilter] = useState('');
+
+  /** The fetched list narrowed by the typing filter; what the selection UI shows. */
+  const filteredModels = useMemo(
+    () => cachedModels.filter((m) => m.toLowerCase().includes(modelFilter.toLowerCase())),
+    [cachedModels, modelFilter],
+  );
 
   /** Ref to the in-flight AbortController so we can cancel stale requests. */
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  /** Snapshot of the form as it was when opened; used to detect unsaved edits. */
+  const initialSnapshot = useRef(JSON.stringify(form));
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   // Sync customApiModes when type switches to custom-api.
   useEffect(() => {
@@ -193,6 +207,11 @@ export function ProviderForm({
     }
   }, [form.type, form.baseUrl, form.apiKey]);
 
+  const isDirty = useCallback(
+    (): boolean => JSON.stringify(form) !== initialSnapshot.current,
+    [form],
+  );
+
   const doSubmit = useCallback(() => {
     const models = form.models.map((m) => ({ ...m, name: m.name.trim() })).filter((m) => m.name);
     try {
@@ -229,16 +248,22 @@ export function ProviderForm({
         setSubMode('form');
         return;
       }
-      if (key.upArrow) {
-        setModelSelectionCursor((i) => Math.max(0, i - 1));
+      if (key.pageDown) {
+        setModelSelectionCursor((i) => Math.min(filteredModels.length - 1, i + MODEL_VIEWPORT));
         return;
       }
-      if (key.downArrow) {
-        setModelSelectionCursor((i) => Math.min(cachedModels.length - 1, i + 1));
+      if (key.pageUp) {
+        setModelSelectionCursor((i) => Math.max(0, i - MODEL_VIEWPORT));
+        return;
+      }
+      // Terminals report the Backspace key as either 0x7f (delete) or Ctrl+H.
+      if (key.backspace || key.delete) {
+        setModelFilter((f) => f.slice(0, -1));
+        setModelSelectionCursor(0);
         return;
       }
       if (input === ' ') {
-        const modelId = cachedModels[modelSelectionCursor];
+        const modelId = filteredModels[modelSelectionCursor];
         if (modelId !== undefined) {
           setModelSelectionSelected((prev) => {
             const next = new Set(prev);
@@ -247,6 +272,27 @@ export function ProviderForm({
             return next;
           });
         }
+        return;
+      }
+      if (
+        input.length === 1 &&
+        !key.ctrl &&
+        !key.meta &&
+        !key.upArrow &&
+        !key.downArrow &&
+        input >= ' ' &&
+        input <= '~'
+      ) {
+        setModelFilter((f) => f + input);
+        setModelSelectionCursor(0);
+        return;
+      }
+      if (key.upArrow) {
+        setModelSelectionCursor((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setModelSelectionCursor((i) => Math.min(filteredModels.length - 1, i + 1));
         return;
       }
       if (key.return) {
@@ -350,9 +396,19 @@ export function ProviderForm({
     }
 
     // --- form sub-mode ---
+    if (confirmDiscard) {
+      const lower = input.toLowerCase();
+      if (key.return || lower === 'y') {
+        onCancel();
+      } else if (key.escape || lower === 'n') {
+        setConfirmDiscard(false);
+      }
+      return;
+    }
+
     if (key.escape) {
-      if (activeField === 'models' || activeField === 'save') {
-        setActiveFieldIndex((i) => Math.max(0, i - 1));
+      if (isDirty()) {
+        setConfirmDiscard(true);
         return;
       }
       onCancel();
@@ -361,7 +417,7 @@ export function ProviderForm({
 
     if (activeField === 'models' && key.return) {
       if (isOpenAICompatible(form.type) && apiTestStatus !== 'success') {
-        setStatus('Сначала проверьте работоспособность API (поле "API:")');
+        setStatus('Test the API first (the "API:" field) before editing models');
         return;
       }
       setStatus('');
@@ -380,6 +436,7 @@ export function ProviderForm({
     if (activeField === 'fetchModels' && key.return) {
       setModelSelectionCursor(0);
       setModelSelectionSelected(new Set());
+      setModelFilter('');
       setSubMode('model-selection');
       return;
     }
@@ -443,29 +500,43 @@ export function ProviderForm({
     }
   });
 
+  // --- discard-confirmation dialog ---
+  if (confirmDiscard) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text bold>Unsaved changes</Text>
+        <Text>Discard changes? y/Enter: discard | n/Esc: keep editing</Text>
+      </Box>
+    );
+  }
+
   // --- model-selection sub-mode render ---
   if (subMode === 'model-selection') {
-    const VIEWPORT = 20;
+    const cursor = Math.min(modelSelectionCursor, Math.max(0, filteredModels.length - 1));
+    const total = filteredModels.length;
     const viewStart = Math.max(
       0,
-      Math.min(modelSelectionCursor - Math.floor(VIEWPORT / 2), cachedModels.length - VIEWPORT),
+      Math.min(cursor - Math.floor(MODEL_VIEWPORT / 2), total - MODEL_VIEWPORT),
     );
-    const viewEnd = Math.min(cachedModels.length, viewStart + VIEWPORT);
-    const visibleModels = cachedModels.slice(viewStart, viewEnd);
+    const viewEnd = Math.min(total, viewStart + MODEL_VIEWPORT);
+    const visibleModels = filteredModels.slice(viewStart, viewEnd);
 
     return (
       <Box flexDirection="column" padding={1}>
-        <Text bold>Выбор моделей</Text>
-        <Text dimColor>↑↓: навигация Space: выбрать Enter: добавить Esc: отмена</Text>
+        <Text bold>Select Models</Text>
         <Text dimColor>
-          Выбрано: {modelSelectionSelected.size} [{modelSelectionCursor + 1}/{cachedModels.length}]
+          type: filter | Backspace: edit | ↑↓: navigate Space: toggle Enter: add Esc: back
+        </Text>
+        <Text dimColor>
+          Selected: {modelSelectionSelected.size} [{cursor + 1}/{total}]
+          {modelFilter ? `  Filter: "${modelFilter}" of ${cachedModels.length}` : ''}
         </Text>
         <Box flexDirection="column" marginTop={1} paddingLeft={2}>
-          {cachedModels.length === 0 && <Text dimColor>(нет моделей)</Text>}
-          {viewStart > 0 && <Text dimColor> ↑ ещё {viewStart}</Text>}
+          {total === 0 && <Text dimColor>(no models match the filter)</Text>}
+          {viewStart > 0 && <Text dimColor> ↑ {viewStart} more</Text>}
           {visibleModels.map((modelId, relIdx) => {
             const idx = viewStart + relIdx;
-            const isCursor = idx === modelSelectionCursor;
+            const isCursor = idx === cursor;
             const isChecked = modelSelectionSelected.has(modelId);
             const alreadyAdded = form.models.some((m) => m.name === modelId);
             return (
@@ -473,14 +544,12 @@ export function ProviderForm({
                 <Text color={isCursor ? 'cyan' : undefined}>{isCursor ? '▶ ' : '  '}</Text>
                 <Text dimColor={alreadyAdded}>
                   [{isChecked ? 'x' : ' '}] {modelId}
-                  {alreadyAdded ? ' (уже есть)' : ''}
+                  {alreadyAdded ? ' (already added)' : ''}
                 </Text>
               </Box>
             );
           })}
-          {viewEnd < cachedModels.length && (
-            <Text dimColor> ↓ ещё {cachedModels.length - viewEnd}</Text>
-          )}
+          {viewEnd < total && <Text dimColor> ↓ {total - viewEnd} more</Text>}
         </Box>
       </Box>
     );
@@ -564,15 +633,15 @@ export function ProviderForm({
   // --- form sub-mode render ---
   const hint =
     activeField === 'models'
-      ? 'Enter: edit models  Tab: next field  Esc: back'
+      ? 'Enter: edit models  Tab: next field  Esc: cancel'
       : activeField === 'save'
-        ? 'Enter: save provider  Esc: back  Tab: navigate'
+        ? 'Enter: save provider  Esc: cancel  Tab: navigate'
         : activeField === 'customApiModes'
           ? 'o/a/r: toggle modes  Tab: navigate  Esc: cancel'
           : activeField === 'apiTest'
-            ? 'Enter: тест API  Tab: след. поле'
+            ? 'Enter: test API  Tab: next field'
             : activeField === 'fetchModels'
-              ? 'Enter: список моделей  Tab: след. поле'
+              ? 'Enter: fetch model list  Tab: next field'
               : 'Tab/↑↓: navigate  Space/←→: toggle type  Esc: cancel';
 
   return (
@@ -623,18 +692,18 @@ export function ProviderForm({
                       }
                       bold={focused}
                     >
-                      {focused ? '[ Протестировать API ]' : '  Протестировать API  '}
+                      {focused ? '[ Test API ]' : ' Test API '}
                     </Text>
-                    {apiTestStatus === 'testing' && <Text color="cyan"> Проверяем...</Text>}
+                    {apiTestStatus === 'testing' && <Text color="cyan"> Testing...</Text>}
                     {apiTestStatus === 'success' && (
-                      <Text color="green"> ✓ OK — {cachedModels.length} моделей</Text>
+                      <Text color="green"> ✓ OK — {cachedModels.length} models</Text>
                     )}
                     {apiTestStatus === 'error' && <Text color="red"> ✗ {apiTestError}</Text>}
                   </Box>
                 )}
                 {field === 'fetchModels' && (
                   <Text color={focused ? 'green' : 'gray'} bold={focused}>
-                    {focused ? '[ Запросить список моделей ]' : '  Запросить список моделей  '}
+                    {focused ? '[ Fetch model list ]' : '  Fetch model list  '}
                   </Text>
                 )}
                 {field !== 'type' &&

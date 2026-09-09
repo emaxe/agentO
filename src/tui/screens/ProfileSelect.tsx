@@ -16,7 +16,7 @@ export function ProfileSelect({ profiles, selected }: ProfileSelectProps): React
       items={profiles}
       selected={selected}
       title="Select Profile"
-      hint="↑↓ navigate, Enter select, Esc back"
+      hint="↑↓ navigate, Enter select, m: mode, s: scope, Esc back"
       emptyMessage="No profiles configured. Add one first."
       renderItem={(profile, index, isSelected) => (
         <Text color={isSelected ? 'green' : undefined}>

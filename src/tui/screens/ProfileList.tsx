@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { SelectList } from '../components/SelectList.js';
+import { StatusLine } from '../components/StatusLine.js';
 import type { Profile } from '../../config/schema.js';
 
 interface ProfileListProps {
@@ -18,7 +19,7 @@ export function ProfileList({ profiles, selected, status }: ProfileListProps): R
     <Box flexDirection="column" padding={1}>
       <Text bold>Profiles</Text>
       <Text dimColor>↑↓ navigate | Enter: detail | a: add | d: delete | Esc: back</Text>
-      {status && <Text color="green">{status}</Text>}
+      <StatusLine message={status ?? ''} />
       <SelectList
         items={profiles}
         selected={selected}

@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import type { Provider } from '../../config/schema.js';
 import { capabilityMarker } from '../../config/schema.js';
+import { StatusLine } from '../components/StatusLine.js';
 
 interface ProviderListProps {
   providers: Provider[];
@@ -23,7 +24,7 @@ export function ProviderList({
     <Box flexDirection="column" padding={1}>
       <Text bold>Providers</Text>
       <Text dimColor>↑↓ navigate | Enter/a: add | e: edit | d: delete | Esc: back</Text>
-      {status && <Text color="green">{status}</Text>}
+      <StatusLine message={status ?? ''} />
       <Box flexDirection="column" marginTop={1}>
         {providers.map((p, i) => (
           <Box key={p.id} flexDirection="column">

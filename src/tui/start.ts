@@ -9,9 +9,10 @@ import React from 'react';
 import { render } from 'ink';
 import { App } from './App.js';
 import type { ExecRequest } from '../launcher/independent.js';
+import type { AgentInstallStatus } from '../config/store.js';
 
 /** Cache of agent install statuses shared across TUI relaunches within a single process. */
-const agentStatusCache: Record<string, boolean> = {};
+const agentStatusCache: Record<string, AgentInstallStatus> = {};
 
 export interface StartTuiOptions {
   dev?: boolean;

@@ -60,7 +60,8 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
     }
 
     if (mode === 'confirm-delete') {
-      if (input === 'y' && deleteTarget) {
+      const lower = input.toLowerCase();
+      if ((key.return || lower === 'y') && deleteTarget) {
         removeProvider(deleteTarget.id)
           .then(() => {
             setStatus(`Deleted "${deleteTarget.name}"`);
@@ -68,7 +69,7 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
             setMode('list');
           })
           .catch((err) => setStatus(`Error: ${String(err)}`));
-      } else {
+      } else if (key.escape || lower === 'n' || input === 'q') {
         setMode('list');
       }
       return;
@@ -79,8 +80,7 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
     return (
       <Box flexDirection="column" padding={1}>
         <Text>
-          Delete provider <Text bold>"{deleteTarget?.name}"</Text>? Press y to confirm, any other
-          key to cancel.
+          Delete provider <Text bold>"{deleteTarget?.name}"</Text>? y/Enter: confirm | n/Esc: cancel
         </Text>
       </Box>
     );
