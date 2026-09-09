@@ -17,6 +17,12 @@ const CYRILLIC = /[\u0400-\u04FF]/;
 /** The layout map itself is keyed by Russian letters — that is data, not UI. */
 const ALLOWED = ['use-key-input.ts'];
 
+/** Works with both POSIX and Windows path separators (CI runs on windows too). */
+export function isExcluded(file: string): boolean {
+  const name = file.split(/[\\/]/).pop() ?? '';
+  return ALLOWED.includes(name) || file.includes('.test.');
+}
+
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
@@ -54,10 +60,23 @@ function offendingLines(file: string): string[] {
 }
 
 describe('TUI language', () => {
-  it.each(sourceFiles(TUI_DIR).filter((f) => !ALLOWED.includes(f.split('/').pop() ?? '')))(
+  it.each(sourceFiles(TUI_DIR).filter((f) => !isExcluded(f)))(
     'renders only English strings in %s',
     (file) => {
       expect(offendingLines(file)).toEqual([]);
     },
   );
+});
+
+describe('isExcluded', () => {
+  it.each(['src/tui/use-key-input.ts', 'C:\\repo\\src\\tui\\use-key-input.ts'])(
+    'excludes the layout map under any path separator: %s',
+    (file) => {
+      expect(isExcluded(file)).toBe(true);
+    },
+  );
+
+  it('does not exclude ordinary screens', () => {
+    expect(isExcluded('C:\\repo\\src\\tui\\screens\\MainMenu.tsx')).toBe(false);
+  });
 });
