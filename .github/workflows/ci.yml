@@ -47,6 +47,9 @@ jobs:
         run: npm run typecheck
 
       - name: Test
+        # vitest 4 requires Node >= 20.12 (imports `styleText` from node:util).
+        # On Node 18 the CLI itself is still built and smoke-tested below.
+        if: matrix.node != '18'
         run: npm test
 
       - name: Build

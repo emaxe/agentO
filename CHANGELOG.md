@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- CI: тесты (vitest 4) не запускаются на Node 18 — модуль требует `styleText` из Node ≥ 20.12; сборка и smoke CLI на 18 остаются. Guard-тест `english-ui` теперь корректно исключает `use-key-input.ts` и на windows-путях с обратными слешами.
+
 ## [0.9.0] - 2026-09-09
 
 ### Fixed
