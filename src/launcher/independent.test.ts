@@ -5,6 +5,7 @@ import type { Profile, Provider } from '../config/schema.js';
 vi.mock('../config/store.js', () => ({
   writeBackup: vi.fn(),
   readBackup: vi.fn(),
+  backupExists: vi.fn(() => false),
   deleteBackup: vi.fn(),
   inferBackupFileFormat: vi.fn((path: string) => (path.endsWith('.toml') ? 'toml' : 'json')),
   readConfig: vi.fn().mockResolvedValue({ settings: { mergeAgentConfigs: true } }),
@@ -71,6 +72,8 @@ describe('launchIndependent', () => {
 
     expect(mockWriteBackup).toHaveBeenCalledWith('test-agent', 'project', {
       cwd: '/project',
+      pid: process.pid,
+      pidStartedAt: expect.any(String) as string,
       files: [
         {
           path: '/project/.test.json',

@@ -1,9 +1,9 @@
-import { readFile, mkdir, unlink } from 'node:fs/promises';
+import { readFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
-import { writeFileAtomic } from '../config/atomic-write.js';
+import { unlinkWithRetry, writeFileAtomic } from '../config/atomic-write.js';
 import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
@@ -48,7 +48,7 @@ function missingFile(error: unknown): boolean {
 
 async function removeIfExists(path: string): Promise<void> {
   try {
-    await unlink(path);
+    await unlinkWithRetry(path);
   } catch (error) {
     if (!missingFile(error)) throw error;
   }

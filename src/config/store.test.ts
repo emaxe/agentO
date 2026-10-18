@@ -366,3 +366,164 @@ describe('agent status cache', () => {
     });
   });
 });
+
+describe('encodeCwdForBackup', () => {
+  describe('POSIX (layout is frozen)', () => {
+    it.each([
+      ['/home/user/project', ['home', 'user', 'project']],
+      ['/home/user/My Project/', ['home', 'user', 'My Project']],
+      ['/srv/Case/Sensitive', ['srv', 'Case', 'Sensitive']],
+      ['/tmp/a:b/c*d', ['tmp', 'a_b', 'c_d']],
+      ['/opt/con/nul.', ['opt', 'con', 'nul.']],
+      ['/tmp//double///slash', ['tmp', 'double', 'slash']],
+      ['/tmp/back\\slash', ['tmp', 'back', 'slash']],
+      ['/', []],
+    ])('keeps %s → %j byte for byte', async (cwd, expected) => {
+      const { encodeCwdForBackup } = await getStore();
+      expect(encodeCwdForBackup(cwd, 'linux')).toEqual(expected);
+      expect(encodeCwdForBackup(cwd, 'darwin')).toEqual(expected);
+    });
+
+    it('does not hash long paths', async () => {
+      const { encodeCwdForBackup } = await getStore();
+      const long = `/${'segment/'.repeat(60)}end`;
+      const segments = encodeCwdForBackup(long, 'linux');
+      expect(segments).toHaveLength(61);
+      expect(segments.at(-1)).toBe('end');
+    });
+  });
+
+  describe('win32', () => {
+    it('is case-insensitive and drops the drive colon', async () => {
+      const { encodeCwdForBackup } = await getStore();
+      expect(encodeCwdForBackup('C:\\Proj', 'win32')).toEqual(['c', 'proj']);
+      expect(encodeCwdForBackup('c:\\proj', 'win32')).toEqual(
+        encodeCwdForBackup('C:\\Proj', 'win32'),
+      );
+    });
+
+    it('treats separators and trailing slashes uniformly', async () => {
+      const { encodeCwdForBackup } = await getStore();
+      const expected = ['d', 'work', 'app'];
+      expect(encodeCwdForBackup('D:\\Work\\App\\', 'win32')).toEqual(expected);
+      expect(encodeCwdForBackup('D:/Work/App', 'win32')).toEqual(expected);
+      expect(encodeCwdForBackup('D:\\Work\\.\\Other\\..\\App', 'win32')).toEqual(expected);
+    });
+
+    it('prefixes reserved device names, with or without an extension', async () => {
+      const { encodeCwdForBackup } = await getStore();
+      expect(encodeCwdForBackup('C:\\CON', 'win32')).toEqual(['c', '_con']);
+      expect(encodeCwdForBackup('C:\\src\\Aux\\COM1\\lpt9.txt', 'win32')).toEqual([
+        'c',
+        'src',
+        '_aux',
+        '_com1',
+        '_lpt9.txt',
+      ]);
+      // Near misses stay untouched.
+      expect(encodeCwdForBackup('C:\\console\\com10\\lpt0', 'win32')).toEqual([
+        'c',
+        'console',
+        'com10',
+        'lpt0',
+      ]);
+    });
+
+    it('strips trailing dots and spaces from segments', async () => {
+      const { encodeCwdForBackup } = await getStore();
+      expect(encodeCwdForBackup('C:\\proj. \\sub...', 'win32')).toEqual(['c', 'proj', 'sub']);
+    });
+
+    it('handles UNC and extended-length prefixes', async () => {
+      const { encodeCwdForBackup } = await getStore();
+      expect(encodeCwdForBackup('\\\\Server\\Share\\Dir', 'win32')).toEqual([
+        'server',
+        'share',
+        'dir',
+      ]);
+      expect(encodeCwdForBackup('\\\\?\\C:\\Proj', 'win32')).toEqual(['c', 'proj']);
+    });
+
+    it('replaces the tail of an over-long path with a stable 16-char hash', async () => {
+      const { encodeCwdForBackup } = await getStore();
+      const deep = `C:\\${'Directory-With-A-Long-Name\\'.repeat(12)}Leaf`;
+      const key = encodeCwdForBackup(deep, 'win32');
+
+      expect(key.at(-1)).toMatch(/^[0-9a-f]{16}$/);
+      expect(key.join('/').length).toBeLessThanOrEqual(200);
+      expect(key.slice(0, 2)).toEqual(['c', 'directory-with-a-long-name']);
+      // Same directory, different spelling → same key.
+      expect(encodeCwdForBackup(deep.toUpperCase(), 'win32')).toEqual(key);
+      // Different directory sharing the kept prefix → different key.
+      expect(encodeCwdForBackup(`${deep}2`, 'win32')).not.toEqual(key);
+    });
+
+    it('does not hash a path that fits', async () => {
+      const { encodeCwdForBackup } = await getStore();
+      const key = encodeCwdForBackup('C:\\Users\\me\\project', 'win32');
+      expect(key).toEqual(['c', 'users', 'me', 'project']);
+    });
+  });
+});
+
+describe('backup manifest owner', () => {
+  const files = [{ path: '/cfg.json', format: 'json' as const, hadFile: true, content: {} }];
+
+  it('persists pid and pidStartedAt supplied by the caller', async () => {
+    const { writeBackup, readBackup } = await getStore();
+    await writeBackup('claude-code', 'global', {
+      files,
+      pid: 4242,
+      pidStartedAt: '2026-06-01T10:00:00.000Z',
+    });
+
+    const manifest = await readBackup('claude-code', 'global');
+    expect(manifest?.pid).toBe(4242);
+    expect(manifest?.pidStartedAt).toBe('2026-06-01T10:00:00.000Z');
+  });
+
+  it('does not invent a pid when none is supplied', async () => {
+    const { writeBackup, readBackup, getBackupPath } = await getStore();
+    await writeBackup('claude-code', 'global', { files });
+
+    const manifest = await readBackup('claude-code', 'global');
+    expect(manifest).not.toHaveProperty('pid');
+    const { readFile } = await import('node:fs/promises');
+    expect(
+      JSON.parse(await readFile(getBackupPath('claude-code', 'global'), 'utf-8')),
+    ).not.toHaveProperty('pid');
+  });
+
+  it('reads a pre-existing manifest without pid and ignores a malformed pid', async () => {
+    const { readBackup, getBackupPath } = await getStore();
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    const path = getBackupPath('claude-code', 'global');
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 2,
+        sessionId: 's',
+        agentId: 'claude-code',
+        scope: 'global',
+        createdAt: 'x',
+        files: [],
+      }),
+    );
+    expect(await readBackup('claude-code', 'global')).not.toHaveProperty('pid');
+
+    await writeFile(
+      path,
+      JSON.stringify({
+        version: 2,
+        sessionId: 's',
+        agentId: 'claude-code',
+        scope: 'global',
+        createdAt: 'x',
+        pid: -1,
+        files: [],
+      }),
+    );
+    expect(await readBackup('claude-code', 'global')).not.toHaveProperty('pid');
+  });
+});

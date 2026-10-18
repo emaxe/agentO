@@ -8,7 +8,12 @@ import {
   createStreamState,
   convertStreamChunk,
 } from './responses-adapter.js';
-import { buildProxyHeaders, getOutboundAgent, normalizeProxyUpstream } from './proxy-utils.js';
+import {
+  buildProxyHeaders,
+  getOutboundAgent,
+  normalizeProxyUpstream,
+  stopServer,
+} from './proxy-utils.js';
 
 /** Options for starting the Responses-API-to-Anthropic proxy server. */
 export interface ResponsesProxyOptions {
@@ -276,7 +281,7 @@ export async function startResponsesProxy(options: ResponsesProxyOptions): Promi
       }
       resolve({
         url: `http://127.0.0.1:${addr.port}`,
-        stop: () => new Promise<void>((res) => server.close(() => res())),
+        stop: () => stopServer(server),
       });
     });
     server.on('error', reject);

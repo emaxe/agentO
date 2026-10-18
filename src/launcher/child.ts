@@ -1,6 +1,7 @@
 import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
 import type { Profile, Provider } from '../config/schema.js';
 import { spawnCommand } from '../platform/spawn.js';
+import { forwardSignals } from './signal-forwarding.js';
 import { prepareLaunchTransaction, type ExecRequest } from './transaction.js';
 
 export interface ChildLaunchOptions {
@@ -11,6 +12,8 @@ export interface ChildLaunchOptions {
   command: string;
   args?: string[];
   cwd?: string;
+  /** Signal-handling flavour; defaults to `process.platform`. Exists for tests. */
+  platform?: NodeJS.Platform;
 }
 
 export interface ChildPrepareResult {
@@ -30,17 +33,10 @@ export async function prepareChild(options: ChildLaunchOptions): Promise<ChildPr
 }
 
 /**
- * How long to wait for the agent to exit after forwarding a signal, before
- * escalating to SIGKILL. Long enough for an agent to flush its own state, short
- * enough that a wedged agent does not hold the terminal hostage.
- */
-const SIGNAL_EXIT_GRACE_MS = 5_000;
-
-/**
  * Запускает агент как дочерний процесс.
  * Перед запуском: backup → patch config.
  * После завершения: restore config.
- * SIGTERM/SIGINT: сигнал пробрасывается агенту, конфиг восстанавливается после его выхода.
+ * Сигналы: см. `forwardSignals`; конфиг восстанавливается после выхода агента.
  */
 export async function launchChild(options: ChildLaunchOptions): Promise<number> {
   const { execReq, cleanup, warnings } = await prepareChild(options);
@@ -56,9 +52,9 @@ export async function launchChild(options: ChildLaunchOptions): Promise<number> 
       env: execReq.env,
     });
 
-    let signalled = false;
+    // Forwarding only touches the process; the agent's `exit` event drives cleanup.
+    const forwarding = forwardSignals(child, { platform: options.platform });
     let settled = false;
-    let killTimer: NodeJS.Timeout | undefined;
 
     /**
      * Restores the agent config exactly once, then hands control back.
@@ -71,37 +67,13 @@ export async function launchChild(options: ChildLaunchOptions): Promise<number> 
     const settle = (finalize: () => void): void => {
       if (settled) return;
       settled = true;
-      clearTimeout(killTimer);
-      process.removeListener('SIGTERM', handleSignal);
-      process.removeListener('SIGINT', handleSignal);
+      forwarding.dispose();
       cleanup().catch(console.error).finally(finalize);
     };
 
-    /**
-     * Forwards the signal and waits — the agent's `exit` event drives cleanup.
-     *
-     * Listening with `on` rather than `once` so a second Ctrl-C from an
-     * impatient user escalates to SIGKILL instead of killing agento outright and
-     * leaving the agent config patched with an active backup behind it.
-     */
-    function handleSignal(signal: NodeJS.Signals): void {
-      if (signalled) {
-        child.kill('SIGKILL');
-        return;
-      }
-      signalled = true;
-      child.kill(signal);
-      killTimer = setTimeout(() => child.kill('SIGKILL'), SIGNAL_EXIT_GRACE_MS);
-      // Do not let the grace timer alone keep the event loop alive.
-      killTimer.unref();
-    }
-
-    process.on('SIGTERM', handleSignal);
-    process.on('SIGINT', handleSignal);
-
     child.on('exit', (code) => {
       settle(() => {
-        if (signalled) {
+        if (forwarding.wasSignalled()) {
           process.exit(1);
         }
         resolve(code ?? 0);

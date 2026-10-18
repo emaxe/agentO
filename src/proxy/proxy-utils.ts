@@ -92,3 +92,30 @@ export function buildProxyHeaders(
   }
   return headers;
 }
+
+/** How long `stopServer` waits for connections to drain before giving up. */
+export const PROXY_STOP_TIMEOUT_MS = 2_000;
+
+/**
+ * Stops a proxy server without letting a lingering connection block cleanup.
+ *
+ * `server.close()` alone waits for every keep-alive socket, and the agent's
+ * HTTP client keeps one open — so on Windows especially the launch cleanup (and
+ * with it the config restore) could hang until the socket idled out. Connections
+ * are closed explicitly, and if the server still has not closed after
+ * `timeoutMs` the promise resolves anyway.
+ */
+export function stopServer(
+  server: http.Server,
+  timeoutMs: number = PROXY_STOP_TIMEOUT_MS,
+): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const closed = new Promise<void>((resolve) => {
+    server.close(() => resolve());
+    server.closeAllConnections?.();
+  });
+  const timedOut = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, timeoutMs);
+  });
+  return Promise.race([closed, timedOut]).finally(() => clearTimeout(timer));
+}

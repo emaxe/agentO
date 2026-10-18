@@ -4,6 +4,7 @@ import { restoreBackupManifest } from '../config/backup-restore.js';
 import { addToGitExclude } from '../config/git-exclude.js';
 import type { Profile, Provider } from '../config/schema.js';
 import {
+  backupExists,
   deleteBackup,
   inferBackupFileFormat,
   readBackup,
@@ -40,6 +41,10 @@ export interface LaunchTransactionOptions {
   command: string;
   args?: string[];
   cwd?: string;
+  /** Owner recorded in the backup manifest. Defaults to `process.pid`; tests pass their own. */
+  pid?: number;
+  /** Liveness probe for a recorded pid. Defaults to {@link isProcessAlive}. */
+  isProcessAlive?: (pid: number) => boolean;
 }
 
 export interface LaunchTransactionResult {
@@ -128,11 +133,64 @@ async function buildExecRequest(
   };
 }
 
+/**
+ * Whether a process with this pid exists. `kill(pid, 0)` sends nothing; it only
+ * reports whether the pid could be signalled, on Windows too. `EPERM` means the
+ * process exists but belongs to someone else — still alive. Anything other than
+ * a definite `ESRCH` is treated as alive: the cost of a wrong "dead" is a restore
+ * under a running agent, the cost of a wrong "alive" is one manual `agento restore`.
+ */
+export function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ESRCH';
+  }
+}
+
+/**
+ * Restores an active backup left behind by an agento process that no longer exists
+ * (hard-killed, power loss, window closed on Windows), so the next launch does not
+ * have to stop at "Active backup already exists".
+ *
+ * Only a backup whose manifest records a pid that is demonstrably gone is touched.
+ * A live pid — which may be a pid reused by an unrelated process, hence the "dead
+ * only" rule — or a manifest without a pid (written before this field existed)
+ * leaves the backup alone, and `writeBackup` then refuses as before.
+ */
+async function recoverStaleBackup(
+  adapter: AgentAdapter,
+  scope: LaunchScope,
+  cwd: string | undefined,
+  probe: (pid: number) => boolean,
+): Promise<string[]> {
+  if (!backupExists(adapter.id, scope, cwd)) return [];
+
+  const manifest = await readBackup(adapter.id, scope, cwd);
+  const pid = manifest?.pid;
+  if (!manifest || pid === undefined || !Number.isInteger(pid) || pid <= 0 || probe(pid)) {
+    return [];
+  }
+
+  try {
+    await restoreBackupManifest(adapter, manifest, scope, cwd);
+    await deleteBackup(adapter.id, scope, cwd);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Could not recover config from a previous crashed session (${reason}). Run "agento restore -a ${adapter.id} -s ${scope}" manually.`,
+    );
+  }
+  return ['Recovered config from a previous crashed session'];
+}
+
 /** Backs up every config file the launch is about to touch, returning their paths. */
 async function backupCurrentConfig(
   adapter: AgentAdapter,
   scope: LaunchScope,
-  cwd?: string,
+  cwd: string | undefined,
+  pid: number,
 ): Promise<string[]> {
   const files = adapter.snapshotConfigFiles
     ? await adapter.snapshotConfigFiles(scope, cwd)
@@ -140,6 +198,8 @@ async function backupCurrentConfig(
 
   await writeBackup(adapter.id, scope, {
     cwd,
+    pid,
+    pidStartedAt: processStartedAt(pid),
     files: files.map((file) => ({
       ...file,
       format: file.format ?? inferBackupFileFormat(file.path),
@@ -176,6 +236,13 @@ async function excludeProjectConfigsFromGit(
   return [
     `Generated agent config may contain your API key; added to .git/info/exclude so it is not committed: ${added.join(', ')}`,
   ];
+}
+
+/** Start time of our own process; unknown (and omitted) for a pid supplied from outside. */
+function processStartedAt(pid: number): string | undefined {
+  return pid === process.pid
+    ? new Date(Date.now() - process.uptime() * 1000).toISOString()
+    : undefined;
 }
 
 async function snapshotPrimaryConfigFile(adapter: AgentAdapter, scope: LaunchScope, cwd?: string) {
@@ -272,13 +339,19 @@ export async function prepareLaunchTransaction(
   const { adapter, profile, providers, scope, cwd } = options;
   const args = options.args ?? [];
 
-  const configPaths = await backupCurrentConfig(adapter, scope, cwd);
+  const recovered = await recoverStaleBackup(
+    adapter,
+    scope,
+    cwd,
+    options.isProcessAlive ?? isProcessAlive,
+  );
+  const configPaths = await backupCurrentConfig(adapter, scope, cwd, options.pid ?? process.pid);
 
   const newConfig = adapter.buildConfig(profile, providers);
   const agentoConfig = await readConfig();
   await adapter.writeConfig(newConfig, scope, cwd, agentoConfig.settings.mergeAgentConfigs);
 
-  const warnings = await excludeProjectConfigsFromGit(configPaths, scope, cwd);
+  const warnings = [...recovered, ...(await excludeProjectConfigsFromGit(configPaths, scope, cwd))];
 
   const execReq = await buildExecRequest({ ...options, args });
   const stopProxy = await maybeStartProxy(adapter, profile, providers, scope, cwd, newConfig);

@@ -8,7 +8,12 @@ import {
   createStreamState,
   convertStreamChunk,
 } from './openai-adapter.js';
-import { buildProxyHeaders, getOutboundAgent, normalizeProxyUpstream } from './proxy-utils.js';
+import {
+  buildProxyHeaders,
+  getOutboundAgent,
+  normalizeProxyUpstream,
+  stopServer,
+} from './proxy-utils.js';
 
 /** Options for starting the OpenAI-to-Anthropic proxy server. */
 export interface OpenAIProxyOptions {
@@ -285,7 +290,7 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
       }
       resolve({
         url: `http://127.0.0.1:${addr.port}`,
-        stop: () => new Promise<void>((res) => server.close(() => res())),
+        stop: () => stopServer(server),
       });
     });
     server.on('error', reject);

@@ -165,4 +165,29 @@ describe('runTuiLoop', () => {
       runTuiLoop({ startTui: scriptedTui(request({ cleanup: undefined })), spawnAgent }),
     ).resolves.toBeUndefined();
   });
+
+  it('restores the config but does not reopen the TUI once shouldStop reports a signal', async () => {
+    const first = request({ relaunch: true });
+    const second = request();
+    const startTui = scriptedTui(first, second);
+    const spawnAgent = vi.fn().mockResolvedValue(null);
+
+    await runTuiLoop({ startTui, spawnAgent, shouldStop: () => true });
+
+    expect(first.cleanup).toHaveBeenCalledTimes(1);
+    expect(spawnAgent).toHaveBeenCalledTimes(1);
+    expect(startTui).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps looping while shouldStop is false', async () => {
+    const spawnAgent = vi.fn().mockResolvedValue(0);
+
+    await runTuiLoop({
+      startTui: scriptedTui(request({ relaunch: true }), request()),
+      spawnAgent,
+      shouldStop: () => false,
+    });
+
+    expect(spawnAgent).toHaveBeenCalledTimes(2);
+  });
 });

@@ -1,7 +1,12 @@
 import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';
-import { buildProxyHeaders, getOutboundAgent, normalizeProxyUpstream } from './proxy-utils.js';
+import {
+  buildProxyHeaders,
+  getOutboundAgent,
+  normalizeProxyUpstream,
+  stopServer,
+} from './proxy-utils.js';
 
 export interface ProxyOptions {
   upstreamUrl: string;
@@ -137,10 +142,7 @@ export async function startAnthropicScrubberProxy(options: ProxyOptions): Promis
       }
       resolve({
         url: `http://127.0.0.1:${addr.port}`,
-        stop: () =>
-          new Promise<void>((res) => {
-            server.close(() => res());
-          }),
+        stop: () => stopServer(server),
       });
     });
     server.on('error', reject);

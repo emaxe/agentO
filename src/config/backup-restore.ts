@@ -1,5 +1,5 @@
-import { unlink } from 'node:fs/promises';
 import type { AgentAdapter } from '../adapters/base.js';
+import { unlinkWithRetry } from './atomic-write.js';
 import type { LaunchScope } from './schema.js';
 import type { BackupManifest, BackupManifestFile } from './store.js';
 import { deleteBackup, readBackup } from './store.js';
@@ -10,7 +10,7 @@ function missingFile(error: unknown): boolean {
 
 async function removeIfExists(path: string): Promise<void> {
   try {
-    await unlink(path);
+    await unlinkWithRetry(path);
   } catch (error) {
     if (!missingFile(error)) throw error;
   }

@@ -13,6 +13,7 @@ import { createProviderCommand } from '../src/cli/commands/provider.js';
 import { createProfileCommand } from '../src/cli/commands/profile.js';
 import { createRestoreCommand } from '../src/cli/commands/restore.js';
 import { createAgentCommand } from '../src/cli/commands/agent.js';
+import { forwardSignals } from '../src/launcher/signal-forwarding.js';
 import { spawnCommand } from '../src/platform/spawn.js';
 
 const require = createRequire(import.meta.url);
@@ -31,7 +32,15 @@ program.addCommand(createProfileCommand());
 program.addCommand(createRestoreCommand());
 program.addCommand(createAgentCommand());
 
-/** Spawn a child process asynchronously, returning its exit code. */
+/** Set once a signal made agento terminate the agent; the TUI loop must not reopen after that. */
+let terminatedBySignal = false;
+
+/**
+ * Spawn a child process asynchronously, returning its exit code.
+ *
+ * Signals are handled for the agent's lifetime: with no handler, Ctrl+C or
+ * SIGTERM ended agento before `run-loop` could restore the patched agent config.
+ */
 function spawnAsync(
   command: string,
   args: string[],
@@ -43,12 +52,16 @@ function spawnAsync(
       cwd: process.cwd(),
       env,
     });
+    const forwarding = forwardSignals(child);
 
     child.on('error', (err) => {
+      forwarding.dispose();
       reject(err);
     });
 
     child.on('exit', (code, signal) => {
+      forwarding.dispose();
+      if (forwarding.wasSignalled()) terminatedBySignal = true;
       if (signal) {
         resolve(null);
       } else {
@@ -69,10 +82,14 @@ program.action(() => {
           spawnAgent: spawnAsync,
           // Ink may leave stdin in "flowing" state — pause before handing fd to child
           beforeSpawn: () => process.stdin.pause(),
+          shouldStop: () => terminatedBySignal,
         },
         { dev: opts.dev },
       ),
     )
+    .then(() => {
+      if (terminatedBySignal) process.exitCode = 1;
+    })
     .catch(console.error);
 });
 

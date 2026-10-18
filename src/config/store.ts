@@ -1,10 +1,10 @@
-import { readFile, mkdir, unlink } from 'node:fs/promises';
+import { readFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import path, { join } from 'node:path';
+import { createHash, randomUUID } from 'node:crypto';
 import { AgentOConfigSchema, type AgentOConfig, type LaunchScope } from './schema.js';
-import { writeJsonAtomic } from './atomic-write.js';
+import { unlinkWithRetry, writeJsonAtomic } from './atomic-write.js';
 
 const CONFIG_DIR = join(homedir(), '.agento');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
@@ -15,7 +15,55 @@ function escapePathSegment(segment: string): string {
   return segment.replace(/[<>:"|?*]/g, '_');
 }
 
-function encodeCwdForBackup(cwd: string): string[] {
+/** Device names Windows refuses as file names, with or without an extension. */
+const WIN32_RESERVED_NAMES = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/;
+
+/** Longest backup key (joined segments) before the tail is replaced by a hash. */
+const WIN32_MAX_KEY_LENGTH = 200;
+const WIN32_HASH_LENGTH = 16;
+
+/**
+ * Windows backup key: case-insensitive (`C:\Proj` and `c:\proj` are one directory),
+ * free of `:`, of reserved device names and of trailing dots/spaces (which Windows
+ * silently strips, so two different cwds could otherwise collide), and bounded in
+ * length. An over-long key keeps its leading segments and ends in a hash of the
+ * whole path, so distinct deep directories stay distinct.
+ */
+function encodeWin32Cwd(cwd: string): string[] {
+  const normalized = path.win32.normalize(cwd).toLowerCase();
+  const segments = normalized
+    .replace(/^\\\\\?\\/u, '')
+    .replace(/^([a-z]):/u, '$1')
+    .split(/[\\/]+/u)
+    .map(escapePathSegment)
+    .map((segment) => segment.replace(/[. ]+$/u, ''))
+    .filter(Boolean)
+    .map((segment) => (WIN32_RESERVED_NAMES.test(segment.split('.')[0]) ? `_${segment}` : segment));
+
+  if (segments.join('/').length <= WIN32_MAX_KEY_LENGTH) return segments;
+
+  const hash = createHash('sha1').update(normalized).digest('hex').slice(0, WIN32_HASH_LENGTH);
+  const kept: string[] = [];
+  let length = WIN32_HASH_LENGTH;
+  for (const segment of segments) {
+    length += segment.length + 1;
+    if (length > WIN32_MAX_KEY_LENGTH) break;
+    kept.push(segment);
+  }
+  return [...kept, hash];
+}
+
+/**
+ * Directory segments identifying a project cwd inside the backups tree.
+ *
+ * The POSIX layout is frozen: changing it would orphan the active backups of
+ * users who already have one. Only the win32 branch is normalised.
+ */
+export function encodeCwdForBackup(
+  cwd: string,
+  platform: NodeJS.Platform = process.platform,
+): string[] {
+  if (platform === 'win32') return encodeWin32Cwd(cwd);
   const normalized = cwd.replace(/\\/g, '/');
   const withoutLeading = normalized.replace(/^\/+/u, '');
   return withoutLeading.split('/').filter(Boolean).map(escapePathSegment);
@@ -48,6 +96,10 @@ export interface BackupManifest {
   scope: LaunchScope;
   cwd?: string;
   createdAt: string;
+  /** Process that wrote the backup; lets a later launch tell a crashed session from a live one. */
+  pid?: number;
+  /** ISO start time of {@link pid}. Informational: pid liveness alone decides recovery. */
+  pidStartedAt?: string;
   files: BackupManifestFile[];
 }
 
@@ -63,6 +115,9 @@ export interface WriteBackupOptions {
   files: WriteBackupFile[];
   sessionId?: string;
   createdAt?: string;
+  /** Owner of the backup. Passed in rather than read from `process.pid` so tests control it. */
+  pid?: number;
+  pidStartedAt?: string;
 }
 
 const LEGACY_BACKUP_CREATED_AT = new Date(0).toISOString();
@@ -147,6 +202,10 @@ function normalizeBackupManifest(
       scope: raw.scope === 'project' ? 'project' : scope,
       cwd: typeof raw.cwd === 'string' ? raw.cwd : undefined,
       createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : LEGACY_BACKUP_CREATED_AT,
+      ...(typeof raw.pid === 'number' && Number.isInteger(raw.pid) && raw.pid > 0
+        ? { pid: raw.pid }
+        : {}),
+      ...(typeof raw.pidStartedAt === 'string' ? { pidStartedAt: raw.pidStartedAt } : {}),
       files,
     };
   }
@@ -196,6 +255,8 @@ export async function writeBackup(
     scope,
     cwd: options.cwd,
     createdAt: options.createdAt ?? new Date().toISOString(),
+    ...(options.pid !== undefined ? { pid: options.pid } : {}),
+    ...(options.pidStartedAt !== undefined ? { pidStartedAt: options.pidStartedAt } : {}),
     files: options.files.map((file) => ({
       path: file.path,
       format: file.format ?? 'json',
@@ -251,7 +312,7 @@ export function backupExists(agentId: string, scope: string, cwd?: string): bool
 export async function deleteBackup(agentId: string, scope: string, cwd?: string): Promise<void> {
   const backupPath = join(getBackupDir(agentId, scope as LaunchScope, cwd), `${scope}.bak.json`);
   try {
-    await unlink(backupPath);
+    await unlinkWithRetry(backupPath);
   } catch {
     /* file might not exist */
   }
@@ -259,7 +320,7 @@ export async function deleteBackup(agentId: string, scope: string, cwd?: string)
   // Backward-compatibility: also try legacy path for project scope
   if (scope === 'project' && cwd) {
     try {
-      await unlink(getLegacyBackupPath(agentId, scope as LaunchScope));
+      await unlinkWithRetry(getLegacyBackupPath(agentId, scope as LaunchScope));
     } catch {
       /* file might not exist */
     }

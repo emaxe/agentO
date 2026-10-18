@@ -3,6 +3,9 @@ import { spawnCommand } from './spawn.js';
 
 export type KillMode = NodeJS.Signals | 'force';
 
+/** The part of a `ChildProcess` that `killTree` (and signal forwarding) needs. */
+export type KillableProcess = Pick<ChildProcess, 'pid' | 'kill'>;
+
 /**
  * Terminates `child` and, on Windows, its whole process tree.
  *
@@ -11,7 +14,7 @@ export type KillMode = NodeJS.Signals | 'force';
  * running, so `taskkill /T /F` is used, falling back to `child.kill()`.
  */
 export function killTree(
-  child: Pick<ChildProcess, 'pid' | 'kill'>,
+  child: KillableProcess,
   mode: KillMode,
   platform: NodeJS.Platform = process.platform,
 ): void {

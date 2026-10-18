@@ -16,6 +16,8 @@ export interface RunTuiLoopDeps {
   spawnAgent: SpawnAgent;
   /** Called before handing the terminal to the agent. */
   beforeSpawn?: () => void;
+  /** Checked after each agent run (and its cleanup): `true` ends the loop instead of reopening the TUI. */
+  shouldStop?: () => boolean;
   /** Where launch warnings are printed — outside Ink's render loop. */
   warn?: (message: string) => void;
 }
@@ -33,7 +35,13 @@ export function isEnoent(err: unknown): boolean {
  * the missing `cleanup()` below went unnoticed is that nothing exercised them.
  */
 export async function runTuiLoop(
-  { startTui, spawnAgent, beforeSpawn, warn = (message) => console.warn(message) }: RunTuiLoopDeps,
+  {
+    startTui,
+    spawnAgent,
+    beforeSpawn,
+    shouldStop,
+    warn = (message) => console.warn(message),
+  }: RunTuiLoopDeps,
   options: StartTuiOptions = {},
 ): Promise<void> {
   let execReq = await startTui(options);
@@ -61,6 +69,9 @@ export async function runTuiLoop(
       // needs a manual `agento restore` to clear.
       await execReq.cleanup?.();
     }
+
+    // agento was told to terminate (SIGTERM, window closed): the config is restored, so leave.
+    if (shouldStop?.()) break;
 
     if (missingCommand) {
       execReq = await startTui({
