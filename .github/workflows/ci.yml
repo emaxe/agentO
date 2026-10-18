@@ -11,24 +11,24 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test:
     name: ${{ matrix.os }} / node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         node: ['18', '20', '22']
-        include:
-          # Windows support is known to be incomplete — the launcher and the
-          # installers still assume a POSIX shell (see
-          # docs/windows-cross-platform-report.md). Kept visible but non-blocking
-          # so regressions there are reported without gating merges.
+        exclude:
+          # vitest 4 requires Node >= 20.12; the Windows build is covered by 20 and 22.
           - os: windows-latest
-            node: '20'
-            experimental: true
-    continue-on-error: ${{ matrix.experimental == true }}
+            node: '18'
 
     steps:
       - uses: actions/checkout@v4
@@ -50,13 +50,41 @@ jobs:
         # vitest 4 requires Node >= 20.12 (imports `styleText` from node:util).
         # On Node 18 the CLI itself is still built and smoke-tested below.
         if: matrix.node != '18'
-        run: npm test
+        run: npx vitest run --reporter=default --reporter=junit --outputFile.junit=reports/junit.xml
+
+      - name: Upload test report
+        if: failure() && matrix.node != '18'
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.os }}-node${{ matrix.node }}
+          path: reports/junit.xml
+          if-no-files-found: ignore
 
       - name: Build
         run: npm run build
 
       - name: Smoke-check the built CLI
         run: node dist/bin/agento.js --version
+
+      # Native-shell checks: the bash steps above do not exercise PowerShell or cmd.exe.
+      - name: Smoke-check the built CLI (PowerShell)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          node dist\bin\agento.js --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node dist\bin\agento.js agent status
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # Installs the packed tarball globally so npm generates the real agento.cmd shim.
+      - name: Smoke-check the global npm shim (cmd)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          for /f "delims=" %%i in ('npm pack --silent') do set TGZ=%%i
+          npm install -g "%CD%\%TGZ%" || exit /b 1
+          for /f "delims=" %%p in ('npm prefix -g') do set "PATH=%%p;%PATH%"
+          agento --version
 
   audit:
     name: Dependency audit

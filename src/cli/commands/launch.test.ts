@@ -139,6 +139,7 @@ describe('launch command — mode/scope validation', () => {
     // Default launchers
     mocks.launchChild.mockResolvedValue(0);
     mocks.launchIndependent.mockResolvedValue({ command: 'qwen', args: [], env: {} });
+    mocks.spawnSync.mockReturnValue({ status: 0 });
 
     // Spy on process.exit and console.error
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
@@ -194,6 +195,28 @@ describe('launch command — mode/scope validation', () => {
 
     expect(mocks.launchIndependent).toHaveBeenCalledOnce();
     expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('propagates the agent exit code in independent mode', async () => {
+    mocks.spawnSync.mockReturnValue({ status: 3 });
+
+    await runLaunch(['-p', 'default', '-a', 'qwen', '--mode', 'independent']);
+
+    expect(exitSpy).toHaveBeenCalledWith(3);
+  });
+
+  it('exits 127 when the agent command is missing in independent mode', async () => {
+    mocks.spawnSync.mockReturnValue({
+      status: null,
+      error: Object.assign(new Error('spawn qwen ENOENT'), { code: 'ENOENT' }),
+    });
+
+    await runLaunch(['-p', 'default', '-a', 'qwen', '--mode', 'independent']);
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Error: failed to start "qwen": spawn qwen ENOENT',
+    );
+    expect(exitSpy).toHaveBeenCalledWith(127);
   });
 
   // -------------------------------------------------------------------------

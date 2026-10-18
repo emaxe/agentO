@@ -7,8 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Поддержка Windows 10 1809+/11** (план `docs/windows-support/plan.md`, итоги `docs/windows-support/report.md`):
+  - запуск агентов-`.cmd`/`.exe` и поиск по `PATH`/`PATHEXT` через единый слой `src/platform/*` (`spawn`, `resolve-executable`, `env`, `kill-tree`); несуществующая команда даёт `ENOENT`, а не `exit 1`;
+  - каналы установки: npm для шести npm-агентов, winget → npm для Copilot, uv для Kimi; Goose — только вручную; подсказка `npm config set prefix %APPDATA%\npm` при `EPERM/EACCES`;
+  - завершение дерева процессов (`taskkill /T /F`) по Ctrl+C / Ctrl+Break / закрытию окна, `SIGHUP`/`SIGBREAK`;
+  - PATH-фолбэки (`%APPDATA%\npm`, `%LOCALAPPDATA%\pnpm`, WinGet Links, `.local\bin`, `.cargo\bin`, scoop, nodejs);
+  - восстановление после crash: бэкап хранит `pid`/`pidStartedAt`, следующий запуск автоматически восстанавливает конфиг, если процесс мёртв;
+  - TUI: заглавный ЙЦУКЕН, вставка с CR/LF, ASCII-рамки для conhost, `setRawMode(false)` перед передачей stdin агенту, выход с кодом 2 без TTY;
+  - таблица путей конфигов агентов на Windows `docs/windows-support/config-paths.md`;
+  - **блокирующий Windows CI**: `windows-latest` × Node 20/22, native-проверки `pwsh` и `cmd` (глобальный `agento.cmd`-шим), junit-артефакт при падении тестов.
+- README (EN/RU): раздел Windows — установка, ограничения, troubleshooting.
+- AGENTS.md: слой `src/platform/*` и правила кроссплатформенности.
+
+### Changed
+
+- `codex`: каталог конфига — `CODEX_HOME`, иначе `homedir()/.codex` (раньше `HOME ?? homedir()`).
+- `goose`: на Windows конфиг читается из `%APPDATA%\Block\goose\config\config.yaml`; POSIX-путь не менялся.
+- Запуск процессов только через `src/platform/spawn.ts` (cross-spawn); прямой `node:child_process` запрещён ESLint.
+- `atomic-write` и restore ретраят `rename`/`unlink` на Windows при `EPERM/EACCES/EBUSY`.
+- Ключ бэкапа для cwd на Windows регистронезависим, безопасен по зарезервированным именам и длине; на POSIX раскладка прежняя.
+- `stop()` локальных прокси закрывает активные соединения (`closeAllConnections`, таймаут 2 с) — cleanup больше не зависает на SSE.
+- TUI-путь запуска агента перехватывает сигналы и восстанавливает конфиг до выхода (раньше `agento` мог умереть по SIGINT раньше cleanup); Copilot на Linux ставится через npm вместо brew cask.
+- Устаревший бэкап без живого процесса (только для бэкапов, созданных после обновления) восстанавливается автоматически вместо ошибки `Active backup already exists`.
+
 ### Fixed
 
+- Установщик OpenCode ставил несуществующий npm-пакет `opencode` (404) — теперь `opencode-ai`, на всех ОС.
+- Дубликат ключа `Path`/`PATH` в env запуска на Windows.
+- Заглавные буквы ЙЦУКЕН (`Н`, `Т`, `Й`…) не маппились — подтверждения `y/n` не срабатывали при Shift/CapsLock.
+- Вставка текста с CR/LF в поля TUI отправляла форму.
+- TUI без TTY (`agento < NUL`, pipe) падал стектрейсом Ink — теперь сообщение и выход с кодом 2.
+- `agento launch -m independent` игнорировал код возврата агента (всегда `exit 0`) и не передавал `cwd` — теперь код и ошибка (`ENOENT` → 127) пробрасываются.
 - CI: тесты (vitest 4) не запускаются на Node 18 — модуль требует `styleText` из Node ≥ 20.12; сборка и smoke CLI на 18 остаются. Guard-тест `english-ui` теперь корректно исключает `use-key-input.ts` и на windows-путях с обратными слешами.
 
 ## [0.9.0] - 2026-09-09
@@ -59,7 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Девять копий «найди base-модель и её провайдера» в адаптерах заменены общим `resolveBaseModel`, который последовательно бросает ошибку при отсутствии провайдера.
 - `shell-path-resolver` стал кроссплатформенным: разделитель PATH выбирается по платформе (на Windows `:` склеивал весь `%Path%` в один мусорный элемент), на Windows резолвер не вызывает login-shell, на POSIX используется `$SHELL` вместо захардкоженного `/bin/zsh` (на Linux без zsh проба молча падала в fallback).
 - Цикл «TUI → агент → восстановление конфига» вынесен из `bin/agento.ts` в `src/tui/run-loop.ts` и покрыт тестами.
-- README честно фиксирует: **Windows пока не поддерживается** — запуск и установка агентов идут через `spawn(..., { shell: false })`, а npm-CLI на Windows это `.cmd`-шимы. Подробности в `docs/windows-cross-platform-report.md`.
+- README честно фиксирует: **Windows пока не поддерживается** — запуск и установка агентов идут через `spawn(..., { shell: false })`, а npm-CLI на Windows это `.cmd`-шимы. (позднее поддержка Windows добавлена — см. `docs/windows-support/report.md`).
 
 ### Added
 

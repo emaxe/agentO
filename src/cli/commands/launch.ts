@@ -122,8 +122,19 @@ export function createLaunchCommand(): Command {
             for (const warning of execReq.warnings ?? []) {
               console.warn(`Warning: ${warning}`);
             }
-            spawnCommandSync(execReq.command, execReq.args, { stdio: 'inherit', env: execReq.env });
-            process.exit(0);
+            const result = spawnCommandSync(execReq.command, execReq.args, {
+              stdio: 'inherit',
+              env: execReq.env,
+              cwd: launchCwd,
+            });
+            if (result.error) {
+              const code = (result.error as NodeJS.ErrnoException).code;
+              console.error(
+                `Error: failed to start "${execReq.command}": ${result.error.message}`,
+              );
+              process.exit(code === 'ENOENT' ? 127 : 1);
+            }
+            process.exit(result.status ?? 1);
           }
         } catch (err) {
           console.error('Error:', err instanceof Error ? err.message : String(err));

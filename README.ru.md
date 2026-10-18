@@ -95,14 +95,57 @@ npx @emaxe/agento
 
 ### Требования
 
-- Node.js ≥ 18
-- Один или несколько установленных CLI-инструментов поддерживаемых агентов
-- **macOS или Linux.** Windows сейчас не поддерживается: и запуск агента, и его
-  установка идут через `spawn(..., { shell: false })`, а установленные через npm CLI
-  на Windows — это `.cmd`-шимы, которые так не запускаются. TUI откроется и управление
-  конфигами работает, но агенты не стартуют, а в списке все показываются как
-  «не установлены». Подробности и roadmap —
-  [docs/windows-cross-platform-report.md](docs/windows-cross-platform-report.md).
+- **Операционные системы:** macOS, Linux, Windows 10 (1809+) и Windows 11
+- Node.js ≥ 18 (на Windows рекомендуются Node 20+ и [Windows Terminal](https://aka.ms/terminal))
+- Один или несколько установленных CLI-инструментов поддерживаемых агентов (большинство AgentO умеет ставить сам)
+
+Всё работает на всех трёх системах: TUI, `agento launch` (режимы child и independent),
+`agento restore`, определение установленных агентов и мастер установки. Особенности
+платформы — в разделе [Windows](#windows).
+
+## Windows
+
+```powershell
+npm i -g @emaxe/agento
+agento
+```
+
+Запускайте из PowerShell, Windows Terminal или `cmd.exe`. WSL тоже работает и идёт по Linux-пути.
+
+- **Запуск агентов.** Установленные через npm CLI на Windows — это `.cmd`-шимы; AgentO находит их
+  через `PATH`/`PATHEXT` и запускает корректно, в том числе из путей с пробелами и не-ASCII символами.
+- **Установка агентов.** Из мастера установки в TUI: через npm, winget (Copilot) или uv (Kimi), где это
+  поддержано. **Goose — только вручную**: `winget search goose` или загрузка с
+  <https://github.com/block/goose/releases/latest>.
+- **Расположение конфигов.** Агенты читают конфиг из `%USERPROFILE%` (Goose: `%APPDATA%\Block\goose\config`).
+  Полная таблица — [docs/windows-support/config-paths.md](docs/windows-support/config-paths.md).
+
+### Ограничения Windows
+
+- Поддерживаются только лаунчеры `.cmd`/`.bat`/`.exe`. CLI, у которого **только** `.ps1`-шим, не работает
+  при строгой ExecutionPolicy PowerShell (`Restricted`/`AllSigned`); AgentO политику не обходит.
+- На Windows нет graceful `SIGTERM`. Ctrl+C или закрытие окна консоли завершают всё дерево процессов
+  агента (`taskkill /T /F`), после чего исходный конфиг восстанавливается.
+- При жёстком завершении (Диспетчер задач → «Снять задачу», отключение питания) выполнить код некому,
+  поэтому конфиг восстанавливается при **следующем** запуске `agento`: устаревший бэкап, процесс которого
+  уже не существует, восстанавливается автоматически.
+- Ключи API хранятся открытым текстом в конфигах самих агентов, как на macOS/Linux; шифрования
+  через DPAPI/Credential Manager нет.
+
+### Решение проблем на Windows
+
+- **Агент установлен, но AgentO пишет «not installed».** `PATH` терминала старше установки. Перезапустите
+  терминал; AgentO также смотрит в `%APPDATA%\npm`, `%LOCALAPPDATA%\pnpm`,
+  `%LOCALAPPDATA%\Microsoft\WinGet\Links`, `%USERPROFILE%\.local\bin` и `%USERPROFILE%\.cargo\bin`.
+- **`npm install -g` падает с `EPERM`/`EACCES`.** Укажите npm каталог, доступный на запись:
+  `npm config set prefix %APPDATA%\npm`.
+- **`ENAMETOOLONG` / пути длиннее 260 символов.** Включите длинные пути (`LongPathsEnabled=1` в
+  `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem`, затем перезагрузка) или используйте более короткий путь к проекту.
+- **`Active backup already exists`.** Предыдущий запуск завершился нештатно. Выполните
+  `agento restore -a <agent> -s <scope>` и запустите снова.
+
+Подробности — что проверено, а что ещё требует ручной приёмки — в
+[docs/windows-support/report.md](docs/windows-support/report.md).
 
 ## Быстрый старт
 

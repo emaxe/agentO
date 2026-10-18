@@ -40,14 +40,56 @@ npx @emaxe/agento
 
 ### Requirements
 
-- Node.js ≥ 18
-- One or more supported AI agent CLI tools installed
-- **macOS or Linux.** Windows is not supported today: launching an agent and
-  installing one both go through `spawn(..., { shell: false })`, and npm-installed
-  CLIs on Windows are `.cmd` shims that this cannot execute. The TUI opens and
-  config management works, but agents will not start and every agent shows as "not
-  installed". See [docs/windows-cross-platform-report.md](docs/windows-cross-platform-report.md)
-  for the full breakdown and the roadmap.
+- **Operating systems:** macOS, Linux, Windows 10 (1809+) and Windows 11
+- Node.js ≥ 18 (on Windows, Node 20+ and [Windows Terminal](https://aka.ms/terminal) are recommended)
+- One or more supported AI agent CLI tools installed (AgentO can install most of them for you)
+
+Everything works on all three systems: the TUI, `agento launch` (child and independent
+modes), `agento restore`, installed-agent detection and the install wizard. See
+[Windows](#windows) for the platform-specific notes.
+
+## Windows
+
+```powershell
+npm i -g @emaxe/agento
+agento
+```
+
+Run it from PowerShell, Windows Terminal or `cmd.exe`. WSL also works and follows the Linux path.
+
+- **Launching agents.** npm-installed CLIs are `.cmd` shims on Windows; AgentO resolves them via
+  `PATH`/`PATHEXT` and starts them correctly, including from paths with spaces and non-ASCII characters.
+- **Installing agents.** From the TUI install wizard, through npm, winget (Copilot) or uv (Kimi) where
+  that is supported. **Goose is manual only** — run `winget search goose` or download it from
+  <https://github.com/block/goose/releases/latest>.
+- **Config locations.** Agents read their config from `%USERPROFILE%` (Goose: `%APPDATA%\Block\goose\config`).
+  The full table is in [docs/windows-support/config-paths.md](docs/windows-support/config-paths.md).
+
+### Windows limitations
+
+- Only `.cmd`/`.bat`/`.exe` launchers are supported. A CLI that ships **only** a `.ps1` shim does not
+  work under a restrictive PowerShell ExecutionPolicy (`Restricted`/`AllSigned`); AgentO does not bypass it.
+- Windows has no graceful `SIGTERM`. Ctrl+C or closing the console window ends the agent's whole process
+  tree (`taskkill /T /F`) and the original config is then restored.
+- After a hard kill (Task Manager → End task, power loss) nothing can run, so the config is restored on
+  the **next** `agento` launch: a stale backup whose process is gone is restored automatically.
+- API keys are stored in plain text in the agents' own config files, as on macOS/Linux; there is no
+  DPAPI/Credential Manager encryption.
+
+### Windows troubleshooting
+
+- **Agent installed, but AgentO says "not installed".** The terminal's `PATH` predates the install.
+  Restart the terminal; AgentO also looks in `%APPDATA%\npm`, `%LOCALAPPDATA%\pnpm`,
+  `%LOCALAPPDATA%\Microsoft\WinGet\Links`, `%USERPROFILE%\.local\bin` and `%USERPROFILE%\.cargo\bin`.
+- **`npm install -g` fails with `EPERM`/`EACCES`.** Point npm at a user-writable prefix:
+  `npm config set prefix %APPDATA%\npm`.
+- **`ENAMETOOLONG` / paths over 260 characters.** Enable long paths (`LongPathsEnabled=1` in
+  `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem`, then reboot) or use a shorter project path.
+- **`Active backup already exists`.** A previous run did not finish cleanly. Run
+  `agento restore -a <agent> -s <scope>` and launch again.
+
+More detail — what was verified and what still needs manual acceptance — in
+[docs/windows-support/report.md](docs/windows-support/report.md).
 
 ## Supported Provider Types
 

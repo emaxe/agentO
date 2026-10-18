@@ -62,13 +62,18 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── independent.ts     # Independent mode (backup → patch → exec)
 │   │   ├── transaction.ts     # Общий transaction layer: backup/write/env/cleanup/proxy
 │   │   └── shell-path-resolver.ts  # Резолвинг PATH через login shell
+│   ├── platform/              # Кроссплатформенный слой (единственное место, где живут win32-развилки)
+│   │   ├── spawn.ts           # spawnCommand/spawnCommandSync: cross-spawn + резолв .cmd/.exe; ENOENT вместо exit 1
+│   │   ├── resolve-executable.ts  # Поиск команды по PATH/PATHEXT из env запуска
+│   │   ├── env.ts             # getEnvCI/setEnvCI: регистронезависимый env, один ключ PATH
+│   │   └── kill-tree.ts       # killTree: taskkill /T /F на win32, child.kill на POSIX
 │   ├── proxy/                 # HTTP-прокси для адаптации запросов
 │   │   └── anthropic-scrubber.ts  # Вырезание неподдерживаемых полей Anthropic API (context_management) при работе Claude Code через сторонние провайдеры
 │   ├── profiles/              # Управление профилями
 │   │   └── profile-manager.ts
 │   ├── providers/             # Управление провайдерами
 │   │   └── provider-manager.ts
-│   └── tui/                   # Terminal UI (Ink/React)
+│   ├── test-utils/            # paths.ts (p/posix/win32 для ожиданий), spawn-fakes.ts
 │   ├── tui/                   # Terminal UI (Ink/React)
 │   │   ├── App.tsx            # Корневой компонент, роутинг экранов
 │   │   ├── start.ts           # Точка входа в TUI
@@ -82,6 +87,34 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   │   └── ProfileWizard.tsx  # Мастер добавления профиля
 │   │   └── screens/           # Экраны TUI (MainMenu, LaunchAgent, Providers, Profiles, Agents, Settings, формы)
 ```
+
+## Кроссплатформенность (macOS / Linux / Windows)
+
+Поддерживаются macOS, Linux и Windows 10 1809+/11. Подробности и статус проверок —
+`docs/windows-support/report.md`, пути конфигов агентов — `docs/windows-support/config-paths.md`.
+
+Правила (нарушение ломает Windows, а на Linux/macOS тесты этого не покажут):
+
+- **Процессы — только через `src/platform/spawn.ts`** (`spawnCommand`/`spawnCommandSync`). Прямой
+  импорт `node:child_process`/`child_process` запрещён ESLint (`no-restricted-imports`). Исключения:
+  `src/platform/**`, тесты и `src/launcher/shell-path-resolver.ts` (POSIX login-shell probe, на win32 не исполняется).
+- **`process.platform` читать только в `src/platform/*`** либо принимать `platform` параметром (инъекция,
+  по образцу `ShellPathResolverOptions.platform`). Глубоко в коде глобал не читать — иначе win32-ветка
+  не тестируется на Linux.
+- **Новые тесты не используют POSIX-литералы путей** (`'/home/x'`, `'/tmp/...'`) в ожиданиях. Платформа —
+  параметр; пути строить через `src/test-utils/paths.ts` (`p` — как рантайм на хосте, `posix`/`win32` —
+  явное представление). Не заменять всё скопом на `p`: это скрывает `\` на POSIX. Тесты, требующие
+  реального `.cmd`/`taskkill`, — `*.windows.test.ts` с `skipIf` вне win32.
+- **win32-нюансы:**
+  - переменная PATH называется `Path`; env собирать через `getEnvCI`/`setEnvCI`, чтобы остался один ключ;
+  - домашний каталог — `homedir()`, не `process.env.HOME` (в cmd/PowerShell `HOME` не задан);
+  - npm-CLI на Windows — `.cmd`-шимы: запускать их через `spawnCommand`, а не `spawn(..., {shell:false})`;
+    несуществующая команда должна давать `ENOENT`, а не `exit 1` от `cmd.exe`;
+  - завершение агента — `killTree` (`taskkill /T /F`); `process.kill(-pid)` не использовать;
+  - graceful SIGTERM на Windows нет: восстановление после hard-kill — отложенное (pid в манифесте бэкапа);
+  - `rename`/`unlink` на Windows ретраятся (`EPERM/EACCES/EBUSY`) — писать файлы через `atomic-write`.
+- Изменения в `encodeCwdForBackup` и других путях бэкапа ветвить строго по `platform`, иначе на POSIX
+  осиротеют активные бэкапы (закреплено golden-тестами).
 
 ## Система конфигурации
 
@@ -432,6 +465,7 @@ grep "const providerKey" dist/src/adapters/qwen.js
 2. Обновить **`README.md`** — если новая фича видна пользователю (новые флаги, агенты, команды, поведение)
 3. Обновить **`CHANGELOG.md`** — добавить запись в секцию `[Unreleased]` с типом изменения (Added / Changed / Fixed / Removed)
 4. Запустить **smoke check**: `npm run build && node dist/bin/agento.js --version` (входит в `npm run prepublishOnly`)
+5. Убедиться, что **CI зелёный на всех трёх ОС**, включая **windows-job** (`windows-latest`, Node 20/22): он блокирующий. Публиковать при красном windows-job нельзя
 
 > Порядок: сначала обновляешь код, потом документацию, потом коммитишь всё вместе.
 
