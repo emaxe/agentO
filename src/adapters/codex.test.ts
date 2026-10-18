@@ -338,10 +338,14 @@ describe('CodexAdapter', () => {
   describe('writeConfig profile file separation', () => {
     let tmpDir = '';
     const originalHome = process.env.HOME;
+    const originalCodexHome = process.env.CODEX_HOME;
 
     beforeEach(async () => {
       tmpDir = await mkdtemp(join(tmpdir(), 'agento-codex-test-'));
       process.env.HOME = tmpDir;
+      // The adapter resolves CODEX_HOME first; os.homedir() ignores HOME on Windows,
+      // so pin the Codex root explicitly to keep this test platform-independent.
+      process.env.CODEX_HOME = join(tmpDir, '.codex');
     });
 
     afterEach(async () => {
@@ -352,6 +356,11 @@ describe('CodexAdapter', () => {
         process.env.HOME = originalHome;
       } else {
         delete process.env.HOME;
+      }
+      if (originalCodexHome !== undefined) {
+        process.env.CODEX_HOME = originalCodexHome;
+      } else {
+        delete process.env.CODEX_HOME;
       }
     });
 

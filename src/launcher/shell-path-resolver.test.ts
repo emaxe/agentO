@@ -124,7 +124,7 @@ describe('ShellPathResolver on Windows', () => {
     // /bin/zsh does not exist on Windows; probing for it only wasted a timeout
     // and then fell back to a POSIX path list that CreateProcess cannot use.
     process.env.Path = 'C:\\Windows\\system32;C:\\Users\\me\\AppData\\Roaming\\npm';
-    const resolver = new ShellPathResolver({ platform: 'win32' });
+    const resolver = new ShellPathResolver({ platform: 'win32', existsSync: () => false });
 
     const result = await resolver.resolve();
 
@@ -136,7 +136,7 @@ describe('ShellPathResolver on Windows', () => {
     // Splitting on ':' turned the whole Windows PATH into a single element —
     // and 'C' plus a drive letter is not a directory.
     process.env.Path = 'C:\\a;C:\\b;C:\\a';
-    const resolver = new ShellPathResolver({ platform: 'win32' });
+    const resolver = new ShellPathResolver({ platform: 'win32', existsSync: () => false });
 
     expect((await resolver.resolve()).split(';')).toEqual(['C:\\a', 'C:\\b']);
   });
@@ -154,7 +154,7 @@ describe('ShellPathResolver on Windows', () => {
   it('falls back to PATH when Path is unset', async () => {
     delete process.env.Path;
     process.env.PATH = 'C:\\only';
-    const resolver = new ShellPathResolver({ platform: 'win32' });
+    const resolver = new ShellPathResolver({ platform: 'win32', existsSync: () => false });
 
     expect(await resolver.resolve()).toBe('C:\\only');
   });
@@ -272,12 +272,21 @@ describe('ShellPathResolver Windows fallback directories', () => {
 
   it('never consults the filesystem or adds Windows directories on POSIX', async () => {
     const exists = vi.fn(() => true);
-    mockExecFileSuccess('/usr/local/bin:/usr/bin');
-    const resolver = new ShellPathResolver({ platform: 'darwin', existsSync: exists });
+    // The resolver reads process.env.PATH on POSIX; on a Windows host that value is
+    // Windows-shaped, so pin a POSIX PATH for the duration of the test.
+    const originalPath = process.env.PATH;
+    process.env.PATH = '/usr/local/bin:/usr/bin';
+    try {
+      mockExecFileSuccess('/usr/local/bin:/usr/bin');
+      const resolver = new ShellPathResolver({ platform: 'darwin', existsSync: exists });
 
-    const result = await resolver.resolve();
+      const result = await resolver.resolve();
 
-    expect(exists).not.toHaveBeenCalled();
-    expect(result).not.toContain('\\');
+      expect(exists).not.toHaveBeenCalled();
+      expect(result).not.toContain('\\');
+    } finally {
+      if (originalPath === undefined) delete process.env.PATH;
+      else process.env.PATH = originalPath;
+    }
   });
 });
