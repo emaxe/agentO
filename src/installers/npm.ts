@@ -1,6 +1,6 @@
-import { spawnSync, spawn } from 'node:child_process';
 import type { AgentInstaller, InstallCheckResult, EnvCheckResult, InstallResult } from './base.js';
 import type { AgentId } from '../config/schema.js';
+import { spawnCommand, spawnCommandSync } from '../platform/spawn.js';
 
 export interface NpmInstallerConfig {
   readonly agentId: AgentId;
@@ -28,7 +28,7 @@ export function createNpmInstaller(config: NpmInstallerConfig): AgentInstaller {
     },
 
     async checkInstalled(): Promise<InstallCheckResult> {
-      const result = spawnSync(config.command, ['--version'], { encoding: 'utf8' });
+      const result = spawnCommandSync(config.command, ['--version'], { encoding: 'utf8' });
       if (result.status !== 0) {
         return { installed: false };
       }
@@ -39,7 +39,7 @@ export function createNpmInstaller(config: NpmInstallerConfig): AgentInstaller {
     },
 
     async checkEnvironment(): Promise<EnvCheckResult> {
-      const result = spawnSync('npm', ['--version'], { encoding: 'utf8' });
+      const result = spawnCommandSync('npm', ['--version'], { encoding: 'utf8' });
       if (result.status !== 0) {
         return { ok: false, missing: ['npm'] };
       }
@@ -50,12 +50,12 @@ export function createNpmInstaller(config: NpmInstallerConfig): AgentInstaller {
       return new Promise<InstallResult>((resolve) => {
         const stderrChunks: Buffer[] = [];
 
-        const child = spawn('npm', ['install', '-g', config.packageName], {
+        const child = spawnCommand('npm', ['install', '-g', config.packageName], {
           stdio: ['ignore', 'inherit', 'pipe'],
           shell: false,
         });
 
-        child.stderr.on('data', (chunk: Buffer) => {
+        child.stderr?.on('data', (chunk: Buffer) => {
           stderrChunks.push(chunk);
         });
 
@@ -78,12 +78,12 @@ export function createNpmInstaller(config: NpmInstallerConfig): AgentInstaller {
       return new Promise<InstallResult>((resolve) => {
         const stderrChunks: Buffer[] = [];
 
-        const child = spawn('npm', ['update', '-g', cleanPackageName(config.packageName)], {
+        const child = spawnCommand('npm', ['update', '-g', cleanPackageName(config.packageName)], {
           stdio: ['ignore', 'inherit', 'pipe'],
           shell: false,
         });
 
-        child.stderr.on('data', (chunk: Buffer) => {
+        child.stderr?.on('data', (chunk: Buffer) => {
           stderrChunks.push(chunk);
         });
 
@@ -106,12 +106,12 @@ export function createNpmInstaller(config: NpmInstallerConfig): AgentInstaller {
       return new Promise<InstallResult>((resolve) => {
         const stderrChunks: Buffer[] = [];
 
-        const child = spawn('npm', ['uninstall', '-g', config.packageName], {
+        const child = spawnCommand('npm', ['uninstall', '-g', config.packageName], {
           stdio: ['ignore', 'inherit', 'pipe'],
           shell: false,
         });
 
-        child.stderr.on('data', (chunk: Buffer) => {
+        child.stderr?.on('data', (chunk: Buffer) => {
           stderrChunks.push(chunk);
         });
 

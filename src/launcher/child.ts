@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process';
 import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
 import type { Profile, Provider } from '../config/schema.js';
+import { spawnCommand } from '../platform/spawn.js';
 import { prepareLaunchTransaction, type ExecRequest } from './transaction.js';
 
 export interface ChildLaunchOptions {
@@ -49,7 +49,7 @@ export async function launchChild(options: ChildLaunchOptions): Promise<number> 
   }
 
   return new Promise<number>((resolve) => {
-    const child = spawn(execReq.command, execReq.args, {
+    const child = spawnCommand(execReq.command, execReq.args, {
       stdio: 'inherit',
       cwd: options.cwd ?? process.cwd(),
       shell: false,

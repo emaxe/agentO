@@ -5,13 +5,13 @@
  * child-mode (backup → patch → spawn → restore) or independent-mode launch.
  */
 import { Command } from 'commander';
-import { spawnSync } from 'node:child_process';
 import { readConfig } from '../../config/store.js';
 import { getAgentCommand, listAgents } from '../../agents/registry.js';
 import { describeIncompatibility } from '../../agents/compatibility.js';
 import { launchChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
 import { LaunchModeSchema, LaunchScopeSchema } from '../../config/schema.js';
+import { spawnCommandSync } from '../../platform/spawn.js';
 
 const SUPPORTED_AGENT_IDS = listAgents({ dev: true })
   .map((agent) => agent.id)
@@ -122,7 +122,7 @@ export function createLaunchCommand(): Command {
             for (const warning of execReq.warnings ?? []) {
               console.warn(`Warning: ${warning}`);
             }
-            spawnSync(execReq.command, execReq.args, { stdio: 'inherit', env: execReq.env });
+            spawnCommandSync(execReq.command, execReq.args, { stdio: 'inherit', env: execReq.env });
             process.exit(0);
           }
         } catch (err) {

@@ -1,12 +1,11 @@
 import { EventEmitter } from 'node:events';
-import { spawn } from 'node:child_process';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AgentAdapter } from '../adapters/base.js';
 import type { Profile, Provider } from '../config/schema.js';
 
 // Mock dependencies before importing the module under test
-vi.mock('node:child_process', () => ({
-  spawn: vi.fn(),
+vi.mock('../platform/spawn.js', () => ({
+  spawnCommand: vi.fn(),
 }));
 
 vi.mock('../config/store.js', () => ({
@@ -29,12 +28,13 @@ vi.mock('node:fs/promises', () => ({
 
 import { writeBackup, readBackup } from '../config/store.js';
 import { unlink } from 'node:fs/promises';
+import { spawnCommand } from '../platform/spawn.js';
 import { launchChild, prepareChild } from './child.js';
 
 const mockWriteBackup = vi.mocked(writeBackup);
 const mockReadBackup = vi.mocked(readBackup);
 const mockUnlink = vi.mocked(unlink);
-const mockSpawn = vi.mocked(spawn);
+const mockSpawn = vi.mocked(spawnCommand);
 
 const testProvider: Provider = {
   id: 'p1',
@@ -275,7 +275,7 @@ describe('prepareChild', () => {
   it('launchChild spawns with the prepared ExecRequest and cleans up on exit', async () => {
     const adapter = makeAdapter(null);
     const child = makeFakeChildProcess();
-    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawnCommand>);
 
     const launch = launchChild({
       adapter,
@@ -307,7 +307,7 @@ describe('prepareChild', () => {
     const adapter = makeAdapter(null);
     const child = makeFakeChildProcess();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawnCommand>);
 
     const launch = launchChild({
       adapter,
@@ -329,7 +329,7 @@ describe('prepareChild', () => {
   it('forwards a signal to the agent and waits for it to exit before restoring config', async () => {
     const adapter = makeAdapter(null);
     const child = makeFakeChildProcess();
-    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawnCommand>);
 
     void launchChild({
       adapter,
@@ -355,7 +355,7 @@ describe('prepareChild', () => {
   it('restores the config only once when a signal is followed by the agent exiting', async () => {
     const adapter = makeAdapter(null);
     const child = makeFakeChildProcess();
-    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawnCommand>);
 
     void launchChild({
       adapter,
@@ -377,7 +377,7 @@ describe('prepareChild', () => {
   it('escalates to SIGKILL when a second signal arrives', async () => {
     const adapter = makeAdapter(null);
     const child = makeFakeChildProcess();
-    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawnCommand>);
 
     void launchChild({
       adapter,
@@ -403,7 +403,7 @@ describe('prepareChild', () => {
     try {
       const adapter = makeAdapter(null);
       const child = makeFakeChildProcess();
-      mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+      mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawnCommand>);
 
       void launchChild({
         adapter,
@@ -431,7 +431,7 @@ describe('prepareChild', () => {
   it('unregisters its signal handlers once the agent has exited', async () => {
     const adapter = makeAdapter(null);
     const child = makeFakeChildProcess();
-    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawn>);
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawnCommand>);
 
     const before = process.listenerCount('SIGINT');
     const launch = launchChild({

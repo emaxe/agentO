@@ -39,7 +39,7 @@ import { deleteBackup, readBackup, writeBackup } from '../config/store.js';
 import { startOpenAIProxy } from '../proxy/openai-proxy.js';
 import { startAnthropicScrubberProxy } from '../proxy/anthropic-scrubber.js';
 import { startResponsesProxy } from '../proxy/responses-proxy.js';
-import { prepareLaunchTransaction } from './transaction.js';
+import { buildLaunchEnv, prepareLaunchTransaction } from './transaction.js';
 
 const mockWriteBackup = vi.mocked(writeBackup);
 const mockReadBackup = vi.mocked(readBackup);
@@ -497,5 +497,71 @@ describe('prepareLaunchTransaction', () => {
     });
     expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
     expect(mockStartAnthropicScrubberProxy).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildLaunchEnv', () => {
+  it('POSIX: matches the previous { ...env, PATH, ...adapterEnv } layout', () => {
+    const base = { HOME: '/home/u', PATH: '/old', Path: 'keep' };
+    const env = buildLaunchEnv(base, '/new', { ADAPTER_KEY: 'v' }, 'linux');
+    expect(env).toEqual({ HOME: '/home/u', PATH: '/new', Path: 'keep', ADAPTER_KEY: 'v' });
+    expect(Object.keys(env)).toEqual(['HOME', 'PATH', 'Path', 'ADAPTER_KEY']);
+  });
+
+  it('POSIX: lets the adapter override PATH', () => {
+    const env = buildLaunchEnv({ PATH: '/old' }, '/resolved', { PATH: '/adapter' }, 'linux');
+    expect(env['PATH']).toBe('/adapter');
+  });
+
+  it('win32: Path from the process env and the resolved PATH collapse into one key', () => {
+    const env = buildLaunchEnv(
+      { Path: 'C:\\old', SystemRoot: 'C:\\Windows' },
+      'C:\\new',
+      {},
+      'win32',
+    );
+    expect(env).toEqual({ Path: 'C:\\new', SystemRoot: 'C:\\Windows' });
+    expect(Object.keys(env).filter((key) => key.toLowerCase() === 'path')).toHaveLength(1);
+  });
+
+  it('win32: an adapter PATH override replaces the single key', () => {
+    const env = buildLaunchEnv(
+      { Path: 'C:\\old' },
+      'C:\\resolved',
+      { PATH: 'C:\\adapter' },
+      'win32',
+    );
+    expect(Object.keys(env).filter((key) => key.toLowerCase() === 'path')).toEqual(['Path']);
+    expect(env['Path']).toBe('C:\\adapter');
+  });
+
+  it('POSIX: appends loopback to both NO_PROXY spellings independently', () => {
+    const env = buildLaunchEnv(
+      { HTTPS_PROXY: 'http://proxy:3128', NO_PROXY: 'corp.local', no_proxy: 'other' },
+      '/bin',
+      {},
+      'linux',
+    );
+    expect(env['NO_PROXY']).toBe('corp.local,127.0.0.1,localhost,::1');
+    expect(env['no_proxy']).toBe('other,127.0.0.1,localhost,::1');
+  });
+
+  it('POSIX: leaves NO_PROXY alone without any proxy variable', () => {
+    const env = buildLaunchEnv({ NO_PROXY: 'corp.local' }, '/bin', {}, 'linux');
+    expect(env['NO_PROXY']).toBe('corp.local');
+    expect(env['no_proxy']).toBeUndefined();
+  });
+
+  it('win32: finds a lowercase proxy var and appends loopback to NO_PROXY exactly once', () => {
+    const env = buildLaunchEnv(
+      { https_proxy: 'http://proxy:3128', No_Proxy: 'corp.local' },
+      'C:\\bin',
+      {},
+      'win32',
+    );
+    expect(env).toMatchObject({ No_Proxy: 'corp.local,127.0.0.1,localhost,::1' });
+    expect(Object.keys(env).filter((key) => key.toLowerCase() === 'no_proxy')).toEqual([
+      'No_Proxy',
+    ]);
   });
 });

@@ -52,8 +52,8 @@ vi.mock('../../launcher/independent.js', () => ({
   launchIndependent: mocks.launchIndependent,
 }));
 
-vi.mock('node:child_process', () => ({
-  spawnSync: mocks.spawnSync,
+vi.mock('../../platform/spawn.js', () => ({
+  spawnCommandSync: mocks.spawnSync,
 }));
 
 vi.mock('../../agents/registry.js', () => ({

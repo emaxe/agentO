@@ -1,6 +1,6 @@
-import { spawnSync, spawn } from 'node:child_process';
 import type { AgentInstaller, InstallCheckResult, EnvCheckResult, InstallResult } from './base.js';
 import type { AgentId } from '../config/schema.js';
+import { spawnCommand, spawnCommandSync } from '../platform/spawn.js';
 
 /** Installer for the Goose CLI agent (brew cask). */
 class GooseInstaller implements AgentInstaller {
@@ -13,7 +13,7 @@ class GooseInstaller implements AgentInstaller {
 
   /** Checks whether `goose --version` succeeds and parses the version string. */
   async checkInstalled(): Promise<InstallCheckResult> {
-    const result = spawnSync('goose', ['--version'], { encoding: 'utf8' });
+    const result = spawnCommandSync('goose', ['--version'], { encoding: 'utf8' });
     if (result.status !== 0) {
       return { installed: false };
     }
@@ -25,7 +25,7 @@ class GooseInstaller implements AgentInstaller {
 
   /** Verifies that `brew` is available on the system. */
   async checkEnvironment(): Promise<EnvCheckResult> {
-    const result = spawnSync('brew', ['--version'], { encoding: 'utf8' });
+    const result = spawnCommandSync('brew', ['--version'], { encoding: 'utf8' });
     if (result.status !== 0) {
       return { ok: false, missing: ['brew'] };
     }
@@ -51,12 +51,12 @@ class GooseInstaller implements AgentInstaller {
     return new Promise<InstallResult>((resolve) => {
       const stderrChunks: Buffer[] = [];
 
-      const child = spawn('brew', args, {
+      const child = spawnCommand('brew', args, {
         stdio: ['ignore', 'inherit', 'pipe'],
         shell: false,
       });
 
-      child.stderr.on('data', (chunk: Buffer) => {
+      child.stderr?.on('data', (chunk: Buffer) => {
         stderrChunks.push(chunk);
       });
 

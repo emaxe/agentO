@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { spawn } from 'node:child_process';
+import { spawnCommand } from '../platform/spawn.js';
 import { createNpmInstaller } from './npm.js';
 
-vi.mock('node:child_process', () => ({
-  spawn: vi.fn(),
+vi.mock('../platform/spawn.js', () => ({
+  spawnCommand: vi.fn(),
+  spawnCommandSync: vi.fn(),
 }));
 
 describe('createNpmInstaller', () => {
@@ -26,14 +27,20 @@ describe('createNpmInstaller', () => {
           if (event === 'exit') cb(0);
         }),
       };
-      vi.mocked(spawn).mockReturnValue(mockChild as unknown as ReturnType<typeof spawn>);
+      vi.mocked(spawnCommand).mockReturnValue(
+        mockChild as unknown as ReturnType<typeof spawnCommand>,
+      );
 
       const result = await installer.update();
       expect(result.success).toBe(true);
-      expect(spawn).toHaveBeenCalledWith('npm', ['update', '-g', '@anthropic-ai/claude-code'], {
-        stdio: ['ignore', 'inherit', 'pipe'],
-        shell: false,
-      });
+      expect(spawnCommand).toHaveBeenCalledWith(
+        'npm',
+        ['update', '-g', '@anthropic-ai/claude-code'],
+        {
+          stdio: ['ignore', 'inherit', 'pipe'],
+          shell: false,
+        },
+      );
     });
 
     it('resolves failure on non-zero exit', async () => {
@@ -45,7 +52,9 @@ describe('createNpmInstaller', () => {
           if (event === 'exit') cb(1);
         }),
       };
-      vi.mocked(spawn).mockReturnValue(mockChild as unknown as ReturnType<typeof spawn>);
+      vi.mocked(spawnCommand).mockReturnValue(
+        mockChild as unknown as ReturnType<typeof spawnCommand>,
+      );
 
       const result = await installer.update();
       expect(result.success).toBe(false);
@@ -61,14 +70,20 @@ describe('createNpmInstaller', () => {
           if (event === 'exit') cb(0);
         }),
       };
-      vi.mocked(spawn).mockReturnValue(mockChild as unknown as ReturnType<typeof spawn>);
+      vi.mocked(spawnCommand).mockReturnValue(
+        mockChild as unknown as ReturnType<typeof spawnCommand>,
+      );
 
       const result = await installer.uninstall();
       expect(result.success).toBe(true);
-      expect(spawn).toHaveBeenCalledWith('npm', ['uninstall', '-g', '@anthropic-ai/claude-code'], {
-        stdio: ['ignore', 'inherit', 'pipe'],
-        shell: false,
-      });
+      expect(spawnCommand).toHaveBeenCalledWith(
+        'npm',
+        ['uninstall', '-g', '@anthropic-ai/claude-code'],
+        {
+          stdio: ['ignore', 'inherit', 'pipe'],
+          shell: false,
+        },
+      );
     });
 
     it('resolves failure on non-zero exit', async () => {
@@ -80,7 +95,9 @@ describe('createNpmInstaller', () => {
           if (event === 'exit') cb(1);
         }),
       };
-      vi.mocked(spawn).mockReturnValue(mockChild as unknown as ReturnType<typeof spawn>);
+      vi.mocked(spawnCommand).mockReturnValue(
+        mockChild as unknown as ReturnType<typeof spawnCommand>,
+      );
 
       const result = await installer.uninstall();
       expect(result.success).toBe(false);

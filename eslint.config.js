@@ -19,4 +19,29 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
+  {
+    // Every process start goes through src/platform/spawn.ts (cross-spawn + PATHEXT
+    // resolution on Windows); a direct child_process call bypasses both.
+    files: ['**/*.ts', '**/*.tsx'],
+    ignores: [
+      'src/platform/**',
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      // POSIX-only login-shell probe (`$SHELL -lc`); never runs on win32.
+      'src/launcher/shell-path-resolver.ts',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['node:child_process', 'child_process'],
+              message: 'Use spawnCommand/spawnCommandSync from src/platform/spawn.ts instead.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

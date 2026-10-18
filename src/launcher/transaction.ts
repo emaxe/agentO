@@ -10,6 +10,7 @@ import {
   readConfig,
   writeBackup,
 } from '../config/store.js';
+import { getEnvCI, setEnvCI } from '../platform/env.js';
 import { startAnthropicScrubberProxy } from '../proxy/anthropic-scrubber.js';
 import { startOpenAIProxy } from '../proxy/openai-proxy.js';
 import { startResponsesProxy } from '../proxy/responses-proxy.js';
@@ -64,22 +65,51 @@ const LOOPBACK_NO_PROXY = '127.0.0.1,localhost,::1';
  * loopback addresses so that child processes (e.g. claude-code) do not route
  * requests to agento's local proxy servers through the external proxy.
  */
-function withNoProxyLoopback(env: Record<string, string>): Record<string, string> {
+function withNoProxyLoopback(
+  env: Record<string, string>,
+  platform: NodeJS.Platform,
+): Record<string, string> {
   const hasProxy =
-    env['HTTP_PROXY'] ??
-    env['http_proxy'] ??
-    env['HTTPS_PROXY'] ??
-    env['https_proxy'] ??
-    env['ALL_PROXY'] ??
-    env['all_proxy'];
+    getEnvCI(env, 'HTTP_PROXY', platform) ??
+    getEnvCI(env, 'http_proxy', platform) ??
+    getEnvCI(env, 'HTTPS_PROXY', platform) ??
+    getEnvCI(env, 'https_proxy', platform) ??
+    getEnvCI(env, 'ALL_PROXY', platform) ??
+    getEnvCI(env, 'all_proxy', platform);
   if (!hasProxy) return env;
 
-  const patch: Record<string, string> = {};
-  for (const key of ['NO_PROXY', 'no_proxy'] as const) {
-    const existing = env[key];
-    patch[key] = existing ? `${existing},${LOOPBACK_NO_PROXY}` : LOOPBACK_NO_PROXY;
+  // Read both spellings before writing: on win32 they are one variable, and reading
+  // after the first write would append the loopback list twice.
+  const names = ['NO_PROXY', 'no_proxy'] as const;
+  const patched = names.map((name) => {
+    const existing = getEnvCI(env, name, platform);
+    return [name, existing ? `${existing},${LOOPBACK_NO_PROXY}` : LOOPBACK_NO_PROXY] as const;
+  });
+  const result = { ...env };
+  for (const [name, value] of patched) {
+    setEnvCI(result, name, value, platform);
   }
-  return { ...env, ...patch };
+  return result;
+}
+
+/**
+ * Builds the environment the agent process starts with: the current env, the
+ * resolved PATH, then the adapter's variables (which may override either), with
+ * loopback excluded from any external proxy. On win32 `Path`/`PATH` and other
+ * case variants collapse into a single key.
+ */
+export function buildLaunchEnv(
+  baseEnv: Record<string, string>,
+  resolvedPath: string,
+  adapterEnv: Record<string, string>,
+  platform: NodeJS.Platform = process.platform,
+): Record<string, string> {
+  const env = { ...baseEnv };
+  setEnvCI(env, 'PATH', resolvedPath, platform);
+  for (const [name, value] of Object.entries(adapterEnv)) {
+    setEnvCI(env, name, value, platform);
+  }
+  return withNoProxyLoopback(env, platform);
 }
 
 async function buildExecRequest(
@@ -92,7 +122,7 @@ async function buildExecRequest(
   return {
     command,
     args,
-    env: withNoProxyLoopback({ ...cleanProcessEnv(), PATH: resolvedPath, ...adapterEnv }),
+    env: buildLaunchEnv(cleanProcessEnv(), resolvedPath, adapterEnv),
     agentId: adapter.id,
     profileId: profile.id,
   };

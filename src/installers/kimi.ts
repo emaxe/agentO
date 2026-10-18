@@ -1,6 +1,6 @@
-import { spawnSync, spawn } from 'node:child_process';
 import type { AgentInstaller, InstallCheckResult, EnvCheckResult, InstallResult } from './base.js';
 import type { AgentId } from '../config/schema.js';
+import { spawnCommand, spawnCommandSync } from '../platform/spawn.js';
 
 /**
  * Installer for Kimi Code CLI.
@@ -21,7 +21,7 @@ class KimiInstaller implements AgentInstaller {
 
   /** Checks whether `kimi --version` succeeds and parses the version string. */
   async checkInstalled(): Promise<InstallCheckResult> {
-    const result = spawnSync('kimi', ['--version'], { encoding: 'utf8' });
+    const result = spawnCommandSync('kimi', ['--version'], { encoding: 'utf8' });
     if (result.status !== 0) {
       return { installed: false };
     }
@@ -33,8 +33,8 @@ class KimiInstaller implements AgentInstaller {
 
   /** Verifies that either `curl` or `wget` is available for the install script. */
   async checkEnvironment(): Promise<EnvCheckResult> {
-    const curlOk = spawnSync('curl', ['--version'], { encoding: 'utf8' }).status === 0;
-    const wgetOk = spawnSync('wget', ['--version'], { encoding: 'utf8' }).status === 0;
+    const curlOk = spawnCommandSync('curl', ['--version'], { encoding: 'utf8' }).status === 0;
+    const wgetOk = spawnCommandSync('wget', ['--version'], { encoding: 'utf8' }).status === 0;
 
     if (!curlOk && !wgetOk) {
       return { ok: false, missing: ['curl', 'wget'] };
@@ -57,12 +57,12 @@ class KimiInstaller implements AgentInstaller {
     return new Promise<InstallResult>((resolve) => {
       const stderrChunks: Buffer[] = [];
 
-      const child = spawn('uv', ['tool', 'uninstall', 'kimi-cli'], {
+      const child = spawnCommand('uv', ['tool', 'uninstall', 'kimi-cli'], {
         stdio: ['ignore', 'inherit', 'pipe'],
         shell: false,
       });
 
-      child.stderr.on('data', (chunk: Buffer) => {
+      child.stderr?.on('data', (chunk: Buffer) => {
         stderrChunks.push(chunk);
       });
 
@@ -85,12 +85,12 @@ class KimiInstaller implements AgentInstaller {
     return new Promise<InstallResult>((resolve) => {
       const stderrChunks: Buffer[] = [];
 
-      const child = spawn('bash', ['-c', script], {
+      const child = spawnCommand('bash', ['-c', script], {
         stdio: ['ignore', 'inherit', 'pipe'],
         shell: false,
       });
 
-      child.stderr.on('data', (chunk: Buffer) => {
+      child.stderr?.on('data', (chunk: Buffer) => {
         stderrChunks.push(chunk);
       });
 

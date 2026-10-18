@@ -8,12 +8,12 @@
  */
 import { program } from 'commander';
 import { createRequire } from 'module';
-import { spawn } from 'node:child_process';
 import { createLaunchCommand } from '../src/cli/commands/launch.js';
 import { createProviderCommand } from '../src/cli/commands/provider.js';
 import { createProfileCommand } from '../src/cli/commands/profile.js';
 import { createRestoreCommand } from '../src/cli/commands/restore.js';
 import { createAgentCommand } from '../src/cli/commands/agent.js';
+import { spawnCommand } from '../src/platform/spawn.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json') as { version: string };
@@ -38,8 +38,9 @@ function spawnAsync(
   env: Record<string, string | undefined>,
 ): Promise<number | null> {
   return new Promise<number | null>((resolve, reject) => {
-    const child = spawn(command, args, {
+    const child = spawnCommand(command, args, {
       stdio: 'inherit',
+      cwd: process.cwd(),
       env,
     });
 
