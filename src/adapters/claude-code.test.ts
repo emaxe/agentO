@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ClaudeCodeAdapter, CLAUDE_API_KEY_ENV } from './claude-code.js';
 import type { Profile, Provider } from '../config/schema.js';
+import { p } from '../test-utils/paths.js';
 
 const adapter = new ClaudeCodeAdapter();
 
@@ -95,8 +96,8 @@ describe('ClaudeCodeAdapter', () => {
 
   it('configPaths returns correct paths', () => {
     const paths = adapter.configPaths('/my/project');
-    expect(paths.project).toContain('.claude/settings.json');
-    expect(paths.global).toContain('.claude/settings.json');
+    expect(paths.project).toBe(p('/my/project', '.claude', 'settings.json'));
+    expect(paths.global).toContain(p('.claude', 'settings.json'));
   });
 
   it('throws when tiers use different providers', () => {

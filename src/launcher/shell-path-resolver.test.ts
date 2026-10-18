@@ -50,7 +50,7 @@ describe('ShellPathResolver', () => {
   });
 
   it('resolves PATH from shell output using delimiters', async () => {
-    const resolver = new ShellPathResolver();
+    const resolver = new ShellPathResolver({ platform: 'darwin' });
     mockExecFileSuccess('/usr/local/bin:/usr/bin:/bin');
 
     const result = await resolver.resolve();
@@ -60,7 +60,7 @@ describe('ShellPathResolver', () => {
   });
 
   it('returns cached result on second call', async () => {
-    const resolver = new ShellPathResolver();
+    const resolver = new ShellPathResolver({ platform: 'darwin' });
     mockExecFileSuccess('/usr/local/bin:/bin');
 
     const first = await resolver.resolve();
@@ -70,7 +70,7 @@ describe('ShellPathResolver', () => {
   });
 
   it('invalidate clears cache, next resolve re-fetches', async () => {
-    const resolver = new ShellPathResolver();
+    const resolver = new ShellPathResolver({ platform: 'darwin' });
     mockExecFileSuccess('/usr/local/bin:/bin');
 
     await resolver.resolve();
@@ -82,7 +82,7 @@ describe('ShellPathResolver', () => {
   });
 
   it('falls back to system PATH on failure', async () => {
-    const resolver = new ShellPathResolver();
+    const resolver = new ShellPathResolver({ platform: 'darwin' });
     mockExecFileFailure();
 
     const result = await resolver.resolve();
@@ -91,12 +91,12 @@ describe('ShellPathResolver', () => {
   });
 
   it('getResolvedPath returns null before resolve', () => {
-    const resolver = new ShellPathResolver();
+    const resolver = new ShellPathResolver({ platform: 'darwin' });
     expect(resolver.getResolvedPath()).toBeNull();
   });
 
   it('strips OSC escape sequences from shell output', async () => {
-    const resolver = new ShellPathResolver();
+    const resolver = new ShellPathResolver({ platform: 'darwin' });
     mockExecFileWithOSC('/opt/homebrew/bin:/usr/local/bin');
 
     const result = await resolver.resolve();

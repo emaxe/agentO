@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { QwenAdapter } from './qwen.js';
 import type { Profile, Provider } from '../config/schema.js';
+import { p } from '../test-utils/paths.js';
 
 const adapter = new QwenAdapter();
 
@@ -46,7 +47,7 @@ describe('QwenAdapter', () => {
 
     it('returns correct project path', () => {
       const paths = adapter.configPaths('/my/project');
-      expect(paths.project).toBe('/my/project/.qwen/settings.json');
+      expect(paths.project).toBe(p('/my/project', '.qwen', 'settings.json'));
     });
   });
 

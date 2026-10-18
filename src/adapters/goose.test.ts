@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { GooseAdapter } from './goose.js';
 import type { Profile, Provider } from '../config/schema.js';
+import { p } from '../test-utils/paths.js';
 
 const adapter = new GooseAdapter();
 
@@ -85,7 +86,7 @@ describe('GooseAdapter', () => {
 
     it('returns project config.yaml path', () => {
       const paths = adapter.configPaths('/my/project');
-      expect(paths.project).toBe('/my/project/.goose/config.yaml');
+      expect(paths.project).toBe(p('/my/project', '.goose', 'config.yaml'));
     });
   });
 

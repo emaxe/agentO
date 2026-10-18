@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import { CodexAdapter } from './codex.js';
 import type { Profile, Provider } from '../config/schema.js';
+import { p } from '../test-utils/paths.js';
 
 const adapter = new CodexAdapter();
 
@@ -47,7 +48,7 @@ describe('CodexAdapter', () => {
 
     it('returns correct project path', () => {
       const paths = adapter.configPaths('/my/project');
-      expect(paths.project).toBe('/my/project/.codex/config.toml');
+      expect(paths.project).toBe(p('/my/project', '.codex', 'config.toml'));
     });
   });
 

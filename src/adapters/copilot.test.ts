@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CopilotAdapter } from './copilot.js';
 import type { Profile, Provider } from '../config/schema.js';
+import { p } from '../test-utils/paths.js';
 
 const adapter = new CopilotAdapter();
 
@@ -85,7 +86,7 @@ describe('CopilotAdapter', () => {
 
     it('returns project settings.json path', () => {
       const paths = adapter.configPaths('/my/project');
-      expect(paths.project).toBe('/my/project/.copilot/settings.json');
+      expect(paths.project).toBe(p('/my/project', '.copilot', 'settings.json'));
     });
   });
 
