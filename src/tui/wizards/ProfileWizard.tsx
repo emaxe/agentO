@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
+import { sanitizeFieldValue } from '../sanitize-field-value.js';
 import { useKeyInput } from '../use-key-input.js';
 import { SelectList } from '../components/SelectList.js';
 import type { Provider, Profile, ProfileModel, ModelTier } from '../../config/schema.js';
@@ -210,7 +211,12 @@ export function ProfileWizard({
           <Text dimColor>Enter profile name, Enter to continue, Esc to cancel</Text>
           <Box marginTop={1}>
             <Text>Name: </Text>
-            <TextInput value={formName} onChange={setFormName} focus showCursor />
+            <TextInput
+              value={formName}
+              onChange={(v) => setFormName(sanitizeFieldValue(v))}
+              focus
+              showCursor
+            />
           </Box>
         </Box>
         {status && <Text color="yellow">{status}</Text>}
@@ -292,7 +298,7 @@ export function ProfileWizard({
               </Text>
               <TextInput
                 value={customModel}
-                onChange={setCustomModel}
+                onChange={(v) => setCustomModel(sanitizeFieldValue(v))}
                 focus={modelCursor === customIdx}
                 showCursor={modelCursor === customIdx}
                 placeholder="model-name"

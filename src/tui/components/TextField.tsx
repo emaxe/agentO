@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
+import { sanitizeFieldValue } from '../sanitize-field-value.js';
 
 export interface TextFieldProps {
   label: string;
@@ -29,7 +30,7 @@ export function TextField({
       </Text>
       <TextInput
         value={value}
-        onChange={onChange}
+        onChange={(v) => onChange(sanitizeFieldValue(v))}
         focus={focus}
         showCursor={showCursor ?? focus}
         placeholder={placeholder}

@@ -9,6 +9,7 @@ import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
 import type { Screen } from '../App.js';
 import { VERSION } from '../../config/version.js';
+import { tuiBorderStyle } from '../border-style.js';
 
 const MENU_ITEMS: Array<{ label: string; screen: Screen }> = [
   { label: 'Launch Agent', screen: 'launch' },
@@ -48,7 +49,7 @@ export function MainMenu({ onSelect, onExit }: MainMenuProps): React.JSX.Element
   });
 
   return (
-    <Box flexDirection="column" borderStyle="round" paddingX={2} paddingY={1} width={40}>
+    <Box flexDirection="column" borderStyle={tuiBorderStyle()} paddingX={2} paddingY={1} width={40}>
       <Box justifyContent="space-between" marginBottom={1}>
         <Text bold>AgentO</Text>
         <Text dimColor>v{VERSION}</Text>

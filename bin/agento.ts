@@ -73,6 +73,12 @@ function spawnAsync(
 
 // Default action: launch interactive TUI
 program.action(() => {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.error(
+      'agento: the interactive TUI needs a terminal. Use `agento launch -p <profile> -a <agent>`.',
+    );
+    process.exit(2);
+  }
   const opts = program.opts() as { dev?: boolean };
   Promise.all([import('../src/tui/start.js'), import('../src/tui/run-loop.js')])
     .then(([{ startTui }, { runTuiLoop }]) =>
@@ -80,8 +86,13 @@ program.action(() => {
         {
           startTui,
           spawnAgent: spawnAsync,
-          // Ink may leave stdin in "flowing" state — pause before handing fd to child
-          beforeSpawn: () => process.stdin.pause(),
+          // Ink may leave stdin in "flowing" state — pause before handing fd to child.
+          // On Windows also drop raw mode first (Ink is already unmounted), otherwise the
+          // child's first keystroke can be swallowed by the console input mode left behind.
+          beforeSpawn: () => {
+            if (process.platform === 'win32') process.stdin.setRawMode?.(false);
+            process.stdin.pause();
+          },
           shouldStop: () => terminatedBySignal,
         },
         { dev: opts.dev },

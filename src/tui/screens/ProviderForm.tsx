@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
+import { sanitizeFieldValue } from '../sanitize-field-value.js';
 import { useKeyInput } from '../use-key-input.js';
 import type { Provider, ModelConfig, ProviderType } from '../../config/schema.js';
 import { capabilityMarker, PROVIDER_TYPES } from '../../config/schema.js';
@@ -578,7 +579,9 @@ export function ProviderForm({
                   onChange={(v) =>
                     setForm((f) => ({
                       ...f,
-                      models: f.models.map((m, j) => (j === idx ? { ...m, name: v } : m)),
+                      models: f.models.map((m, j) =>
+                        j === idx ? { ...m, name: sanitizeFieldValue(v) } : m,
+                      ),
                     }))
                   }
                   onSubmit={() => setModelsEditingIndex(null)}
@@ -597,7 +600,7 @@ export function ProviderForm({
               <TextInput
                 value={modelsNewValue}
                 focus
-                onChange={setModelsNewValue}
+                onChange={(v) => setModelsNewValue(sanitizeFieldValue(v))}
                 onSubmit={() => {
                   const trimmed = modelsNewValue.trim();
                   if (trimmed)
@@ -714,7 +717,9 @@ export function ProviderForm({
                   field !== 'fetchModels' && (
                     <TextInput
                       value={form[field as StringField]}
-                      onChange={(value) => setForm((f) => ({ ...f, [field]: value }))}
+                      onChange={(value) =>
+                        setForm((f) => ({ ...f, [field]: sanitizeFieldValue(value) }))
+                      }
                       focus={focused}
                       showCursor={focused}
                       placeholder={

@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
+import { sanitizeFieldValue } from '../sanitize-field-value.js';
 import { useKeyInput } from '../use-key-input.js';
 import { SelectList } from '../components/SelectList.js';
 import type { Profile, Provider, ProfileModel, ModelTier } from '../../config/schema.js';
@@ -363,7 +364,7 @@ export function ProfileEdit({
                     </Text>
                     <TextInput
                       value={customModel}
-                      onChange={setCustomModel}
+                      onChange={(v) => setCustomModel(sanitizeFieldValue(v))}
                       focus={modelCursor === customIdx}
                       showCursor={modelCursor === customIdx}
                       placeholder="model-name"
@@ -420,7 +421,7 @@ export function ProfileEdit({
         </Text>
         <TextInput
           value={editName}
-          onChange={setEditName}
+          onChange={(v) => setEditName(sanitizeFieldValue(v))}
           focus={editFocus === 'name'}
           showCursor={editFocus === 'name'}
         />

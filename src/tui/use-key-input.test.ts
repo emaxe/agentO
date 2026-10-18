@@ -47,23 +47,32 @@ describe('useKeyInput', () => {
   });
 
   it('passes Latin input through unchanged', () => {
-    for (const c of ['e', 'd', 'a', 'q', 'i', 'v']) {
+    for (const c of ['e', 'd', 'a', 'q', 'i', 'v', 'Y', 'N', 'Q']) {
       expect(press(c)).toBe(c);
     }
   });
 
   it('leaves unmapped characters alone', () => {
     expect(press('ъ')).toBe('ъ');
+    expect(press('Ъ')).toBe('Ъ');
     expect(press('7')).toBe('7');
     expect(press('')).toBe('');
   });
 
-  it('does not map uppercase — terminal hotkeys are case-sensitive', () => {
-    expect(press('У')).toBe('У');
+  it.each([
+    ['н', 'y'],
+    ['Н', 'Y'],
+    ['т', 'n'],
+    ['Т', 'N'],
+    ['й', 'q'],
+    ['Й', 'Q'],
+    ['У', 'E'],
+  ])('keeps case: %s maps to %s', (ru, en) => {
+    expect(press(ru)).toBe(en);
   });
 
   it('is injective, so no two Russian keys trigger the same action', () => {
-    const RU = 'йцукенгшщзфывапролдячсмить';
+    const RU = 'йцукенгшщзфывапролдячсмить' + 'йцукенгшщзфывапролдячсмить'.toUpperCase();
     const mapped = [...RU].map(press);
     expect(new Set(mapped).size).toBe(mapped.length);
   });

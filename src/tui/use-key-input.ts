@@ -1,34 +1,19 @@
 import { useInput, type Key } from 'ink';
 
-// ЙЦУКЕН → QWERTY mapping (lowercase only — terminal hotkeys are case-sensitive)
-const RU_TO_EN: Record<string, string> = {
-  й: 'q',
-  ц: 'w',
-  у: 'e',
-  к: 'r',
-  е: 't',
-  н: 'y',
-  г: 'u',
-  ш: 'i',
-  щ: 'o',
-  з: 'p',
-  ф: 'a',
-  ы: 's',
-  в: 'd',
-  а: 'f',
-  п: 'g',
-  р: 'h',
-  о: 'j',
-  л: 'k',
-  д: 'l',
-  я: 'z',
-  ч: 'x',
-  с: 'c',
-  м: 'v',
-  и: 'b',
-  т: 'n',
-  ь: 'm',
-};
+// ЙЦУКЕН → QWERTY mapping. Case is preserved (й→q, Й→Q): confirmations distinguish `y` from `Y`,
+// and Shift/CapsLock with a Russian layout must behave like the Latin key does.
+const RU_LOWER = 'йцукенгшщзфывапролдячсмить';
+const EN_LOWER = 'qwertyuiopasdfghjklzxcvbnm';
+
+const RU_TO_EN: Record<string, string> = Object.fromEntries(
+  [...RU_LOWER].flatMap((ru, i) => {
+    const en = EN_LOWER[i] as string;
+    return [
+      [ru, en],
+      [ru.toUpperCase(), en.toUpperCase()],
+    ];
+  }),
+);
 
 /**
  * Drop-in replacement for Ink's `useInput` that also accepts Russian ЙЦУКЕН keyboard input.

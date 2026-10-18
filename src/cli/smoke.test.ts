@@ -28,4 +28,10 @@ describe.skipIf(!existsSync(CLI))('CLI smoke (dist)', () => {
     const result = spawnSync('node', [CLI, 'restore', '--help'], { encoding: 'utf-8' });
     expect(result.status).toBe(0);
   });
+
+  it('refuses to start the TUI without a terminal', () => {
+    const result = spawnSync(process.execPath, [CLI], { encoding: 'utf-8', stdio: 'pipe' });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('the interactive TUI needs a terminal');
+  });
 });
