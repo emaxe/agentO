@@ -18,6 +18,8 @@ export interface ForwardSignalsOptions {
   platform?: NodeJS.Platform;
   /** Windows only: called for the first Ctrl+C, which is deliberately not acted on. */
   onFirstInterrupt?: () => void;
+  /** Clock used for the double-interrupt window; defaults to `Date.now`. */
+  now?: () => number;
 }
 
 export interface SignalForwarding {
@@ -57,6 +59,7 @@ export function forwardSignals(
   const platform = options.platform ?? process.platform;
   const isWin = platform === 'win32';
   const onFirstInterrupt = options.onFirstInterrupt ?? announceFirstInterrupt;
+  const now = options.now ?? Date.now;
 
   let signalled = false;
   let disposed = false;
@@ -80,12 +83,12 @@ export function forwardSignals(
         return;
       }
       if (signalled) return;
-      const now = Date.now();
-      if (lastInterruptAt !== undefined && now - lastInterruptAt <= WIN32_DOUBLE_INTERRUPT_MS) {
+      const at = now();
+      if (lastInterruptAt !== undefined && at - lastInterruptAt <= WIN32_DOUBLE_INTERRUPT_MS) {
         forceKill();
         return;
       }
-      lastInterruptAt = now;
+      lastInterruptAt = at;
       onFirstInterrupt();
       return;
     }

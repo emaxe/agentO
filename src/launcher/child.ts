@@ -14,6 +14,8 @@ export interface ChildLaunchOptions {
   cwd?: string;
   /** Signal-handling flavour; defaults to `process.platform`. Exists for tests. */
   platform?: NodeJS.Platform;
+  /** Clock for the Windows double-interrupt window; defaults to `Date.now`. Exists for tests. */
+  now?: () => number;
 }
 
 export interface ChildPrepareResult {
@@ -53,7 +55,10 @@ export async function launchChild(options: ChildLaunchOptions): Promise<number> 
     });
 
     // Forwarding only touches the process; the agent's `exit` event drives cleanup.
-    const forwarding = forwardSignals(child, { platform: options.platform });
+    const forwarding = forwardSignals(child, {
+      ...(options.platform !== undefined ? { platform: options.platform } : {}),
+      ...(options.now !== undefined ? { now: options.now } : {}),
+    });
     let settled = false;
 
     /**

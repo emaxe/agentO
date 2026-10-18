@@ -353,6 +353,7 @@ describe('prepareChild', () => {
       providers: [testProvider],
       scope: 'global',
       command: 'claude',
+      platform: 'linux',
     });
     await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
 
@@ -379,6 +380,7 @@ describe('prepareChild', () => {
       providers: [testProvider],
       scope: 'global',
       command: 'claude',
+      platform: 'linux',
     });
     await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
 
@@ -401,6 +403,7 @@ describe('prepareChild', () => {
       providers: [testProvider],
       scope: 'global',
       command: 'claude',
+      platform: 'linux',
     });
     await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
 
@@ -488,7 +491,7 @@ describe('launchChild signal handling', () => {
     vi.useRealTimers();
   });
 
-  async function start(platform: NodeJS.Platform) {
+  async function start(platform: NodeJS.Platform, now?: () => number) {
     const child = makeFakeChildProcess();
     mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawnCommand>);
     const launch = launchChild({
@@ -498,6 +501,7 @@ describe('launchChild signal handling', () => {
       scope: 'global',
       command: 'claude',
       platform,
+      ...(now !== undefined ? { now } : {}),
     });
     await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
     return { child, launch };
@@ -521,11 +525,11 @@ describe('launchChild signal handling', () => {
     });
 
     it('force-kills the process tree on a second SIGINT within 3 s', async () => {
-      vi.useFakeTimers();
-      const { child } = await start('win32');
+      let clock = 1_000;
+      const { child } = await start('win32', () => clock);
 
       raise('SIGINT');
-      await vi.advanceTimersByTimeAsync(2_999);
+      clock += 2_999;
       raise('SIGINT');
 
       expect(mockKillTree).toHaveBeenCalledExactlyOnceWith(child, 'force', 'win32');
@@ -538,11 +542,11 @@ describe('launchChild signal handling', () => {
     });
 
     it('treats a second SIGINT after the 3 s window as a new first one', async () => {
-      vi.useFakeTimers();
-      const { child } = await start('win32');
+      let clock = 1_000;
+      const { child } = await start('win32', () => clock);
 
       raise('SIGINT');
-      await vi.advanceTimersByTimeAsync(3_001);
+      clock += 3_001;
       raise('SIGINT');
 
       expect(mockKillTree).not.toHaveBeenCalled();
