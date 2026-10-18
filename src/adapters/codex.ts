@@ -54,9 +54,14 @@ async function removeIfExists(path: string): Promise<void> {
   }
 }
 
-/** Возвращает путь к профиль-файлу Codex CLI: ~/.codex/<name>.config.toml */
+/** Каталог конфигов Codex CLI: `$CODEX_HOME`, иначе `~/.codex`. */
+function codexHome(): string {
+  return process.env.CODEX_HOME || join(homedir(), '.codex');
+}
+
+/** Возвращает путь к профиль-файлу Codex CLI: <codexHome>/<name>.config.toml */
 function profileConfigPath(name: string): string {
-  return join(process.env.HOME ?? homedir(), '.codex', `${name}.config.toml`);
+  return join(codexHome(), `${name}.config.toml`);
 }
 
 async function readTomlFile(path: string): Promise<CodexConfig | null> {
@@ -83,7 +88,7 @@ export class CodexAdapter implements AgentAdapter<CodexConfig> {
 
   configPaths(cwd?: string): AgentConfigPaths {
     return {
-      global: join(process.env.HOME ?? homedir(), '.codex', 'config.toml'),
+      global: join(codexHome(), 'config.toml'),
       project: join(cwd ?? process.cwd(), '.codex', 'config.toml'),
     };
   }

@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { homedir } from 'node:os';
+import path from 'node:path';
 import { GooseAdapter } from './goose.js';
 import type { Profile, Provider } from '../config/schema.js';
 import { p } from '../test-utils/paths.js';
@@ -79,9 +81,44 @@ describe('GooseAdapter', () => {
   });
 
   describe('configPaths', () => {
-    it('returns global config.yaml path', () => {
-      const paths = adapter.configPaths();
-      expect(paths.global).toMatch(/\.config[/\\]goose[/\\]config\.yaml$/);
+    it('returns global config.yaml path on POSIX, unchanged', () => {
+      const posixAdapter = new GooseAdapter({ platform: 'linux' });
+      expect(posixAdapter.configPaths().global).toBe(
+        p(homedir(), '.config', 'goose', 'config.yaml'),
+      );
+      expect(new GooseAdapter({ platform: 'darwin' }).configPaths().global).toBe(
+        p(homedir(), '.config', 'goose', 'config.yaml'),
+      );
+    });
+
+    describe('on Windows', () => {
+      const winAdapter = new GooseAdapter({ platform: 'win32' });
+
+      afterEach(() => {
+        vi.unstubAllEnvs();
+      });
+
+      it('uses %APPDATA%\\Block\\goose\\config\\config.yaml', () => {
+        vi.stubEnv('APPDATA', 'C:\\Users\\me\\AppData\\Roaming');
+        expect(winAdapter.configPaths().global).toBe(
+          'C:\\Users\\me\\AppData\\Roaming\\Block\\goose\\config\\config.yaml',
+        );
+      });
+
+      it('falls back to <home>\\AppData\\Roaming when APPDATA is unset', () => {
+        vi.stubEnv('APPDATA', undefined);
+        expect(winAdapter.configPaths().global).toBe(
+          path.win32.join(
+            homedir(),
+            'AppData',
+            'Roaming',
+            'Block',
+            'goose',
+            'config',
+            'config.yaml',
+          ),
+        );
+      });
     });
 
     it('returns project config.yaml path', () => {

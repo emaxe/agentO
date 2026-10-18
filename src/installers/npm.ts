@@ -1,6 +1,12 @@
 import type { AgentInstaller, InstallCheckResult, EnvCheckResult, InstallResult } from './base.js';
 import type { AgentId } from '../config/schema.js';
-import { spawnCommand, spawnCommandSync } from '../platform/spawn.js';
+import {
+  commandAvailable,
+  defaultVersionRegex,
+  probeVersion,
+  runCommand,
+  type InstallerOptions,
+} from './shared.js';
 
 export interface NpmInstallerConfig {
   readonly agentId: AgentId;
@@ -10,13 +16,33 @@ export interface NpmInstallerConfig {
   readonly versionRegex?: RegExp;
 }
 
-const defaultVersionRegex = /(\d+\.\d+\.\d+[^\s]*)/;
+export interface RunNpmOptions {
+  platform?: NodeJS.Platform;
+}
 
 function cleanPackageName(packageName: string): string {
   return packageName.replace(/@[^@/]+$/, '');
 }
 
-export function createNpmInstaller(config: NpmInstallerConfig): AgentInstaller {
+/** What to try when npm cannot write to its global prefix. */
+export function permissionHint(platform: NodeJS.Platform): string {
+  return platform === 'win32'
+    ? 'Permission denied. Point npm at a user-writable prefix: npm config set prefix %APPDATA%\\npm'
+    : 'Permission denied. Re-run with sudo, or point npm at a user-writable prefix: npm config set prefix ~/.npm-global';
+}
+
+/** Runs `npm <args>`; a successful run invalidates the cached PATH. */
+export function runNpm(args: string[], opts: RunNpmOptions = {}): Promise<InstallResult> {
+  return runCommand('npm', args, {
+    permissionHint: permissionHint(opts.platform ?? process.platform),
+  });
+}
+
+export function createNpmInstaller(
+  config: NpmInstallerConfig,
+  options: InstallerOptions = {},
+): AgentInstaller {
+  const platform = options.platform ?? process.platform;
   const versionRegex = config.versionRegex ?? defaultVersionRegex;
 
   return {
@@ -28,106 +54,18 @@ export function createNpmInstaller(config: NpmInstallerConfig): AgentInstaller {
     },
 
     async checkInstalled(): Promise<InstallCheckResult> {
-      const result = spawnCommandSync(config.command, ['--version'], { encoding: 'utf8' });
-      if (result.status !== 0) {
-        return { installed: false };
-      }
-      const output = (result.stdout ?? '') + (result.stderr ?? '');
-      const match = output.match(versionRegex);
-      const version = match?.[1];
-      return { installed: true, ...(version !== undefined ? { version } : {}) };
+      return probeVersion(config.command, versionRegex);
     },
 
     async checkEnvironment(): Promise<EnvCheckResult> {
-      const result = spawnCommandSync('npm', ['--version'], { encoding: 'utf8' });
-      if (result.status !== 0) {
+      if (!(await commandAvailable('npm'))) {
         return { ok: false, missing: ['npm'] };
       }
       return { ok: true, missing: [] };
     },
 
-    async install(): Promise<InstallResult> {
-      return new Promise<InstallResult>((resolve) => {
-        const stderrChunks: Buffer[] = [];
-
-        const child = spawnCommand('npm', ['install', '-g', config.packageName], {
-          stdio: ['ignore', 'inherit', 'pipe'],
-          shell: false,
-        });
-
-        child.stderr?.on('data', (chunk: Buffer) => {
-          stderrChunks.push(chunk);
-        });
-
-        child.on('exit', (code) => {
-          if (code === 0) {
-            resolve({ success: true });
-          } else {
-            const error = Buffer.concat(stderrChunks).toString('utf8').trim();
-            resolve({ success: false, error: error || `npm exited with code ${code}` });
-          }
-        });
-
-        child.on('error', (err) => {
-          resolve({ success: false, error: err.message });
-        });
-      });
-    },
-
-    async update(): Promise<InstallResult> {
-      return new Promise<InstallResult>((resolve) => {
-        const stderrChunks: Buffer[] = [];
-
-        const child = spawnCommand('npm', ['update', '-g', cleanPackageName(config.packageName)], {
-          stdio: ['ignore', 'inherit', 'pipe'],
-          shell: false,
-        });
-
-        child.stderr?.on('data', (chunk: Buffer) => {
-          stderrChunks.push(chunk);
-        });
-
-        child.on('exit', (code) => {
-          if (code === 0) {
-            resolve({ success: true });
-          } else {
-            const error = Buffer.concat(stderrChunks).toString('utf8').trim();
-            resolve({ success: false, error: error || `npm exited with code ${code}` });
-          }
-        });
-
-        child.on('error', (err) => {
-          resolve({ success: false, error: err.message });
-        });
-      });
-    },
-
-    async uninstall(): Promise<InstallResult> {
-      return new Promise<InstallResult>((resolve) => {
-        const stderrChunks: Buffer[] = [];
-
-        const child = spawnCommand('npm', ['uninstall', '-g', config.packageName], {
-          stdio: ['ignore', 'inherit', 'pipe'],
-          shell: false,
-        });
-
-        child.stderr?.on('data', (chunk: Buffer) => {
-          stderrChunks.push(chunk);
-        });
-
-        child.on('exit', (code) => {
-          if (code === 0) {
-            resolve({ success: true });
-          } else {
-            const error = Buffer.concat(stderrChunks).toString('utf8').trim();
-            resolve({ success: false, error: error || `npm exited with code ${code}` });
-          }
-        });
-
-        child.on('error', (err) => {
-          resolve({ success: false, error: err.message });
-        });
-      });
-    },
+    install: () => runNpm(['install', '-g', config.packageName], { platform }),
+    update: () => runNpm(['update', '-g', cleanPackageName(config.packageName)], { platform }),
+    uninstall: () => runNpm(['uninstall', '-g', config.packageName], { platform }),
   };
 }

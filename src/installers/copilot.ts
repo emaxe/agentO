@@ -1,79 +1,93 @@
 import type { AgentInstaller, InstallCheckResult, EnvCheckResult, InstallResult } from './base.js';
 import type { AgentId } from '../config/schema.js';
-import { spawnCommand, spawnCommandSync } from '../platform/spawn.js';
+import { permissionHint } from './npm.js';
+import { commandAvailable, probeVersion, runCommand, type InstallerOptions } from './shared.js';
 
-/** Installer for the GitHub Copilot CLI agent (brew cask). */
-class CopilotInstaller implements AgentInstaller {
-  readonly agentId: AgentId = 'copilot';
+const WINGET_ID = 'GitHub.Copilot';
+const NPM_PACKAGE = '@github/copilot';
+const WINGET_FLAGS = ['--accept-source-agreements', '--accept-package-agreements'];
 
-  readonly manualInstructions = {
-    commands: ['brew install --cask copilot-cli'],
-    docsUrl: 'https://docs.github.com/copilot/how-tos/copilot-cli',
+type Channel = 'brew' | 'winget' | 'npm';
+
+/**
+ * Installer for the GitHub Copilot CLI agent.
+ *
+ * - darwin: brew cask.
+ * - win32: winget (`GitHub.Copilot`), then the npm package when winget is missing.
+ * - other: the npm package.
+ *
+ * The channel is chosen from what is available at call time, so install, update and
+ * uninstall all use the same one as long as the system does not change in between.
+ */
+export function createCopilotInstaller(options: InstallerOptions = {}): AgentInstaller {
+  const platform = options.platform ?? process.platform;
+
+  const manualCommands: Record<'darwin' | 'win32' | 'other', string[]> = {
+    darwin: ['brew install --cask copilot-cli'],
+    win32: [`winget install --id ${WINGET_ID} -e`, `npm install -g ${NPM_PACKAGE}`],
+    other: [`npm install -g ${NPM_PACKAGE}`],
   };
 
-  /** Checks whether `copilot --version` succeeds and parses the version string. */
-  async checkInstalled(): Promise<InstallCheckResult> {
-    const result = spawnCommandSync('copilot', ['--version'], { encoding: 'utf8' });
-    if (result.status !== 0) {
-      return { installed: false };
+  async function pickChannel(): Promise<Channel | null> {
+    if (platform === 'darwin') return (await commandAvailable('brew')) ? 'brew' : null;
+    if (platform === 'win32' && (await commandAvailable('winget'))) return 'winget';
+    return (await commandAvailable('npm')) ? 'npm' : null;
+  }
+
+  async function run(action: 'install' | 'update' | 'uninstall'): Promise<InstallResult> {
+    const channel = await pickChannel();
+    switch (channel) {
+      case 'brew': {
+        const verb = action === 'update' ? 'upgrade' : action;
+        return runCommand('brew', [verb, '--cask', 'copilot-cli']);
+      }
+      case 'winget': {
+        const verb = action === 'update' ? 'upgrade' : action;
+        const flags = action === 'uninstall' ? [] : WINGET_FLAGS;
+        return runCommand('winget', [verb, '--id', WINGET_ID, '-e', ...flags]);
+      }
+      case 'npm': {
+        const args =
+          action === 'install'
+            ? ['install', '-g', NPM_PACKAGE]
+            : action === 'update'
+              ? ['update', '-g', NPM_PACKAGE]
+              : ['uninstall', '-g', NPM_PACKAGE];
+        return runCommand('npm', args, { permissionHint: permissionHint(platform) });
+      }
+      default:
+        return { success: false, error: 'No supported package manager found' };
     }
-    const output = (result.stdout ?? '') + (result.stderr ?? '');
-    const match = output.match(/GitHub Copilot CLI (\d+\.\d+\.\d+[^\s]*)/);
-    const version = match?.[1];
-    return { installed: true, ...(version !== undefined ? { version } : {}) };
   }
 
-  /** Verifies that `brew` is available on the system. */
-  async checkEnvironment(): Promise<EnvCheckResult> {
-    const result = spawnCommandSync('brew', ['--version'], { encoding: 'utf8' });
-    if (result.status !== 0) {
-      return { ok: false, missing: ['brew'] };
-    }
-    return { ok: true, missing: [] };
-  }
+  const key = platform === 'darwin' ? 'darwin' : platform === 'win32' ? 'win32' : 'other';
 
-  /** Runs `brew install --cask copilot-cli` and reports the result. */
-  async install(): Promise<InstallResult> {
-    return this._runBrew(['install', '--cask', 'copilot-cli']);
-  }
+  return {
+    agentId: 'copilot' as AgentId,
 
-  /** Runs `brew upgrade --cask copilot-cli` and reports the result. */
-  async update(): Promise<InstallResult> {
-    return this._runBrew(['upgrade', '--cask', 'copilot-cli']);
-  }
+    manualInstructions: {
+      commands: manualCommands[key],
+      docsUrl: 'https://docs.github.com/copilot/how-tos/copilot-cli',
+      windows: { commands: manualCommands.win32 },
+    },
 
-  /** Runs `brew uninstall --cask copilot-cli` and reports the result. */
-  async uninstall(): Promise<InstallResult> {
-    return this._runBrew(['uninstall', '--cask', 'copilot-cli']);
-  }
+    /** Checks whether `copilot --version` succeeds and parses the version string. */
+    async checkInstalled(): Promise<InstallCheckResult> {
+      return probeVersion('copilot', /GitHub Copilot CLI (\d+\.\d+\.\d+[^\s]*)/);
+    },
 
-  private _runBrew(args: string[]): Promise<InstallResult> {
-    return new Promise<InstallResult>((resolve) => {
-      const stderrChunks: Buffer[] = [];
+    /** Verifies that a package manager for this platform is available. */
+    async checkEnvironment(): Promise<EnvCheckResult> {
+      if ((await pickChannel()) !== null) return { ok: true, missing: [] };
+      if (platform === 'darwin') return { ok: false, missing: ['brew'] };
+      if (platform === 'win32') return { ok: false, missing: ['winget', 'npm'] };
+      return { ok: false, missing: ['npm'] };
+    },
 
-      const child = spawnCommand('brew', args, {
-        stdio: ['ignore', 'inherit', 'pipe'],
-        shell: false,
-      });
-
-      child.stderr?.on('data', (chunk: Buffer) => {
-        stderrChunks.push(chunk);
-      });
-
-      child.on('exit', (code) => {
-        if (code === 0) {
-          resolve({ success: true });
-        } else {
-          const error = Buffer.concat(stderrChunks).toString('utf8').trim();
-          resolve({ success: false, error: error || `brew exited with code ${code}` });
-        }
-      });
-
-      child.on('error', (err) => {
-        resolve({ success: false, error: err.message });
-      });
-    });
-  }
+    install: () => run('install'),
+    update: () => run('update'),
+    uninstall: () => run('uninstall'),
+  };
 }
 
-export const copilotInstaller = new CopilotInstaller();
+export const copilotInstaller = createCopilotInstaller();

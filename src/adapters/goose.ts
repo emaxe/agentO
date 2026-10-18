@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import path, { join } from 'node:path';
 import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
@@ -46,9 +46,29 @@ export class GooseAdapter implements AgentAdapter<GooseConfig> {
     'custom-api',
   ] as const;
 
+  private readonly _platform: NodeJS.Platform;
+
+  /** `platform` defaults to `process.platform`; injectable so the Windows path is testable. */
+  constructor(options: { platform?: NodeJS.Platform } = {}) {
+    this._platform = options.platform ?? process.platform;
+  }
+
+  /**
+   * On Windows Goose resolves its config through `etcetera` (org "Block"), i.e.
+   * `%APPDATA%\Block\goose\config\config.yaml`; elsewhere `~/.config/goose`.
+   * https://goose-docs.ai/docs/guides/config-files
+   */
+  private _globalConfigPath(): string {
+    if (this._platform === 'win32') {
+      const appData = process.env.APPDATA || path.win32.join(homedir(), 'AppData', 'Roaming');
+      return path.win32.join(appData, 'Block', 'goose', 'config', 'config.yaml');
+    }
+    return join(homedir(), '.config', 'goose', 'config.yaml');
+  }
+
   configPaths(cwd?: string): AgentConfigPaths {
     return {
-      global: join(homedir(), '.config', 'goose', 'config.yaml'),
+      global: this._globalConfigPath(),
       project: join(cwd ?? process.cwd(), '.goose', 'config.yaml'),
     };
   }

@@ -192,3 +192,92 @@ describe('ShellPathResolver shell selection', () => {
     expect(mockExecFile.mock.calls[0]?.[0]).toBe('/bin/zsh');
   });
 });
+
+describe('ShellPathResolver Windows fallback directories', () => {
+  const touched = ['Path', 'PATH', 'APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'ProgramFiles'];
+  const saved = new Map(touched.map((key) => [key, process.env[key]]));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const key of touched) delete process.env[key];
+    process.env.Path = 'C:\\Windows\\system32';
+    process.env.APPDATA = 'C:\\Users\\me\\AppData\\Roaming';
+    process.env.LOCALAPPDATA = 'C:\\Users\\me\\AppData\\Local';
+    process.env.USERPROFILE = 'C:\\Users\\me';
+    process.env.ProgramFiles = 'C:\\Program Files';
+  });
+
+  afterEach(() => {
+    for (const [key, value] of saved) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  const allDirs = [
+    'C:\\Users\\me\\AppData\\Roaming\\npm',
+    'C:\\Users\\me\\AppData\\Local\\pnpm',
+    'C:\\Users\\me\\AppData\\Local\\Microsoft\\WinGet\\Links',
+    'C:\\Users\\me\\.local\\bin',
+    'C:\\Users\\me\\.cargo\\bin',
+    'C:\\Users\\me\\scoop\\shims',
+    'C:\\Program Files\\nodejs',
+  ];
+
+  it('appends every well-known directory that exists', async () => {
+    const resolver = new ShellPathResolver({ platform: 'win32', existsSync: () => true });
+
+    expect((await resolver.resolve()).split(';')).toEqual(['C:\\Windows\\system32', ...allDirs]);
+  });
+
+  it('skips directories that do not exist', async () => {
+    const existing = new Set([allDirs[0], allDirs[6]]);
+    const resolver = new ShellPathResolver({
+      platform: 'win32',
+      existsSync: (dir) => existing.has(dir),
+    });
+
+    expect((await resolver.resolve()).split(';')).toEqual([
+      'C:\\Windows\\system32',
+      allDirs[0],
+      allDirs[6],
+    ]);
+  });
+
+  it('does not duplicate entries already on PATH, ignoring case and trailing separators', async () => {
+    process.env.Path =
+      'C:\\Windows\\system32;c:\\users\\ME\\appdata\\roaming\\NPM\\;C:\\Program Files\\nodejs';
+    const resolver = new ShellPathResolver({ platform: 'win32', existsSync: () => true });
+
+    const parts = (await resolver.resolve()).split(';');
+
+    expect(parts.slice(0, 3)).toEqual([
+      'C:\\Windows\\system32',
+      'c:\\users\\ME\\appdata\\roaming\\NPM\\',
+      'C:\\Program Files\\nodejs',
+    ]);
+    expect(parts).toHaveLength(allDirs.length + 1);
+  });
+
+  it('skips fallbacks whose root variable is unset', async () => {
+    delete process.env.LOCALAPPDATA;
+    const resolver = new ShellPathResolver({ platform: 'win32', existsSync: () => true });
+
+    const result = await resolver.resolve();
+
+    expect(result).not.toContain('pnpm');
+    expect(result).not.toContain('WinGet');
+    expect(result).toContain('C:\\Users\\me\\scoop\\shims');
+  });
+
+  it('never consults the filesystem or adds Windows directories on POSIX', async () => {
+    const exists = vi.fn(() => true);
+    mockExecFileSuccess('/usr/local/bin:/usr/bin');
+    const resolver = new ShellPathResolver({ platform: 'darwin', existsSync: exists });
+
+    const result = await resolver.resolve();
+
+    expect(exists).not.toHaveBeenCalled();
+    expect(result).not.toContain('\\');
+  });
+});

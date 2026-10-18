@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
+import path from 'node:path';
 
 /**
  * Directories a login shell would normally contribute but a non-interactive
@@ -14,6 +16,20 @@ const FALLBACK_PATHS = [
   '/sbin',
   `${homedir()}/.cargo/bin`,
   `${homedir()}/.local/bin`,
+];
+
+/**
+ * Directories where Windows tooling commonly installs agent CLIs. Rooted at environment
+ * variables (not hardcoded drive letters) and only added when they exist on disk.
+ */
+const WIN32_FALLBACK_PATHS: ReadonlyArray<readonly [envVar: string, ...segments: string[]]> = [
+  ['APPDATA', 'npm'],
+  ['LOCALAPPDATA', 'pnpm'],
+  ['LOCALAPPDATA', 'Microsoft', 'WinGet', 'Links'],
+  ['USERPROFILE', '.local', 'bin'],
+  ['USERPROFILE', '.cargo', 'bin'],
+  ['USERPROFILE', 'scoop', 'shims'],
+  ['ProgramFiles', 'nodejs'],
 ];
 
 const POSIX_SYSTEM_PATH = '/usr/bin:/bin:/usr/sbin:/sbin';
@@ -43,6 +59,8 @@ function execShell(shell: string, args: string[], timeout: number): Promise<stri
 export interface ShellPathResolverOptions {
   /** Defaults to `process.platform`; injectable so the Windows branch is testable. */
   platform?: NodeJS.Platform;
+  /** Injectable directory-existence check (defaults to `fs.existsSync`); used for win32 fallbacks. */
+  existsSync?: (dir: string) => boolean;
 }
 
 /**
@@ -56,9 +74,11 @@ export class ShellPathResolver {
   private _resolvedPath: string | null = null;
   private _promise: Promise<string> | null = null;
   private readonly _platform: NodeJS.Platform;
+  private readonly _exists: (dir: string) => boolean;
 
   constructor(options: ShellPathResolverOptions = {}) {
     this._platform = options.platform ?? process.platform;
+    this._exists = options.existsSync ?? existsSync;
   }
 
   async resolve(): Promise<string> {
@@ -108,7 +128,7 @@ export class ShellPathResolver {
     // Windows has no login-shell equivalent worth probing, and running one would
     // only produce a POSIX-shaped PATH that means nothing to CreateProcess.
     if (this._isWindows) {
-      return this._dedupe(this._systemPath.split(';'));
+      return this._dedupe([...this._systemPath.split(';'), ...this._windowsFallbackDirs()]);
     }
 
     const delimiter = `${DELIMITER}_${Date.now()}_${Math.random().toString(36).slice(2)}_`;
@@ -141,8 +161,39 @@ export class ShellPathResolver {
     return this._buildFallbackPath();
   }
 
+  /** Existing well-known install directories, resolved from the environment (win32 only). */
+  private _windowsFallbackDirs(): string[] {
+    const dirs: string[] = [];
+    for (const [envVar, ...segments] of WIN32_FALLBACK_PATHS) {
+      const root = envVar ? this._winEnv(envVar) : undefined;
+      if (!root) continue;
+      const dir = path.win32.join(root, ...segments);
+      if (this._exists(dir)) dirs.push(dir);
+    }
+    return dirs;
+  }
+
+  /** Windows environment names are case-insensitive. */
+  private _winEnv(name: string): string | undefined {
+    const key = Object.keys(process.env).find((k) => k.toLowerCase() === name.toLowerCase());
+    return key === undefined ? undefined : process.env[key];
+  }
+
   private _dedupe(parts: string[]): string {
-    return [...new Set(parts)].filter(Boolean).join(this._delimiter);
+    if (!this._isWindows) {
+      return [...new Set(parts)].filter(Boolean).join(this._delimiter);
+    }
+    // Windows paths compare case-insensitively and a trailing separator is not significant.
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    for (const part of parts) {
+      if (!part) continue;
+      const key = part.replace(/[\\/]+$/, '').toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(part);
+    }
+    return unique.join(this._delimiter);
   }
 
   private _mergeWithSystemPath(resolved: string): string {

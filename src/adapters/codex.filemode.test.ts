@@ -1,10 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { CodexAdapter } from './codex.js';
 
 const adapter = new CodexAdapter();
+
+beforeEach(() => {
+  vi.stubEnv('CODEX_HOME', undefined);
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('CodexAdapter file mode', () => {
   it('writeConfig sets 0o600 file mode on POSIX for config.toml', async () => {

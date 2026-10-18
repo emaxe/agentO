@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, readFile, mkdir, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import { CodexAdapter } from './codex.js';
@@ -8,6 +8,14 @@ import type { Profile, Provider } from '../config/schema.js';
 import { p } from '../test-utils/paths.js';
 
 const adapter = new CodexAdapter();
+
+// A developer's own CODEX_HOME must not leak into (or be written by) these tests.
+beforeEach(() => {
+  vi.stubEnv('CODEX_HOME', undefined);
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const testProvider: Provider = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -44,6 +52,26 @@ describe('CodexAdapter', () => {
     it('returns correct global path', () => {
       const paths = adapter.configPaths();
       expect(paths.global).toMatch(/\.codex[/\\]config\.toml$/);
+    });
+
+    it('is rooted at the home directory when CODEX_HOME is unset', () => {
+      expect(adapter.configPaths().global).toBe(p(homedir(), '.codex', 'config.toml'));
+    });
+
+    it('follows HOME on POSIX, as before', () => {
+      if (process.platform === 'win32') return;
+      vi.stubEnv('HOME', '/custom/home');
+      expect(adapter.configPaths().global).toBe(p('/custom/home', '.codex', 'config.toml'));
+    });
+
+    it('prefers CODEX_HOME over the home directory', () => {
+      vi.stubEnv('CODEX_HOME', p('/opt/codex-home'));
+      expect(adapter.configPaths().global).toBe(p('/opt/codex-home', 'config.toml'));
+    });
+
+    it('treats an empty CODEX_HOME as unset', () => {
+      vi.stubEnv('CODEX_HOME', '');
+      expect(adapter.configPaths().global).toBe(p(homedir(), '.codex', 'config.toml'));
     });
 
     it('returns correct project path', () => {
