@@ -8,6 +8,9 @@ docs/*
 !docs/backlog/**
 !docs/superpowers/
 !docs/superpowers/**
+!docs/windows-support/
+!docs/windows-support/**
+docs/windows-support/runs/
 .worktrees/
 .claude/
 .qwen/
