@@ -215,7 +215,7 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 ### Main Menu
 
 ```
-┌────────── AgentO v0.9.0 ──────────┐
+┌───────── AgentO v0.10.0 ──────────┐
 │                                   │
 │   ▶  Launch Agent                 │
 │   2  Providers                    │

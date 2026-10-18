@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-18
+
 ### Added
 
 - **Поддержка Windows 10 1809+/11** (план `docs/windows-support/plan.md`, итоги `docs/windows-support/report.md`):
