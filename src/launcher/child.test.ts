@@ -430,6 +430,7 @@ describe('prepareChild', () => {
         providers: [testProvider],
         scope: 'global',
         command: 'claude',
+        platform: 'linux',
       });
       await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
 
@@ -532,7 +533,11 @@ describe('launchChild signal handling', () => {
       clock += 2_999;
       raise('SIGINT');
 
-      expect(mockKillTree).toHaveBeenCalledExactlyOnceWith(child, 'force', 'win32');
+      expect(mockKillTree).toHaveBeenCalledTimes(1);
+      const [killedChild, mode, platform] = mockKillTree.mock.calls[0] ?? [];
+      expect(killedChild).toBe(child);
+      expect(mode).toBe('force');
+      expect(platform).toBe('win32');
       // Config is restored only after the agent has actually exited.
       expect(mockReadBackup).not.toHaveBeenCalled();
 
@@ -564,7 +569,11 @@ describe('launchChild signal handling', () => {
         raise(signal);
         raise(signal);
 
-        expect(mockKillTree).toHaveBeenCalledExactlyOnceWith(child, 'force', 'win32');
+        expect(mockKillTree).toHaveBeenCalledTimes(1);
+      const [killedChild, mode, platform] = mockKillTree.mock.calls[0] ?? [];
+      expect(killedChild).toBe(child);
+      expect(mode).toBe('force');
+      expect(platform).toBe('win32');
 
         child.emit('exit', 1);
         child.emit('exit', 1);
