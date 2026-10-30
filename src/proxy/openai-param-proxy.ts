@@ -22,6 +22,62 @@ export interface ProxyServer {
   stop: () => Promise<void>;
 }
 
+/** One launchable model entry considered for routing through the param proxy. */
+export interface ProxyCandidate {
+  model: string;
+  baseUrl: string;
+}
+
+/**
+ * Decide whether a model's traffic should route through the param proxy.
+ *
+ * A `(model, baseUrl)` pair qualifies when the model rejects `max_tokens`
+ * (see `requiresMaxCompletionTokens`) or — for models the name heuristic
+ * does not know — when it is served by OpenAI's own host (`api.openai.com`,
+ * case-insensitive), where new families appear first and the proxy's
+ * 400-retry safety net applies. Known legacy OpenAI families (gpt-N with
+ * N < 5) still accept `max_tokens` and stay direct. Unparsable URLs cannot
+ * be routed through the proxy and return false.
+ * Pure function: no network, no server start, no filesystem access.
+ */
+export function shouldProxyModel(model: string, baseUrl: string): boolean {
+  let host: string;
+  try {
+    host = new URL(baseUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (requiresMaxCompletionTokens(model)) return true;
+  if (host !== 'api.openai.com') return false;
+  // Same name normalization as requiresMaxCompletionTokens: a known legacy
+  // family (gpt-N, N < 5) accepts `max_tokens` and stays direct; anything
+  // the heuristic does not recognize goes through the proxy.
+  const name = model
+    .slice(model.lastIndexOf('/') + 1)
+    .trim()
+    .toLowerCase();
+  const gpt = /^gpt-(\d+)/.exec(name);
+  return gpt === null || Number(gpt[1]) >= 5;
+}
+
+/**
+ * Extract the distinct upstream base URLs that require the param proxy.
+ *
+ * Candidates are filtered with `shouldProxyModel` and deduplicated by the
+ * exact `baseUrl` string, preserving first-seen order. Pure function.
+ */
+export function collectProxyUpstreams(candidates: ProxyCandidate[]): string[] {
+  const seen = new Set<string>();
+  const upstreams: string[] = [];
+  for (const candidate of candidates) {
+    if (!shouldProxyModel(candidate.model, candidate.baseUrl)) continue;
+    if (seen.has(candidate.baseUrl)) continue;
+    seen.add(candidate.baseUrl);
+    upstreams.push(candidate.baseUrl);
+  }
+  return upstreams;
+}
+
 /** Read the full body of an incoming message into a Buffer. */
 async function readBody(req: http.IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];

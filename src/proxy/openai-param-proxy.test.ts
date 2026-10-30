@@ -1,6 +1,11 @@
 import http from 'node:http';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { startOpenAIParamProxy, type ProxyServer } from './openai-param-proxy.js';
+import {
+  startOpenAIParamProxy,
+  shouldProxyModel,
+  collectProxyUpstreams,
+  type ProxyServer,
+} from './openai-param-proxy.js';
 
 const MAX_TOKENS_UNSUPPORTED_MESSAGE =
   "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.";
@@ -226,5 +231,32 @@ describe('startOpenAIParamProxy', () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: { message: MAX_TOKENS_UNSUPPORTED_MESSAGE } });
     expect(calls).toBe(2);
+  });
+});
+
+describe('proxy routing helpers', () => {
+  it('proxies models that require max_completion_tokens', () => {
+    expect(shouldProxyModel('gpt-6.1-terra', 'https://example.com/v1')).toBe(true);
+    expect(shouldProxyModel('o3-mini', 'https://example.com/v1')).toBe(true);
+  });
+
+  it('proxies any model served by api.openai.com, including unknown families', () => {
+    expect(shouldProxyModel('gpt-7-future', 'https://api.openai.com/v1')).toBe(true);
+  });
+
+  it('leaves other providers and legacy models direct', () => {
+    expect(shouldProxyModel('gpt-4.1', 'https://api.openai.com/v1')).toBe(false);
+    expect(shouldProxyModel('qwen3.8-max', 'https://dashscope.example.com/v1')).toBe(false);
+    expect(shouldProxyModel('deepseek-v4-pro', 'https://ollama.com/v1')).toBe(false);
+    expect(shouldProxyModel('gpt-6', 'not a url')).toBe(false);
+  });
+
+  it('deduplicates upstreams and keeps only qualifying ones', () => {
+    const upstreams = collectProxyUpstreams([
+      { model: 'gpt-6.1-terra', baseUrl: 'https://api.openai.com/v1' },
+      { model: 'gpt-6-luna', baseUrl: 'https://api.openai.com/v1' },
+      { model: 'qwen3.8-max', baseUrl: 'https://dashscope.example.com/v1' },
+    ]);
+    expect(upstreams).toEqual(['https://api.openai.com/v1']);
   });
 });
