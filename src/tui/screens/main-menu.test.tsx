@@ -17,14 +17,14 @@ describe('MainMenu', () => {
     const frame = lastFrame() ?? '';
     expect(frame).toContain('↑↓');
     expect(frame).toContain('Enter');
-    expect(frame).toContain('1-5');
+    expect(frame).toContain('1-6');
   });
 
   it('selects items with number keys', async () => {
     const onSelect = vi.fn();
     const { stdin } = render(<MainMenu onSelect={onSelect} onExit={() => {}} />);
     await settle();
-    stdin.write('2');
+    stdin.write('4');
     await settle();
     expect(onSelect).toHaveBeenCalledWith('providers');
   });
@@ -33,7 +33,7 @@ describe('MainMenu', () => {
     const onSelect = vi.fn();
     const { stdin } = render(<MainMenu onSelect={onSelect} onExit={() => {}} />);
     await settle();
-    stdin.write('4');
+    stdin.write('5');
     await settle();
     onSelect.mockClear();
     stdin.write('\r');
@@ -47,8 +47,8 @@ describe('MainMenu', () => {
     );
     const frame = lastFrame() ?? '';
     expect(frame).toContain('Providers: 0 · Profiles: 0');
-    expect(frame).toContain('No profiles yet');
-    expect(frame).toContain('Start with Providers (2)');
+    expect(frame).toContain('Set up AgentO');
+    expect(frame).toContain('one guided flow');
   });
 
   it('shows the last launch when one is recorded', () => {
@@ -69,5 +69,29 @@ describe('MainMenu', () => {
       />,
     );
     expect(lastFrame()).toContain('Last: work → Claude Code (child, global)');
+  });
+  it('repeats the last launch with r', async () => {
+    const onSelect = vi.fn();
+    const { stdin } = render(
+      <MainMenu
+        onSelect={onSelect}
+        onExit={() => {}}
+        state={{
+          providers: 1,
+          profiles: 1,
+          lastLaunch: {
+            profileName: 'work',
+            agentLabel: 'Goose',
+            model: 'm1',
+            mode: 'child',
+            scope: 'project',
+          },
+        }}
+      />,
+    );
+    await settle();
+    stdin.write('r');
+    await settle();
+    expect(onSelect).toHaveBeenCalledWith('repeat');
   });
 });

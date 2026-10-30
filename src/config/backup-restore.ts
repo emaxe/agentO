@@ -3,6 +3,7 @@ import { unlinkWithRetry } from './atomic-write.js';
 import type { LaunchScope } from './schema.js';
 import type { BackupManifest, BackupManifestFile } from './store.js';
 import { deleteBackup, readBackup } from './store.js';
+import { withConfigOperation } from './config-operation.js';
 
 function missingFile(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
@@ -94,9 +95,11 @@ export async function restoreBackupForAgent(
   scope: LaunchScope,
   cwd?: string,
 ): Promise<boolean> {
-  const manifest = await readBackup(adapter.id, scope, cwd);
-  if (!manifest) return false;
-  await restoreBackupManifest(adapter, manifest, scope, cwd);
-  await deleteBackup(adapter.id, scope, cwd);
-  return true;
+  return withConfigOperation(async () => {
+    const manifest = await readBackup(adapter.id, scope, cwd);
+    if (!manifest) return false;
+    await restoreBackupManifest(adapter, manifest, scope, cwd);
+    await deleteBackup(adapter.id, scope, cwd);
+    return true;
+  });
 }

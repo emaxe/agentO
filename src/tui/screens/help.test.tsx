@@ -13,13 +13,13 @@ describe('HelpOverlay', () => {
     expect(frame).toContain('child: AgentO patches the config');
     expect(frame).toContain('independent: the patched config stays');
     expect(frame).toContain('global: the agent config');
-    expect(frame).toContain('project: the agent config');
+    expect(frame).toContain('project: adapter-selected files');
   });
 
   it('lists provider actions', () => {
     const { lastFrame } = render(<HelpOverlay topic="providers" />);
     const frame = lastFrame() ?? '';
-    expect(frame).toContain('test the API');
+    expect(frame).toContain('load the model list');
     expect(frame).toContain('duplicate');
     expect(frame).toContain('cannot be deleted');
   });
@@ -39,7 +39,7 @@ describe('MainMenu help', () => {
     stdin.write('\u001B');
     await settle();
     const frame = lastFrame() ?? '';
-    expect(frame).toContain('Launch Agent');
+    expect(frame).toContain('New launch');
     expect(frame).not.toContain('AgentO — main menu');
   });
 });

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text } from 'ink';
+import { useStableSelection } from '../use-stable-selection.js';
 import { useKeyInput } from '../use-key-input.js';
 import { useHelp } from '../use-help.js';
 import { HelpOverlay } from '../components/HelpOverlay.js';
@@ -58,165 +59,170 @@ export function Profiles({ onBack, onNavigateToProviders }: ProfilesProps): Reac
       })
     : profiles;
 
-  useEffect(() => {
-    setSelectedIndex((i) => Math.min(i, Math.max(0, filteredProfiles.length - 1)));
-  }, [query, profiles.length, filteredProfiles.length]);
+  useStableSelection(
+    filteredProfiles.map((item) => item.id),
+    selectedIndex,
+    setSelectedIndex,
+  );
 
-  useKeyInput((input, key) => {
-    if ((mode === 'list' || mode === 'detail') && !searchOpen && help.handleKey(input, key)) {
-      return;
-    }
+  useKeyInput(
+    (input, key) => {
+      if ((mode === 'list' || mode === 'detail') && !searchOpen && help.handleKey(input, key)) {
+        return;
+      }
 
-    if (mode === 'list' && searchOpen) {
-      if (key.escape) {
-        setSearchOpen(false);
-        setQuery('');
-        return;
-      }
-      if (key.return) {
-        setSearchOpen(false);
-        return;
-      }
-      if (key.backspace || key.delete) {
-        setQuery((q) => q.slice(0, -1));
-        return;
-      }
-      if (key.upArrow) {
-        setSelectedIndex((i) => Math.max(0, i - 1));
-        return;
-      }
-      if (key.downArrow) {
-        setSelectedIndex((i) => Math.min(Math.max(0, filteredProfiles.length - 1), i + 1));
-        return;
-      }
-      if (
-        input.length > 0 &&
-        !key.ctrl &&
-        !key.meta &&
-        [...input].every((char) => char >= ' ' && char <= '~')
-      ) {
-        setQuery((q) => q + input);
-        setSelectedIndex(0);
-        return;
-      }
-      return;
-    }
-
-    if (mode === 'list') {
-      if (key.escape || input === 'q') {
-        if (query) {
+      if (mode === 'list' && searchOpen) {
+        if (key.escape) {
+          setSearchOpen(false);
           setQuery('');
-          setSelectedIndex(0);
           return;
         }
-        onBack();
+        if (key.return) {
+          setSearchOpen(false);
+          return;
+        }
+        if (key.backspace || key.delete) {
+          setQuery((q) => [...q].slice(0, -1).join(''));
+          return;
+        }
+        if (key.upArrow) {
+          setSelectedIndex((i) => Math.max(0, i - 1));
+          return;
+        }
+        if (key.downArrow) {
+          setSelectedIndex((i) => Math.min(Math.max(0, filteredProfiles.length - 1), i + 1));
+          return;
+        }
+        if (
+          input.length > 0 &&
+          !key.ctrl &&
+          !key.meta &&
+          [...input].every(
+            (char) => (char.codePointAt(0) ?? 0) >= 32 && char.codePointAt(0) !== 127,
+          )
+        ) {
+          setQuery((q) => q + input);
+          return;
+        }
         return;
       }
-      if (input === '/') {
-        setSearchOpen(true);
-        return;
-      }
-      if (key.upArrow) setSelectedIndex((i) => Math.max(0, i - 1));
-      else if (key.downArrow) {
-        setSelectedIndex((i) => Math.min(Math.max(0, filteredProfiles.length - 1), i + 1));
-      } else if (key.return && filteredProfiles[selectedIndex]) {
-        setDetailProfile(filteredProfiles[selectedIndex]!);
-        setDetailModelIndex(0);
-        setMode('detail');
-      } else if (input === 'a') {
-        if (providers.length === 0) {
+
+      if (mode === 'list') {
+        if (key.escape || input === 'q') {
+          if (query) {
+            setQuery('');
+            return;
+          }
+          onBack();
+          return;
+        }
+        if (input === '/') {
+          setSearchOpen(true);
+          return;
+        }
+        if (key.upArrow) setSelectedIndex((i) => Math.max(0, i - 1));
+        else if (key.downArrow) {
+          setSelectedIndex((i) => Math.min(Math.max(0, filteredProfiles.length - 1), i + 1));
+        } else if (key.return && filteredProfiles[selectedIndex]) {
+          setDetailProfile(filteredProfiles[selectedIndex]!);
+          setDetailModelIndex(0);
+          setMode('detail');
+        } else if (input === 'a') {
+          if (providers.length === 0) {
+            if (onNavigateToProviders) {
+              onNavigateToProviders();
+              return;
+            }
+            setStatus('Add at least one provider first');
+            return;
+          }
+          setStatus('');
+          setMode('add');
+        } else if (input === 'p' && providers.length === 0) {
           if (onNavigateToProviders) {
             onNavigateToProviders();
             return;
           }
           setStatus('Add at least one provider first');
           return;
+        } else if (input === 'd' && filteredProfiles[selectedIndex]) {
+          setDeleteTarget(filteredProfiles[selectedIndex]!);
+          setMode('confirm-delete');
         }
-        setStatus('');
-        setMode('add');
-      } else if (input === 'p' && providers.length === 0) {
-        if (onNavigateToProviders) {
-          onNavigateToProviders();
-          return;
-        }
-        setStatus('Add at least one provider first');
         return;
-      } else if (input === 'd' && filteredProfiles[selectedIndex]) {
-        setDeleteTarget(filteredProfiles[selectedIndex]!);
-        setMode('confirm-delete');
       }
-      return;
-    }
 
-    if (mode === 'confirm-delete') {
-      const lowerInput = input.toLowerCase();
-      if ((key.return || lowerInput === 'y') && deleteTarget) {
-        removeProfile(deleteTarget.id)
-          .then(() => {
-            setStatus('Deleted');
-            setDeleteTarget(null);
-            setQuery('');
-            setSearchOpen(false);
-            reload();
-            setMode('list');
-          })
-          .catch((err) => setStatus(`Error: ${String(err)}`));
-      } else if (key.escape || lowerInput === 'n' || input === 'q') {
-        setDeleteTarget(null);
-        setMode('list');
+      if (mode === 'confirm-delete') {
+        const lowerInput = input.toLowerCase();
+        if ((key.return || lowerInput === 'y') && deleteTarget) {
+          removeProfile(deleteTarget.id)
+            .then(() => {
+              setStatus('Deleted');
+              setDeleteTarget(null);
+              setQuery('');
+              setSearchOpen(false);
+              reload();
+              setMode('list');
+            })
+            .catch((err) => setStatus(`Error: ${String(err)}`));
+        } else if (key.escape || lowerInput === 'n' || input === 'q') {
+          setDeleteTarget(null);
+          setMode('list');
+        }
+        return;
       }
-      return;
-    }
 
-    if (mode === 'detail' && detailProfile) {
-      if (key.escape || input === 'q') {
-        setMode('list');
-        return;
-      }
-      if (input === 'd') {
-        if (detailProfile.models.length === 0) {
-          setStatus('No models to delete');
+      if (mode === 'detail' && detailProfile) {
+        if (key.escape || input === 'q') {
+          setMode('list');
           return;
         }
-        if (detailProfile.models.length === 1) {
-          setStatus("Cannot remove the last model; press 'e' and edit the model list");
+        if (input === 'd') {
+          if (detailProfile.models.length === 0) {
+            setStatus('No models to delete');
+            return;
+          }
+          if (detailProfile.models.length === 1) {
+            setStatus("Cannot remove the last model; press 'e' and edit the model list");
+            return;
+          }
+          const newModels = detailProfile.models.filter((_, i) => i !== detailModelIndex);
+          updateProfile(detailProfile.id, { models: newModels })
+            .then((updated) => {
+              setDetailProfile(updated);
+              reload();
+              setDetailModelIndex(Math.max(0, detailModelIndex - 1));
+              setStatus('');
+            })
+            .catch((err) => setStatus(`Error: ${String(err)}`));
           return;
         }
-        const newModels = detailProfile.models.filter((_, i) => i !== detailModelIndex);
-        updateProfile(detailProfile.id, { models: newModels })
-          .then((updated) => {
-            setDetailProfile(updated);
-            reload();
-            setDetailModelIndex(Math.max(0, detailModelIndex - 1));
-            setStatus('');
-          })
-          .catch((err) => setStatus(`Error: ${String(err)}`));
-        return;
-      }
-      if (input === 'a') {
-        if (detailProfile.models.length >= 3) {
-          setStatus('Maximum 3 models (one per tier)');
+        if (input === 'a') {
+          if (detailProfile.models.length >= 3) {
+            setStatus('Maximum 3 models (one per tier)');
+            return;
+          }
+          setStatus('');
+          setEditStartAddingModel(true);
+          setMode('edit');
           return;
         }
-        setStatus('');
-        setEditStartAddingModel(true);
-        setMode('edit');
+        if (input === 'e') {
+          setStatus('');
+          setEditStartAddingModel(false);
+          setMode('edit');
+          return;
+        }
+        if (key.upArrow) {
+          setDetailModelIndex(Math.max(0, detailModelIndex - 1));
+        } else if (key.downArrow) {
+          setDetailModelIndex(Math.min(detailProfile.models.length - 1, detailModelIndex + 1));
+        }
         return;
       }
-      if (input === 'e') {
-        setStatus('');
-        setEditStartAddingModel(false);
-        setMode('edit');
-        return;
-      }
-      if (key.upArrow) {
-        setDetailModelIndex(Math.max(0, detailModelIndex - 1));
-      } else if (key.downArrow) {
-        setDetailModelIndex(Math.min(detailProfile.models.length - 1, detailModelIndex + 1));
-      }
-      return;
-    }
-  });
+    },
+    { textInput: searchOpen },
+  );
 
   if (help.open) {
     return <HelpOverlay topic="profiles" />;
@@ -228,6 +234,7 @@ export function Profiles({ onBack, onNavigateToProviders }: ProfilesProps): Reac
         <Text>
           Delete profile <Text bold>"{deleteTarget?.name}"</Text>? y/Enter: confirm | n/Esc: cancel
         </Text>
+        <Text color="red">{status}</Text>
       </Box>
     );
   }
@@ -238,7 +245,7 @@ export function Profiles({ onBack, onNavigateToProviders }: ProfilesProps): Reac
         providers={providers}
         profiles={profiles}
         onDone={(result) => {
-          addProfile({ name: result.name, models: result.models })
+          return addProfile({ name: result.name, models: result.models })
             .then((p) => {
               setStatus(`Added "${p.name}"`);
               setQuery('');
@@ -246,7 +253,9 @@ export function Profiles({ onBack, onNavigateToProviders }: ProfilesProps): Reac
               reload();
               setMode('list');
             })
-            .catch((err) => setStatus(`Error: ${String(err)}`));
+            .catch((err) => {
+              throw err;
+            });
         }}
         onCancel={() => setMode('list')}
       />
@@ -259,27 +268,23 @@ export function Profiles({ onBack, onNavigateToProviders }: ProfilesProps): Reac
         profile={detailProfile}
         providers={providers}
         profiles={profiles}
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onSave={(result: any) => {
+        onSave={async (result) => {
           if (result._deleteProfile) {
-            removeProfile(detailProfile.id)
-              .then(() => {
-                setStatus(`Profile deleted`);
-                reload();
-                setMode('list');
-              })
-              .catch((err) => setStatus(`Error: ${String(err)}`));
+            await removeProfile(detailProfile.id);
+            setStatus('Profile deleted');
+            reload();
+            setMode('list');
             return;
           }
-          updateProfile(detailProfile.id, { name: result.name, models: result.models })
-            .then((updated) => {
-              setDetailProfile(updated);
-              setQuery('');
-              setSearchOpen(false);
-              reload();
-              setMode('detail');
-            })
-            .catch((err) => setStatus(`Error: ${String(err)}`));
+          const updated = await updateProfile(detailProfile.id, {
+            name: result.name,
+            models: result.models,
+          });
+          setDetailProfile(updated);
+          setQuery('');
+          setSearchOpen(false);
+          reload();
+          setMode('detail');
         }}
         onCancel={() => setMode('detail')}
         startAddingModel={editStartAddingModel}

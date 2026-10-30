@@ -90,6 +90,25 @@ describe('Providers delete confirmation', () => {
     expect(frame).not.toContain('Acme');
   });
 
+  it('shows dependent profiles before deletion and keeps the rejection in the dialog', async () => {
+    const { listProviders } = await import('../../providers/provider-manager.js');
+    const { addProfile } = await import('../../profiles/profile-manager.js');
+    const providers = await listProviders();
+    await addProfile({ name: 'work', models: [{ providerId: providers[0]!.id, model: 'm1' }] });
+    const ui = await openConfirm();
+    expect(ui.lastFrame()).toContain('Used by profile: work');
+    ui.stdin.write('y');
+    const frame = await poll(
+      ui.lastFrame,
+      (f) => f.includes('Error:'),
+      'delete error stays in dialog',
+    );
+    expect(frame).toContain('Delete provider');
+    expect(frame).toContain('work');
+    expect(await providerNames()).toContain('Acme');
+    ui.unmount();
+  });
+
   it('deletes on lowercase y', async () => {
     const { stdin } = await openConfirm();
     stdin.write('y');

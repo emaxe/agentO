@@ -110,7 +110,7 @@ async function enterModelSelection(
     vi.fn(async () => ({
       ok: true,
       status: 200,
-      json: async () => ({ data: ids.map((id) => ({ id })) }),
+      text: async () => JSON.stringify({ data: ids.map((id) => ({ id })) }),
     })),
   );
   await settle();
@@ -167,7 +167,11 @@ describe('ProviderForm model selection', () => {
     const ids = Array.from({ length: 25 }, (_, i) => `model-${String(i).padStart(2, '0')}`);
     await enterModelSelection(utils.stdin, utils.lastFrame, ids);
     utils.stdin.write('\u001B[6~'); // PageDown
-    await poll(utils.lastFrame, (f) => f.includes('[21/25]'), 'cursor jumped 20');
+    await poll(
+      utils.lastFrame,
+      (f) => f.includes('[15/25]'),
+      'cursor jumped by the available height',
+    );
   });
 
   it('space still toggles selection and does not leak into the filter', async () => {
@@ -177,5 +181,141 @@ describe('ProviderForm model selection', () => {
     await poll(utils.lastFrame, (f) => f.includes('Selected: 1'), 'row checked');
     // The filter is still empty, so every row is visible.
     expect(utils.lastFrame()).toContain('beta/two');
+  });
+});
+
+describe('ProviderForm API key keyboard layout', () => {
+  /** Focus the apiKey field: name → type → apiKey. */
+  async function focusApiKey(stdin: { write: (d: string) => void }) {
+    await settle();
+    stdin.write('\t');
+    await settle();
+    stdin.write('\t');
+    await settle();
+  }
+
+  it('maps a Cyrillic letter typed in the key to the Latin key', async () => {
+    const { stdin, lastFrame } = render(
+      <ProviderForm providers={[]} onSubmit={() => {}} onCancel={vi.fn()} />,
+    );
+    await focusApiKey(stdin);
+    stdin.write('or-proxy-ke');
+    await settle();
+    stdin.write('н'); // "y" on the Russian layout
+    await settle();
+    expect(lastFrame()).not.toContain('or-proxy-key');
+    stdin.write('\x12'); // Ctrl+R explicitly reveals the key
+    const frame = await poll(lastFrame, (f) => f.includes('or-proxy-key'), 'key repaired');
+    expect(frame).not.toContain('or-proxy-keн');
+  });
+
+  it('still allows Cyrillic in the provider name', async () => {
+    const { stdin, lastFrame } = render(
+      <ProviderForm providers={[]} onSubmit={() => {}} onCancel={vi.fn()} />,
+    );
+    await settle();
+    stdin.write('Мой прокси');
+    await poll(lastFrame, (f) => f.includes('Мой прокси'), 'Cyrillic name kept');
+  });
+});
+
+const existingProvider = {
+  id: '00000000-0000-0000-0000-000000000001',
+  name: 'Acme',
+  type: 'openai-compatible' as const,
+  apiKey: 'sk-test',
+  models: [{ name: 'original', capabilities: { image: true, video: false, audio: false } }],
+};
+async function tabs(stdin: { write: (value: string) => void }, count: number) {
+  for (let i = 0; i < count; i++) {
+    stdin.write('\t');
+    await settle();
+  }
+}
+
+describe('ProviderForm draft and write recovery', () => {
+  it('Escape cancels only the current model name edit', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const ui = render(
+      <ProviderForm
+        provider={existingProvider}
+        providers={[existingProvider]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await settle();
+    await tabs(ui.stdin, 4);
+    ui.stdin.write('\r');
+    await settle();
+    ui.stdin.write('\r');
+    await settle();
+    ui.stdin.write('-changed');
+    await settle();
+    expect(ui.lastFrame()).toContain('original-changed');
+    ui.stdin.write('\u001B');
+    await settle();
+    expect(ui.lastFrame()).toContain('original');
+    expect(ui.lastFrame()).not.toContain('changed');
+    ui.stdin.write('\u001B');
+    await settle();
+    await tabs(ui.stdin, 2);
+    ui.stdin.write('\r');
+    await settle();
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ models: existingProvider.models }),
+    );
+    ui.unmount();
+  });
+  it('defaults to Keep editing and retains the draft after Enter', async () => {
+    const ui = openForm();
+    await settle();
+    ui.stdin.write('Draft');
+    await settle();
+    ui.stdin.write('\u001B');
+    await poll(ui.lastFrame, (f) => f.includes('▶ Keep editing'), 'keep editing selected');
+    await settle();
+    ui.stdin.write('\r');
+    await settle();
+    expect(ui.lastFrame()).toContain('Draft');
+    expect(ui.onCancel).not.toHaveBeenCalled();
+    ui.unmount();
+  });
+  it('shows a rejected write, blocks duplicate saves, and can retry with the same data', async () => {
+    let rejectWrite: (err: Error) => void = () => {};
+    const onSubmit = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectWrite = reject;
+          }),
+      )
+      .mockResolvedValue(undefined);
+    const ui = render(
+      <ProviderForm
+        provider={existingProvider}
+        providers={[existingProvider]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await settle();
+    await tabs(ui.stdin, 6);
+    ui.stdin.write('\r');
+    await poll(ui.lastFrame, (f) => f.includes('Saving...'), 'save pending');
+    await settle();
+    ui.stdin.write('\r');
+    await settle();
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    rejectWrite(new Error('EACCES: cannot write config'));
+    await poll(ui.lastFrame, (f) => f.includes('Error: EACCES'), 'write error visible');
+    expect(ui.lastFrame()).toContain('original');
+    await settle();
+    ui.stdin.write('\r');
+    await poll(ui.lastFrame, (f) => f.includes('Saved'), 'retry succeeded');
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+    expect(onSubmit.mock.calls[1]).toEqual(onSubmit.mock.calls[0]);
+    ui.unmount();
   });
 });

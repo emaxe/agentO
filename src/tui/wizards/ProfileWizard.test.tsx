@@ -53,26 +53,22 @@ describe('ProfileWizard tier choices', () => {
     await poll(lastFrame, (f) => f.includes('Select model'), 'model step');
     await settle();
     stdin.write('\r'); // select m1
-    await poll(lastFrame, (f) => f.includes('Assign tier'), 'tier step');
-    await settle();
-
-    const firstTier = await poll(
+    await poll(
       lastFrame,
-      (f) => f.includes('skip (single-model profile)'),
-      'skip offered for the first model',
+      (f) => f.includes('[✓ Save profile]'),
+      'single model skips tier selection',
     );
-    expect(firstTier).toContain('small');
-    expect(firstTier).toContain('base');
-    expect(firstTier).toContain('smart');
-
+    expect(lastFrame()).not.toContain('Assign tier');
+    await settle();
+    stdin.write('\u001B[A'); // add another model
+    await settle();
+    stdin.write('\r');
+    await poll(lastFrame, (f) => f.includes('Assign tier'), 'assign existing model tier');
+    await settle();
     // Default cursor is base; move up to small and confirm.
     stdin.write('\u001B[A');
     await settle();
     stdin.write('\r');
-    await poll(lastFrame, (f) => f.includes('[✓ Save profile]'), 'review after first model');
-    await settle();
-
-    stdin.write('\r'); // add another model
     await poll(lastFrame, (f) => f.includes('Select model'), 'model step again');
     await settle();
     stdin.write('\u001B[B'); // m2
@@ -123,18 +119,11 @@ describe('ProfileWizard tier choices', () => {
     await poll(lastFrame, (f) => f.includes('Select model'), 'model step');
     await settle();
     stdin.write('\r'); // m1
-    await poll(lastFrame, (f) => f.includes('Assign tier'), 'tier step');
-    await settle();
-
-    // default cursor is base; move to "skip" and keep a single untiered model
-    stdin.write('\u001B[B');
-    await settle();
-    stdin.write('\u001B[B');
-    await settle();
-    stdin.write('\r');
     await poll(lastFrame, (f) => f.includes('[✓ Save profile]'), 'review with untiered model');
+    expect(lastFrame()).not.toContain('Assign tier');
     await settle();
-
+    stdin.write('\u001B[A');
+    await settle();
     stdin.write('\r'); // add another model
     const assignTier = await poll(
       lastFrame,

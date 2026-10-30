@@ -1,4 +1,4 @@
-import { writeFile, unlink, rename } from 'node:fs/promises';
+import { writeFile, unlink, rename, link } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 
 /**
@@ -80,4 +80,15 @@ export async function writeJsonAtomic(
   mode = 0o600,
 ): Promise<void> {
   await writeFileAtomic(filePath, JSON.stringify(data, null, 2), mode);
+}
+
+/** Publish a complete JSON file only if the destination does not already exist. */
+export async function writeJsonAtomicExclusive(filePath: string, data: unknown): Promise<void> {
+  const tmp = `${filePath}.tmp-${randomUUID()}`;
+  try {
+    await writeFile(tmp, JSON.stringify(data, null, 2), { encoding: 'utf-8', mode: 0o600 });
+    await link(tmp, filePath);
+  } finally {
+    await unlink(tmp).catch(() => undefined);
+  }
 }

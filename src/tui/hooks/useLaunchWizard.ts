@@ -9,6 +9,8 @@ import {
 import { restoreBackupForAgent } from '../../config/backup-restore.js';
 import { listAgents } from '../../agents/registry.js';
 import { canRunProfile, describeIncompatibility } from '../../agents/compatibility.js';
+import { launchFingerprint } from '../launch-confirmation.js';
+import { updateProfile } from '../../profiles/profile-manager.js';
 import { readUiState, writeLastLaunch } from '../../config/ui-state.js';
 import { prepareChild } from '../../launcher/child.js';
 import { launchIndependent } from '../../launcher/independent.js';
@@ -23,14 +25,16 @@ import type {
 } from '../../config/schema.js';
 import type { AgentRegistryEntry } from '../../agents/registry.js';
 import type { ExecRequest } from '../../launcher/independent.js';
-import type { InstallResult } from '../../installers/base.js';
 
-type Step = 'profile' | 'agent' | 'preview' | 'install' | 'action' | 'launching';
+type Step = 'profile' | 'agent' | 'preview' | 'install' | 'edit-profile' | 'recovery' | 'launching';
 
 interface LaunchWizardProps {
+  initialProfileId?: string;
+  repeatLast?: boolean;
+  forceReview?: boolean;
   dev?: boolean;
   onBack: () => void;
-  onNavigate?: (target: 'providers' | 'profiles') => void;
+  onNavigate?: (target: 'providers' | 'profiles' | 'setup') => void;
   onExec?: (req: ExecRequest) => void;
   launchError?: { agentId: string; profileId?: string; error?: string };
   agentStatusCache?: Record<string, AgentInstallStatus>;
@@ -38,6 +42,10 @@ interface LaunchWizardProps {
 
 export interface LaunchWizardState {
   step: Step;
+  query: string;
+  searchOpen: boolean;
+  showReasons: boolean;
+  filteredProfiles: Profile[];
   profiles: Profile[];
   providers: Provider[];
   settings: Settings | null;
@@ -45,13 +53,11 @@ export interface LaunchWizardState {
   selectedAgent: number;
   status: string;
   error: string;
-  installStatuses: Record<string, boolean>;
+  installStatuses: Record<string, AgentInstallStatus>;
   checkProgress: Record<string, 'pending' | 'checking' | 'done'>;
   statusChecking: boolean;
   errorChoice: number;
   installAgentId: AgentId | null;
-  actionAgentId: AgentId | null;
-  actionMode: 'update' | 'uninstall' | null;
   preview: LaunchPreview | null;
 }
 
@@ -85,14 +91,29 @@ export function sortAgentsByInstall(
 
 /**
  * True when a launch failed because an active backup blocks patching the config —
- * the one failure the "Overwrite and launch" recovery actually fixes. Other
+ * the one failure the "Restore previous config and launch" recovery actually fixes. Other
  * launch errors (permissions, unreadable configs) must not offer it.
  */
 export function isBackupConflictError(message: string): boolean {
   return message.includes('Active backup already exists');
 }
 
+/** Preserve the backup owner's scope/directory when a shared-file conflict opens recovery. */
+export function recoveryTargetForError(
+  message: string,
+  fallback: { agentId?: string; scope: LaunchScope; cwd?: string },
+) {
+  const owner = /agento restore -a ([a-z-]+) -s (global|project)/.exec(message);
+  const directory = /" in (.+) before launching again\. Backup:/.exec(message)?.[1];
+  return owner
+    ? { agentId: owner[1], scope: owner[2] as LaunchScope, cwd: directory ?? fallback.cwd }
+    : fallback;
+}
+
 export function useLaunchWizard({
+  initialProfileId,
+  repeatLast,
+  forceReview,
   dev,
   onBack,
   onNavigate,
@@ -100,6 +121,18 @@ export function useLaunchWizard({
   launchError,
   agentStatusCache,
 }: LaunchWizardProps) {
+  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [showReasons, setShowReasons] = useState(false);
+  const [recoveryTarget, setRecoveryTarget] = useState<{
+    agentId?: string;
+    scope: LaunchScope;
+    cwd?: string;
+  }>();
+  const confirmedFingerprint = useRef<string>();
+  const repeatPending = useRef(Boolean(repeatLast));
+  const launchingRef = useRef(false);
+  const requestPending = useRef(false);
   const [step, setStep] = useState<Step>('profile');
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -117,8 +150,6 @@ export function useLaunchWizard({
   installStatusesRef.current = installStatuses;
   const selectedAgentIdRef = useRef<string | null>(null);
   const [installAgentId, setInstallAgentId] = useState<AgentId | null>(null);
-  const [actionAgentId, setActionAgentId] = useState<AgentId | null>(null);
-  const [actionMode, setActionMode] = useState<'update' | 'uninstall' | null>(null);
   const [statusChecking, setStatusChecking] = useState(false);
   const [checkProgress, setCheckProgress] = useState<
     Record<string, 'pending' | 'checking' | 'done'>
@@ -137,7 +168,25 @@ export function useLaunchWizard({
     [],
   );
 
+  const filteredProfiles = useMemo(
+    () =>
+      profiles.filter((profile) =>
+        `${profile.name} ${profile.models.map((model) => `${model.model} ${providers.find((p) => p.id === model.providerId)?.name ?? ''}`).join(' ')}`
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+      ),
+    [profiles, providers, query],
+  );
   const currentProfile = profiles[selectedProfile];
+  useEffect(() => {
+    if (
+      query &&
+      filteredProfiles.length &&
+      !filteredProfiles.some((p) => p.id === currentProfile?.id)
+    ) {
+      setSelectedProfile(profiles.findIndex((p) => p.id === filteredProfiles[0]?.id));
+    }
+  }, [query, filteredProfiles, currentProfile, profiles]);
   const allAgents = useMemo(() => listAgents({ dev }), [dev]);
   // Stable identity: selection effects and the preview depend on the order, not
   // on a fresh array produced by every render.
@@ -165,14 +214,14 @@ export function useLaunchWizard({
   useEffect(() => {
     Promise.all([readConfig(), readUiState()])
       .then(([config, ui]) => {
+        confirmedFingerprint.current = ui.confirmedLaunch?.fingerprint;
         setProfiles(config.profiles);
         setProviders(config.providers);
         setSettings(config.settings);
 
         const last = ui.lastLaunch;
-        const profileIndex = last
-          ? config.profiles.findIndex((profile) => profile.id === last.profileId)
-          : -1;
+        const wantedId = initialProfileId ?? last?.profileId;
+        const profileIndex = config.profiles.findIndex((profile) => profile.id === wantedId);
         const lastProfile = profileIndex >= 0 ? config.profiles[profileIndex] : undefined;
 
         setSelectedProfile(profileIndex >= 0 ? profileIndex : 0);
@@ -190,6 +239,16 @@ export function useLaunchWizard({
           if (compatible.some((agent) => agent.id === last.agentId)) {
             selectedAgentIdRef.current = last.agentId;
           }
+        }
+        if ((repeatLast || initialProfileId) && lastProfile) {
+          if (
+            repeatLast &&
+            !getCompatibleAgents(listAgents({ dev }), lastProfile, config.providers).some(
+              (a) => a.id === last?.agentId,
+            )
+          )
+            repeatPending.current = false;
+          setStep('agent');
         }
       })
       .catch((err) => setError(String(err)));
@@ -286,7 +345,7 @@ export function useLaunchWizard({
   // Keep the cursor on the same agent when install checks reorder the list.
   // The index is only a view into `visibleAgents`; the id is the source of truth.
   useEffect(() => {
-    if (step !== 'agent') return;
+    if (step !== 'agent' && step !== 'preview') return;
     const id = selectedAgentIdRef.current;
     if (!id) {
       selectedAgentIdRef.current = visibleAgents[0]?.id ?? null;
@@ -354,6 +413,7 @@ export function useLaunchWizard({
   }, [installStatuses, agentStatusCache]);
 
   const doLaunch = useCallback(() => {
+    if (launchingRef.current) return;
     const profile = profiles[selectedProfile];
     // Same list the user sees and navigates: sorting by install status must not
     // make Enter launch a different agent than the highlighted one.
@@ -370,6 +430,7 @@ export function useLaunchWizard({
       return;
     }
 
+    launchingRef.current = true;
     setStep('launching');
     setError('');
     setErrorChoice(0);
@@ -378,14 +439,12 @@ export function useLaunchWizard({
     const scope = launchScope;
     const mode = launchMode;
 
-    writeLastLaunch({
-      profileId: profile.id,
-      agentId: agentEntry.id,
-      mode,
-      scope,
-    }).catch(() => {
-      /* the cache is a convenience; a failed write must not block a launch */
-    });
+    const rememberLaunch = async () => {
+      await writeLastLaunch(
+        { profileId: profile.id, agentId: agentEntry.id, mode, scope },
+        confirmedFingerprint.current,
+      ).catch(() => {});
+    };
 
     const launchOptions = {
       adapter: agentEntry.adapter,
@@ -399,16 +458,24 @@ export function useLaunchWizard({
 
     if (mode === 'child') {
       prepareChild(launchOptions)
-        .then(({ execReq, cleanup }) => {
+        .then(async ({ execReq, cleanup }) => {
+          await rememberLaunch();
           onExec?.({ ...execReq, relaunch: true, cleanup });
         })
-        .catch((err) => setError(String(err)));
+        .catch((err) => {
+          launchingRef.current = false;
+          setError(String(err));
+        });
     } else {
       launchIndependent(launchOptions)
-        .then((execReq) => {
+        .then(async (execReq) => {
+          await rememberLaunch();
           onExec?.(execReq);
         })
-        .catch((err) => setError(String(err)));
+        .catch((err) => {
+          launchingRef.current = false;
+          setError(String(err));
+        });
     }
   }, [
     visibleAgents,
@@ -423,6 +490,68 @@ export function useLaunchWizard({
     onExec,
   ]);
 
+  const requestLaunch = useCallback(async () => {
+    if (requestPending.current || !currentProfile || !settings) return;
+    const agent = visibleAgents[selectedAgent];
+    if (!agent) return;
+    repeatPending.current = false;
+    if (installStatuses[agent.id]?.installed === false) {
+      setInstallAgentId(agent.id);
+      setStep('install');
+      return;
+    }
+    requestPending.current = true;
+    setStep('launching');
+    setStatus('Preparing launch review...');
+    try {
+      const options = {
+        adapter: agent.adapter,
+        agentLabel: agent.label,
+        profile: currentProfile,
+        providers,
+        mode: launchMode,
+        scope: launchScope,
+        cwd: process.cwd(),
+      };
+      const result = await describeLaunch(options);
+      const fingerprint = launchFingerprint(options, result, settings.mergeAgentConfigs);
+      if (!forceReview && fingerprint === confirmedFingerprint.current && !result.backup.active)
+        doLaunch();
+      else {
+        setPreview(result);
+        setError('');
+        setStep('preview');
+      }
+    } catch (err) {
+      setError(String(err));
+      setStep('launching');
+    } finally {
+      requestPending.current = false;
+    }
+  }, [
+    currentProfile,
+    settings,
+    visibleAgents,
+    selectedAgent,
+    providers,
+    launchMode,
+    launchScope,
+    installStatuses,
+    doLaunch,
+    forceReview,
+  ]);
+
+  useEffect(() => {
+    if (
+      repeatPending.current &&
+      step === 'agent' &&
+      !statusChecking &&
+      checkProgress[visibleAgents[selectedAgent]?.id ?? ''] === 'done' &&
+      visibleAgents[selectedAgent]?.id === selectedAgentIdRef.current
+    )
+      void requestLaunch();
+  }, [step, statusChecking, checkProgress, visibleAgents, selectedAgent, requestLaunch]);
+
   const overwriteAndLaunch = useCallback(() => {
     const agentEntry = visibleAgents[selectedAgent];
     if (!agentEntry || !settings) {
@@ -431,19 +560,42 @@ export function useLaunchWizard({
     }
     const scope = launchScope;
     const restoreCwd = process.cwd();
+    launchingRef.current = true;
     setStatus('Restoring backup...');
     setError('');
     restoreBackupForAgent(agentEntry.adapter, scope, restoreCwd)
       .then(() => {
+        launchingRef.current = false;
         doLaunch();
       })
-      .catch((err) => setError(String(err)));
+      .catch((err) => {
+        launchingRef.current = false;
+        setError(String(err));
+      });
   }, [visibleAgents, selectedAgent, settings, launchScope, doLaunch]);
 
   const handleKey = useCallback(
     (input: string, key: Key) => {
-      if (step === 'launching' && error) {
-        const canOverwrite = isBackupConflictError(error);
+      if (error) {
+        if (input === 'r') {
+          setError('');
+          setStep('agent');
+          void requestLaunch();
+          return;
+        }
+        if (input === 'a') {
+          setRecoveryTarget(
+            recoveryTargetForError(error, {
+              agentId: visibleAgents[selectedAgent]?.id,
+              scope: launchScope,
+              cwd: process.cwd(),
+            }),
+          );
+          setError('');
+          setStep('recovery');
+          return;
+        }
+        const canOverwrite = isBackupConflictError(error) && !error.includes('shared config file');
         if (key.escape || input === 'q' || input === 'b') {
           setError('');
           setStep('agent');
@@ -479,7 +631,27 @@ export function useLaunchWizard({
           setStep('agent');
           return;
         }
-        if (key.return) {
+        if (
+          key.return &&
+          preview &&
+          preview.mode === launchMode &&
+          preview.scope === launchScope &&
+          settings
+        ) {
+          const agent = visibleAgents[selectedAgent];
+          if (!agent || !currentProfile) return;
+          confirmedFingerprint.current = launchFingerprint(
+            {
+              adapter: agent.adapter,
+              profile: currentProfile,
+              providers,
+              mode: launchMode,
+              scope: launchScope,
+              cwd: process.cwd(),
+            },
+            preview,
+            settings.mergeAgentConfigs,
+          );
           doLaunch();
           return;
         }
@@ -495,13 +667,58 @@ export function useLaunchWizard({
       }
 
       if (step === 'install') return;
-      if (step === 'action') return;
+      if (step === 'edit-profile' || step === 'recovery') return;
       if (step === 'agent' && statusChecking) return;
+
+      if (step === 'agent' && showReasons && (key.escape || input === 'i')) {
+        setShowReasons(false);
+        return;
+      }
+      if (step === 'agent' && showReasons && input !== 'e') return;
+      if (step === 'agent' && input === 'e') {
+        setStep('edit-profile');
+        return;
+      }
+      if (step === 'agent' && input === 'i') {
+        setShowReasons((v) => !v);
+        return;
+      }
 
       if (step === 'agent' && input === 'v') {
         setPreview(null);
         setError('');
         setStep('preview');
+        return;
+      }
+
+      if (step === 'profile' && searchOpen) {
+        if (key.escape) {
+          setSearchOpen(false);
+          setQuery('');
+          return;
+        }
+        if (key.return) {
+          setSearchOpen(false);
+          return;
+        }
+        if (key.backspace || key.delete) {
+          setQuery((value) => [...value].slice(0, -1).join(''));
+          return;
+        }
+        if (
+          input &&
+          !key.ctrl &&
+          !key.meta &&
+          [...input].every(
+            (char) => (char.codePointAt(0) ?? 0) >= 32 && char.codePointAt(0) !== 127,
+          )
+        ) {
+          setQuery((value) => value + input);
+          return;
+        }
+      }
+      if (step === 'profile' && input === '/') {
+        setSearchOpen(true);
         return;
       }
 
@@ -515,13 +732,17 @@ export function useLaunchWizard({
           return;
         }
         if (key.return) {
-          onNavigate?.(providers.length === 0 ? 'providers' : 'profiles');
+          onNavigate?.('setup');
           return;
         }
       }
 
       if (key.escape || input === 'q') {
         if (step === 'profile') {
+          onBack();
+          return;
+        }
+        if (step === 'agent' && initialProfileId) {
           onBack();
           return;
         }
@@ -542,12 +763,19 @@ export function useLaunchWizard({
         }
       }
 
-      const items = step === 'profile' ? profiles : visibleAgents;
-      const selected = step === 'profile' ? selectedProfile : selectedAgent;
+      const items = step === 'profile' ? filteredProfiles : visibleAgents;
+      const selected =
+        step === 'profile'
+          ? Math.max(
+              0,
+              filteredProfiles.findIndex((p) => p.id === currentProfile?.id),
+            )
+          : selectedAgent;
 
       const moveSelection = (next: number): void => {
         if (step === 'profile') {
-          setSelectedProfile(next);
+          const profile = filteredProfiles[next];
+          if (profile) setSelectedProfile(profiles.findIndex((p) => p.id === profile.id));
           return;
         }
         setSelectedAgent(next);
@@ -558,28 +786,14 @@ export function useLaunchWizard({
         moveSelection(Math.max(0, selected - 1));
       } else if (key.downArrow) {
         moveSelection(Math.min(items.length - 1, selected + 1));
-      } else if (input === 'u' || input === 'd') {
-        if (step !== 'agent') return;
-        const agentEntry = visibleAgents[selectedAgent];
-        if (
-          agentEntry &&
-          agentEntry.installer &&
-          installStatuses[agentEntry.id]?.installed !== false &&
-          (input === 'u' ? agentEntry.installer.update : agentEntry.installer.uninstall)
-        ) {
-          setActionAgentId(agentEntry.id);
-          setActionMode(input === 'u' ? 'update' : 'uninstall');
-          setStep('action');
-        }
-        return;
       } else if (key.return) {
-        if (step === 'profile' && profiles.length === 0) {
+        if (step === 'profile' && filteredProfiles.length === 0) {
           setError('No profiles configured. Add one first.');
           return;
         }
 
         if (step === 'agent') {
-          doLaunch();
+          void requestLaunch();
         } else {
           // Entering the agent step: keep the last-launched agent selected when
           // it is still offered, otherwise start at the first row.
@@ -608,6 +822,17 @@ export function useLaunchWizard({
       selectedAgent,
       doLaunch,
       overwriteAndLaunch,
+      initialProfileId,
+      showReasons,
+      requestLaunch,
+      preview,
+      currentProfile,
+      settings,
+      launchMode,
+      launchScope,
+      query,
+      searchOpen,
+      filteredProfiles,
       installStatuses,
       toggleMode,
       toggleScope,
@@ -626,31 +851,13 @@ export function useLaunchWizard({
     setStep('agent');
   }, []);
 
-  const completeAction = useCallback(
-    (agentId: AgentId, mode: 'update' | 'uninstall', result: InstallResult) => {
-      if (result.success) {
-        setInstallStatuses((prev) => {
-          const next = { ...prev };
-          next[agentId] = { installed: mode === 'update' };
-          return next;
-        });
-      }
-      setActionAgentId(null);
-      setActionMode(null);
-      setStep('agent');
-    },
-    [],
-  );
-
-  const cancelAction = useCallback(() => {
-    setActionAgentId(null);
-    setActionMode(null);
-    setStep('agent');
-  }, []);
-
   return {
     state: {
       step,
+      query,
+      searchOpen,
+      showReasons,
+      filteredProfiles,
       profiles,
       providers,
       settings,
@@ -663,26 +870,44 @@ export function useLaunchWizard({
       statusChecking,
       errorChoice,
       installAgentId,
-      actionAgentId,
-      actionMode,
       preview,
       launchMode,
       launchScope,
     },
     actions: {
       handleKey,
+      setAgentStatus: (id: string, status: AgentInstallStatus) =>
+        setInstallStatuses((current) => ({ ...current, [id]: status })),
+      returnToAgent: () => {
+        setError('');
+        setStep('agent');
+      },
+      saveProfile: async (data: {
+        name: string;
+        models: Profile['models'];
+        _deleteProfile?: boolean;
+      }) => {
+        if (!currentProfile) return;
+        if (data._deleteProfile) throw new Error('Return to Profiles to delete this profile.');
+        const updated = await updateProfile(currentProfile.id, data);
+        setProfiles((items) => items.map((p) => (p.id === updated.id ? updated : p)));
+        setStep('agent');
+      },
       setSelectedProfile,
       setSelectedAgent,
       completeInstall,
       cancelInstall,
-      completeAction,
-      cancelAction,
     },
     computed: {
+      recoveryTarget,
       currentProfile,
       visibleAgents,
       hiddenAgents,
-      canOverwrite: step === 'launching' && error !== '' && isBackupConflictError(error),
+      canOverwrite:
+        step === 'launching' &&
+        error !== '' &&
+        isBackupConflictError(error) &&
+        !error.includes('shared config file'),
     },
   };
 }

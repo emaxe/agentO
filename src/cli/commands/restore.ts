@@ -11,6 +11,7 @@
 import { Command } from 'commander';
 import { readBackup, backupExists, deleteBackup, getBackupPath } from '../../config/store.js';
 import { restoreBackupManifest } from '../../config/backup-restore.js';
+import { withConfigOperation } from '../../config/config-operation.js';
 import { getAgent, listAgents } from '../../agents/registry.js';
 import { LaunchScopeSchema, type LaunchScope } from '../../config/schema.js';
 
@@ -62,6 +63,10 @@ function resolveAgentRef(ref: string): string | undefined {
 }
 
 async function restoreOne(agentId: string, scope: LaunchScope, cwd: string): Promise<void> {
+  return withConfigOperation(() => restoreOneUnlocked(agentId, scope, cwd));
+}
+
+async function restoreOneUnlocked(agentId: string, scope: LaunchScope, cwd: string): Promise<void> {
   const agent = getAgent(agentId, { dev: true });
   if (!agent) {
     throw new Error(`Unknown agent: ${agentId}. Supported: ${SUPPORTED_AGENT_IDS}`);

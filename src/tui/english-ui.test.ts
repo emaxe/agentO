@@ -1,5 +1,5 @@
 /**
- * The TUI speaks English (see the note in use-key-input.ts: hotkey hints are
+ * The TUI speaks English (see the note in keyboard-layout.ts: hotkey hints are
  * English because the ЙЦУКЕН mapping is transparent). Screens that grew in
  * Russian (ProviderForm, AgentInstall, AgentAction) made the UI half one
  * language, half the other — and the ru-to-en hotkey mapping can't be
@@ -15,7 +15,7 @@ const TUI_DIR = fileURLToPath(new URL('.', import.meta.url));
 const CYRILLIC = /[\u0400-\u04FF]/;
 
 /** The layout map itself is keyed by Russian letters — that is data, not UI. */
-const ALLOWED = ['use-key-input.ts'];
+const ALLOWED = ['keyboard-layout.ts'];
 
 /** Works with both POSIX and Windows path separators (CI runs on windows too). */
 export function isExcluded(file: string): boolean {
@@ -69,7 +69,7 @@ describe('TUI language', () => {
 });
 
 describe('isExcluded', () => {
-  it.each(['src/tui/use-key-input.ts', 'C:\\repo\\src\\tui\\use-key-input.ts'])(
+  it.each(['src/tui/keyboard-layout.ts', 'C:\\repo\\src\\tui\\keyboard-layout.ts'])(
     'excludes the layout map under any path separator: %s',
     (file) => {
       expect(isExcluded(file)).toBe(true);

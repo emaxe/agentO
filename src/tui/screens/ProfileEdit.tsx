@@ -1,8 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { sanitizeFieldValue } from '../sanitize-field-value.js';
 import { useKeyInput } from '../use-key-input.js';
+import { DiscardChanges } from '../components/DiscardChanges.js';
+import { useViewport } from '../use-terminal-size.js';
 import { SelectList } from '../components/SelectList.js';
 import type { Profile, Provider, ProfileModel } from '../../config/schema.js';
 import { capabilityMarker } from '../../config/schema.js';
@@ -15,7 +17,11 @@ interface ProfileEditProps {
   profile: Profile;
   providers: Provider[];
   profiles: Profile[];
-  onSave: (result: { name: string; models: ProfileModel[] }) => void;
+  onSave: (result: {
+    name: string;
+    models: ProfileModel[];
+    _deleteProfile?: boolean;
+  }) => Promise<void>;
   onCancel: () => void;
   startAddingModel?: boolean;
 }
@@ -69,11 +75,16 @@ export function ProfileEdit({
     initialUntieredIndex >= 0 ? initialUntieredIndex : null,
   );
   const [status, setStatus] = useState('');
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const viewport = useViewport(15);
   const [confirmEmptyModels, setConfirmEmptyModels] = useState(false);
   const canAddModel = editModels.length < 3;
   const firstUntieredModel = editModels.findIndex((model) => !model.tier);
 
-  const doSave = useCallback(() => {
+  const doSave = useCallback(async () => {
+    if (savingRef.current) return;
     const trimmedName = editName.trim();
     const modelsToSave: ProfileModel[] =
       editModels.length === 1
@@ -88,20 +99,39 @@ export function ProfileEdit({
 
     try {
       validateProfile({ name: trimmedName, models: modelsToSave }, profiles, providers, profile.id);
-      onSave({ name: trimmedName, models: modelsToSave });
+      savingRef.current = true;
+      setSaving(true);
+      setStatus('Saving...');
+      await onSave({ name: trimmedName, models: modelsToSave });
+      setStatus('Saved');
     } catch (err) {
-      setStatus(String(err));
+      setStatus(`Error: ${String(err)}`);
+      if (/name/i.test(String(err))) setEditFocus('name');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   }, [editName, editModels, profiles, providers, profile, onSave]);
 
   useKeyInput((input, key) => {
+    if (savingRef.current || confirmDiscard) return;
     if (confirmEmptyModels) {
       const lower = input.toLowerCase();
       if (key.return || lower === 'y') {
         setConfirmEmptyModels(false);
-        // Signal to parent that profile should be deleted
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onSave({ name: editName.trim(), models: [], _deleteProfile: true } as any);
+        savingRef.current = true;
+        setSaving(true);
+        setStatus('Deleting...');
+        Promise.resolve()
+          .then(() => onSave({ name: editName.trim(), models: [], _deleteProfile: true }))
+          .catch((err) => {
+            setStatus(`Error: ${String(err)}`);
+            setConfirmEmptyModels(true);
+          })
+          .finally(() => {
+            savingRef.current = false;
+            setSaving(false);
+          });
         return;
       }
       if (lower === 'n' || key.escape) {
@@ -255,27 +285,33 @@ export function ProfileEdit({
     }
 
     if (key.escape) {
-      onCancel();
+      if (
+        editName !== profile.name ||
+        JSON.stringify(editModels) !== JSON.stringify(profile.models)
+      )
+        setConfirmDiscard(true);
+      else onCancel();
       return;
     }
     if (key.tab) {
       const focusOrder: ('name' | 'models' | 'save')[] = ['name', 'models', 'save'];
       const currentIdx = focusOrder.indexOf(editFocus);
-      const nextFocus = focusOrder[(currentIdx + 1) % focusOrder.length]!;
+      const nextFocus =
+        focusOrder[(currentIdx + (key.shift ? -1 : 1) + focusOrder.length) % focusOrder.length]!;
       setEditFocus(nextFocus);
       setStatus('');
       return;
     }
-    if (input === 's') {
+    if (input === 's' && editFocus !== 'name') {
       if (editFocus === 'save') {
-        doSave();
+        void doSave();
         return;
       }
       setEditFocus('save');
       return;
     }
     if (key.return && editFocus === 'save') {
-      doSave();
+      void doSave();
       return;
     }
 
@@ -370,6 +406,8 @@ export function ProfileEdit({
     }
   });
 
+  if (confirmDiscard)
+    return <DiscardChanges onKeep={() => setConfirmDiscard(false)} onDiscard={onCancel} />;
   if (confirmEmptyModels) {
     return (
       <Box flexDirection="column" padding={1}>
@@ -445,13 +483,19 @@ export function ProfileEdit({
                   </Text>
                 </Box>
                 <Box flexDirection="column" marginTop={1}>
-                  {provider.models.map((m, i) => (
-                    <Text key={m.name} color={i === modelCursor ? 'green' : undefined}>
-                      {i === modelCursor ? '▶ ' : '  '}
-                      <Text color="gray">{capabilityMarker(m.capabilities)} </Text>
-                      {m.name}
-                    </Text>
-                  ))}
+                  {provider.models
+                    .map((m, i) => ({ m, i }))
+                    .slice(
+                      Math.max(0, modelCursor - viewport + 1),
+                      Math.max(viewport, modelCursor + 1),
+                    )
+                    .map(({ m, i }) => (
+                      <Text key={m.name} color={i === modelCursor ? 'green' : undefined}>
+                        {i === modelCursor ? '▶ ' : '  '}
+                        <Text color="gray">{capabilityMarker(m.capabilities)} </Text>
+                        {m.name}
+                      </Text>
+                    ))}
                   <Box>
                     <Text color={modelCursor === customIdx ? 'green' : 'cyan'}>
                       {modelCursor === customIdx ? '▶ ' : '  '}[custom]:{' '}
@@ -527,7 +571,7 @@ export function ProfileEdit({
         <TextInput
           value={editName}
           onChange={(v) => setEditName(sanitizeFieldValue(v))}
-          focus={editFocus === 'name'}
+          focus={editFocus === 'name' && !saving}
           showCursor={editFocus === 'name'}
         />
       </Box>
@@ -540,7 +584,6 @@ export function ProfileEdit({
           :
         </Text>
         {(() => {
-          const viewport = 12;
           const anchor = Math.min(editModelCursor, Math.max(0, editModels.length - 1));
           const start = Math.max(
             0,

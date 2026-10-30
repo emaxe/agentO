@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
 import { useHelp } from '../use-help.js';
@@ -36,7 +36,7 @@ const SETTINGS: SettingDef[] = [
       global:
         "Patches the agent's global config (e.g. ~/.claude/settings.json) — applies to every project.",
       project:
-        "Patches the agent's config in the current directory (e.g. ./.claude/settings.json) — this project only.",
+        "Patches the agent's config in the current directory (e.g. ./.claude/settings.json) — may also update global settings. Review lists the actual files.",
     },
   },
   {
@@ -67,6 +67,7 @@ export function Settings({ onBack }: SettingsProps): React.JSX.Element {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [values, setValues] = useState<SettingValues>(DEFAULT_VALUES);
   const [status, setStatus] = useState('');
+  const saving = useRef(false);
   const help = useHelp();
 
   const load = useCallback(() => {
@@ -78,7 +79,7 @@ export function Settings({ onBack }: SettingsProps): React.JSX.Element {
           mergeAgentConfigs: String(config.settings.mergeAgentConfigs),
         });
       })
-      .catch(console.error);
+      .catch((err) => setStatus(`Error: ${String(err)}`));
   }, []);
 
   useEffect(() => {
@@ -86,6 +87,7 @@ export function Settings({ onBack }: SettingsProps): React.JSX.Element {
   }, [load]);
 
   useKeyInput((input, key) => {
+    if (saving.current) return;
     if (help.handleKey(input, key)) return;
     if (key.escape || input === 'q') {
       onBack();
@@ -100,7 +102,8 @@ export function Settings({ onBack }: SettingsProps): React.JSX.Element {
       const currentIdx = setting.options.indexOf(current);
       const nextOption = setting.options[(currentIdx + 1) % setting.options.length] as string;
       const newValues = { ...values, [setting.key]: nextOption };
-      setValues(newValues);
+      saving.current = true;
+      setStatus('Saving...');
       readConfig()
         .then((config) =>
           writeConfig({
@@ -115,8 +118,14 @@ export function Settings({ onBack }: SettingsProps): React.JSX.Element {
             },
           }),
         )
-        .then(() => setStatus('Saved'))
-        .catch((err) => setStatus(`Error: ${String(err)}`));
+        .then(() => {
+          setValues(newValues);
+          setStatus('Saved');
+        })
+        .catch((err) => setStatus(`Error: ${String(err)}`))
+        .finally(() => {
+          saving.current = false;
+        });
     }
   });
 

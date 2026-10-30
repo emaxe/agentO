@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
+import { ScreenFrame } from '../components/ScreenFrame.js';
+import { ScrollableLines } from '../components/ScrollableLines.js';
 import { SelectList } from '../components/SelectList.js';
 import type { AgentRegistryEntry } from '../../agents/registry.js';
 import type { AgentInstallStatus } from '../../config/store.js';
@@ -10,6 +12,7 @@ interface AgentSelectProps {
   installStatuses: Record<string, AgentInstallStatus>;
   checkProgress: Record<string, 'pending' | 'checking' | 'done'>;
   statusChecking: boolean;
+  showReasons?: boolean;
   hiddenAgents?: readonly { label: string; reason: string }[];
   onSelect: (index: number) => void;
   onBack: () => void;
@@ -24,6 +27,7 @@ export function AgentSelect({
   checkProgress,
   statusChecking,
   hiddenAgents = [],
+  showReasons = false,
 }: AgentSelectProps): React.JSX.Element {
   const [spinnerFrame, setSpinnerFrame] = useState(0);
 
@@ -32,6 +36,17 @@ export function AgentSelect({
     const id = setInterval(() => setSpinnerFrame((f) => (f + 1) % 10), 80);
     return () => clearInterval(id);
   }, [statusChecking]);
+
+  if (showReasons)
+    return (
+      <ScreenFrame title="Profile compatibility" actions="e: Edit profile | i/Esc: back">
+        <Text dimColor>{hiddenAgents.length} agent hidden for this profile</Text>
+        <ScrollableLines
+          reserved={9}
+          lines={hiddenAgents.map((agent) => `${agent.label}: ${agent.reason}`)}
+        />
+      </ScreenFrame>
+    );
 
   if (statusChecking) {
     return (
@@ -62,7 +77,7 @@ export function AgentSelect({
         items={agents}
         selected={selected}
         title="Select Agent"
-        hint="↑↓ navigate, Enter select, v preview, Esc back, u update, d delete, m mode, s scope, ? help"
+        hint="↑↓ choose | Enter launch | v preview | i reasons | e edit profile | Esc back"
         emptyMessage="No items available"
         renderItem={(item, index, isSelected) => {
           const status = installStatuses[item.id];
@@ -73,7 +88,6 @@ export function AgentSelect({
               {item.label}
               {installed && status?.version ? <Text dimColor> v{status.version}</Text> : null}
               {!installed && <Text dimColor> (not installed)</Text>}
-              {installed && isSelected && <Text dimColor> (u update, d delete)</Text>}
             </Text>
           );
         }}
@@ -82,14 +96,8 @@ export function AgentSelect({
         <Box paddingX={2} marginTop={1} flexDirection="column">
           <Text dimColor>
             {hiddenAgents.length} agent{hiddenAgents.length === 1 ? '' : 's'} hidden for this
-            profile:
+            profile · i: reasons · e: Edit profile
           </Text>
-          {hiddenAgents.map((agent) => (
-            <Text key={agent.label} dimColor>
-              {'  • '}
-              {agent.label} — {agent.reason}
-            </Text>
-          ))}
         </Box>
       )}
     </Box>

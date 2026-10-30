@@ -1,3 +1,7 @@
+vi.mock('../../config/config-operation.js', () => ({
+  withConfigOperation: async (operation: () => Promise<unknown>) => operation(),
+}));
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentAdapter } from '../../adapters/base.js';
 import { createRestoreCommand } from './restore.js';

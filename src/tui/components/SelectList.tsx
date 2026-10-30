@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { useViewport } from '../use-terminal-size.js';
 
 export interface SelectListProps<T> {
   items: readonly T[];
@@ -19,8 +20,10 @@ export function SelectList<T>({
   title,
   hint,
   emptyMessage = 'No items available',
-  maxVisible = 12,
+  maxVisible: requestedVisible,
 }: SelectListProps<T>): React.JSX.Element {
+  const available = useViewport();
+  const maxVisible = Math.min(requestedVisible ?? available, available);
   const start = Math.max(
     0,
     Math.min(selected - Math.floor(maxVisible / 2), items.length - maxVisible),

@@ -214,5 +214,20 @@ describe('provider manager', () => {
       });
       expect(await listProviders()).toHaveLength(1);
     });
+
+    it('keeps a /v1 in a custom-api baseUrl across save and reload', async () => {
+      const { addProvider, listProviders } = await getManager();
+      await addProvider({
+        name: 'CustomV1',
+        type: 'custom-api',
+        apiKey: 'k',
+        baseUrl: 'https://api.example.com/v1',
+        customApiModes: { openai: true, anthropic: false, responses: false },
+        models: [{ name: 'm', capabilities: { image: true, video: false, audio: false } }],
+      });
+
+      const [saved] = await listProviders();
+      expect(saved?.baseUrl).toBe('https://api.example.com/v1');
+    });
   });
 });

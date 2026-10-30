@@ -97,6 +97,59 @@ async function launch(adapter: AgentAdapter, extra: Record<string, unknown> = {}
 }
 
 describe('stale backup recovery', () => {
+  it('rejects a second scope touching the same physical file until restore', async () => {
+    const { adapter, configPath } = makeAdapter();
+    await writeFile(configPath, JSON.stringify(ORIGINAL));
+    const first = await launch(adapter, { isProcessAlive: () => true });
+    await expect(launch(adapter, { scope: 'project', cwd: testDir })).rejects.toThrow(
+      'shared config file',
+    );
+    expect(JSON.parse(await readFile(configPath, 'utf8'))).toEqual(PATCHED);
+    const { restoreBackupForAgent } = await import('../config/backup-restore.js');
+    await restoreBackupForAgent(adapter, 'global');
+    const second = await launch(adapter, { scope: 'project', cwd: testDir });
+    await first.cleanup();
+    expect(JSON.parse(await readFile(configPath, 'utf8'))).toEqual(PATCHED);
+    await second.cleanup();
+    expect(JSON.parse(await readFile(configPath, 'utf8'))).toEqual(ORIGINAL);
+  });
+
+  it('reserves shared files across different project directories', async () => {
+    const { adapter, configPath } = makeAdapter();
+    await writeFile(configPath, JSON.stringify(ORIGINAL));
+    const first = await launch(adapter, { scope: 'project', cwd: join(testDir, 'one') });
+    await expect(launch(adapter, { scope: 'project', cwd: join(testDir, 'two') })).rejects.toThrow(
+      'shared config file',
+    );
+    await first.cleanup();
+    expect(JSON.parse(await readFile(configPath, 'utf8'))).toEqual(ORIGINAL);
+  });
+
+  it('allows only one concurrent preparation for a shared file', async () => {
+    const { adapter, configPath } = makeAdapter();
+    await writeFile(configPath, JSON.stringify(ORIGINAL));
+    const results = await Promise.allSettled([
+      launch(adapter, { isProcessAlive: () => true }),
+      launch(adapter, { scope: 'project', cwd: testDir, isProcessAlive: () => true }),
+    ]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    for (const result of results) if (result.status === 'fulfilled') await result.value.cleanup();
+    expect(JSON.parse(await readFile(configPath, 'utf8'))).toEqual(ORIGINAL);
+  });
+
+  it('does not let cleanup of a restored session overwrite a newer session', async () => {
+    const { adapter, configPath } = makeAdapter();
+    await writeFile(configPath, JSON.stringify(ORIGINAL));
+    const first = await launch(adapter);
+    const { restoreBackupForAgent } = await import('../config/backup-restore.js');
+    await restoreBackupForAgent(adapter, 'global');
+    const second = await launch(adapter);
+    await first.cleanup();
+    expect(JSON.parse(await readFile(configPath, 'utf8'))).toEqual(PATCHED);
+    await second.cleanup();
+    expect(JSON.parse(await readFile(configPath, 'utf8'))).toEqual(ORIGINAL);
+  });
   it('restores a backup whose owner is gone, warns, and continues the launch', async () => {
     const { adapter, writes } = await leaveCrashedSession(DEAD_PID);
 

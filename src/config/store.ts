@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import path, { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { AgentOConfigSchema, type AgentOConfig, type LaunchScope } from './schema.js';
-import { unlinkWithRetry, writeJsonAtomic } from './atomic-write.js';
+import { unlinkWithRetry, writeJsonAtomic, writeJsonAtomicExclusive } from './atomic-write.js';
 
 const CONFIG_DIR = join(homedir(), '.agento');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
@@ -232,7 +232,7 @@ export async function writeBackup(
   agentId: string,
   scope: LaunchScope,
   options: WriteBackupOptions,
-): Promise<void> {
+): Promise<string> {
   const dir = getBackupDir(agentId, scope, options.cwd);
   const backupPath = join(dir, `${scope}.bak.json`);
   if (existsSync(backupPath)) {
@@ -266,7 +266,17 @@ export async function writeBackup(
   };
 
   await mkdir(dir, { recursive: true, mode: 0o700 });
-  await writeJsonAtomic(backupPath, manifest);
+  try {
+    await writeJsonAtomicExclusive(backupPath, manifest);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new Error(
+        `Active backup already exists for ${agentId} (${scope}). Run "agento restore -a ${agentId} -s ${scope}" before launching again.`,
+      );
+    }
+    throw error;
+  }
+  return manifest.sessionId;
 }
 
 /** Читает бэкап конфига агента. Возвращает null если бэкап не существует. */
@@ -313,16 +323,16 @@ export async function deleteBackup(agentId: string, scope: string, cwd?: string)
   const backupPath = join(getBackupDir(agentId, scope as LaunchScope, cwd), `${scope}.bak.json`);
   try {
     await unlinkWithRetry(backupPath);
-  } catch {
-    /* file might not exist */
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
 
   // Backward-compatibility: also try legacy path for project scope
   if (scope === 'project' && cwd) {
     try {
       await unlinkWithRetry(getLegacyBackupPath(agentId, scope as LaunchScope));
-    } catch {
-      /* file might not exist */
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
   }
 }

@@ -1,13 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
 import { useHelp } from '../use-help.js';
 import { HelpOverlay } from '../components/HelpOverlay.js';
 import { useLaunchWizard } from '../hooks/useLaunchWizard.js';
+import { RecoveryDetails } from '../components/RecoveryDetails.js';
+import { ProfileEdit } from './ProfileEdit.js';
+import { Agents } from './Agents.js';
 import { ProfileSelect } from './ProfileSelect.js';
 import { AgentSelect } from './AgentSelect.js';
 import { AgentInstall } from './AgentInstall.js';
-import { AgentAction } from './AgentAction.js';
+import { ScreenFrame } from '../components/ScreenFrame.js';
+import { ScrollableLines } from '../components/ScrollableLines.js';
 import { LaunchPreviewScreen } from './LaunchPreview.js';
 import type { ExecRequest } from '../../launcher/independent.js';
 import type { Profile } from '../../config/schema.js';
@@ -33,15 +37,21 @@ function LaunchFooter({
 }
 
 interface LaunchAgentProps {
+  initialProfileId?: string;
+  repeatLast?: boolean;
+  forceReview?: boolean;
   dev?: boolean;
   onBack: () => void;
-  onNavigate?: (target: 'providers' | 'profiles') => void;
+  onNavigate?: (target: 'providers' | 'profiles' | 'setup') => void;
   onExec?: (req: ExecRequest) => void;
   launchError?: { agentId: string; profileId?: string; error?: string };
   agentStatusCache?: Record<string, AgentInstallStatus>;
 }
 
 export function LaunchAgent({
+  initialProfileId,
+  repeatLast,
+  forceReview,
   dev,
   onBack,
   onNavigate,
@@ -50,6 +60,9 @@ export function LaunchAgent({
   agentStatusCache,
 }: LaunchAgentProps): React.JSX.Element {
   const { state, actions, computed } = useLaunchWizard({
+    initialProfileId,
+    repeatLast,
+    forceReview,
     dev,
     onBack,
     onNavigate,
@@ -59,25 +72,81 @@ export function LaunchAgent({
   });
 
   const help = useHelp();
-  useKeyInput((input, key) => {
-    if (state.step === 'preview') {
+  const [errorDetails, setErrorDetails] = useState(false);
+  useKeyInput(
+    (input, key) => {
+      if (state.error && input === 't') {
+        setErrorDetails((value) => !value);
+        return;
+      }
+      if (state.error && errorDetails) {
+        if (key.escape) setErrorDetails(false);
+        return;
+      }
+      if (state.error || state.step === 'preview') {
+        actions.handleKey(input, key);
+        return;
+      }
+      if (state.step !== 'profile' && state.step !== 'agent') return;
+      if (help.handleKey(input, key)) return;
       actions.handleKey(input, key);
-      return;
-    }
-    if (state.step !== 'profile' && state.step !== 'agent') return;
-    if (help.handleKey(input, key)) return;
-    actions.handleKey(input, key);
-  });
+    },
+    { textInput: state.searchOpen },
+  );
 
   if (help.open) {
     return <HelpOverlay topic="launch" />;
   }
 
+  if (state.step === 'edit-profile' && computed.currentProfile)
+    return (
+      <ProfileEdit
+        profile={computed.currentProfile}
+        providers={state.providers}
+        profiles={state.profiles}
+        onSave={actions.saveProfile}
+        onCancel={actions.returnToAgent}
+      />
+    );
+  if (state.step === 'recovery')
+    return (
+      <Agents
+        agentStatusCache={agentStatusCache}
+        onAgentStatusChange={actions.setAgentStatus}
+        dev={dev}
+        onBack={actions.returnToAgent}
+        initialTarget={
+          computed.recoveryTarget ?? {
+            agentId: computed.visibleAgents[state.selectedAgent]?.id,
+            scope: state.launchScope,
+          }
+        }
+      />
+    );
+
   if (state.error) {
-    const choices = computed.canOverwrite ? ['Overwrite and launch', 'Back'] : [];
+    if (errorDetails)
+      return (
+        <ScreenFrame title="Launch error details" actions="t/Esc: back">
+          <ScrollableLines lines={[state.error]} />
+        </ScreenFrame>
+      );
+    const choices = computed.canOverwrite ? ['Restore previous config and launch', 'Back'] : [];
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color="red">Error: {state.error.replace(/^Error:\s*/, '')}</Text>
+        <Text color="red" wrap="truncate-end">
+          Error:{' '}
+          {computed.canOverwrite
+            ? 'A previous launch still has a config backup.'
+            : state.error.replace(/^Error:\s*/, '')}
+        </Text>
+        <Text dimColor>t: technical details | r: retry | a: recovery | Esc: back</Text>
+        {computed.canOverwrite && (
+          <RecoveryDetails
+            agentId={computed.visibleAgents[state.selectedAgent]!.id}
+            scope={state.launchScope}
+          />
+        )}
         {computed.canOverwrite && (
           <Box flexDirection="column" marginTop={1}>
             {choices.map((c, i) => (
@@ -91,7 +160,6 @@ export function LaunchAgent({
             </Box>
           </Box>
         )}
-        {!computed.canOverwrite && <Text dimColor>Press Esc to go back</Text>}
       </Box>
     );
   }
@@ -118,7 +186,7 @@ export function LaunchAgent({
           </Text>
         </Box>
         <Box marginTop={1} flexDirection="column">
-          <Text color="cyan">{needsProvider ? '[p] Add provider' : '[a] Create profile'}</Text>
+          <Text color="cyan">{'Enter: Set up AgentO'}</Text>
           <Text dimColor>Esc: back</Text>
         </Box>
       </Box>
@@ -129,8 +197,14 @@ export function LaunchAgent({
     return (
       <Box flexDirection="column">
         <ProfileSelect
-          profiles={state.profiles}
-          selected={state.selectedProfile}
+          profiles={state.filteredProfiles}
+          providers={state.providers}
+          query={state.query}
+          searchOpen={state.searchOpen}
+          selected={Math.max(
+            0,
+            state.filteredProfiles.findIndex((p) => p.id === computed.currentProfile?.id),
+          )}
           onSelect={actions.setSelectedProfile}
           onBack={onBack}
         />
@@ -157,6 +231,7 @@ export function LaunchAgent({
           checkProgress={state.checkProgress}
           statusChecking={state.statusChecking}
           hiddenAgents={computed.hiddenAgents}
+          showReasons={state.showReasons}
           onSelect={actions.setSelectedAgent}
           onBack={onBack}
         />
@@ -175,17 +250,6 @@ export function LaunchAgent({
         agentId={state.installAgentId}
         onBack={actions.cancelInstall}
         onDone={actions.completeInstall}
-      />
-    );
-  }
-
-  if (state.step === 'action' && state.actionAgentId && state.actionMode) {
-    return (
-      <AgentAction
-        agentId={state.actionAgentId}
-        mode={state.actionMode}
-        onBack={actions.cancelAction}
-        onDone={(result) => actions.completeAction(state.actionAgentId!, state.actionMode!, result)}
       />
     );
   }

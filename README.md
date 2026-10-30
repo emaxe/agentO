@@ -1,9 +1,12 @@
 # AgentO — AI Agent Configuration Manager
 
-[![npm version](https://badge.fury.io/js/@emaxe%2fagento.svg)](https://www.npmjs.com/package/@emaxe/agento)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![npm version](https://img.shields.io/npm/v/%40emaxe%2Fagento)](https://www.npmjs.com/package/@emaxe/agento)
+[![CI](https://github.com/emaxe/agentO/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/emaxe/agentO/actions/workflows/ci.yml)
+[![Node.js](https://img.shields.io/node/v/%40emaxe%2Fagento)](https://www.npmjs.com/package/@emaxe/agento)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue)](https://github.com/emaxe/agentO#installation)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> Manage AI agent configurations with profiles and providers. Switch between models, providers, and agents seamlessly.
+> Set up once, launch again with one key. Share model profiles and API providers across nine AI coding agents.
 
 AgentO is a CLI tool that centralizes configuration management for popular AI coding agents. Define your API providers once, create profiles with different model combinations, and switch between them with a single command.
 
@@ -15,12 +18,12 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 |-------|---------|---------------|---|------------------|
 | [Claude Code](https://github.com/anthropics/claude-code) | `claude` | JSON | `anthropic-compatible`, `fireworks`, `openrouter`, `custom-api`, `openai-compatible`, `responses-compatible` | Multi-tier support (small/base/smart). Uses local proxy for non-Anthropic providers. |
 | [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Full function calling support via Vercel AI SDK |
-| [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | OpenAI-compatible API structure |
+| [Qwen CLI](https://github.com/QwenLM/qwen-code) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | OpenAI-compatible API structure |
 | [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `openai-compatible`, `responses-compatible`, `fireworks`, `openrouter`, `custom-api` | `wire_api: responses`. Profile stored in separate `default.config.toml`. |
 | [Kimi Code](https://www.kimi.com/code) | `kimi` | TOML | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Writes `~/.kimi/config.toml` (`default_model`, `providers`, `models`); reads the legacy `~/.kimi/config.json` too. |
 | [Kilo Code](https://github.com/Kilo-Org/kilo-code) | `kilo` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Reads `defaultProvider`/`defaultModel` from `~/.kilocode/settings.json`. Custom `baseUrl` from `~/.kilocode/models.json`. |
-| [PI](https://github.com/withpi/pi) | `pi` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | Reads `defaultProvider`/`defaultModel` from `~/.pi/agent/settings.json`. Custom `baseUrl` from `~/.pi/agent/models.json`. |
-| [Copilot](https://github.com/github/gh-copilot) | `copilot` | env vars only | `openai-compatible`, `anthropic-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Config delivered entirely via env vars — no settings file patched. |
+| [PI](https://pi.dev/docs/getting-started/installation) | `pi` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | Reads `defaultProvider`/`defaultModel` from `~/.pi/agent/settings.json`. Custom `baseUrl` from `~/.pi/agent/models.json`. |
+| [Copilot](https://github.com/github/copilot-cli) | `copilot` | env vars only | `openai-compatible`, `anthropic-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Config delivered entirely via env vars — no settings file patched. |
 | [Goose](https://goose-docs.ai) | `goose` | env vars only | `openai-compatible`, `anthropic-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Config delivered entirely via env vars (`GOOSE_PROVIDER`, `GOOSE_MODEL`). |
 
 ## Installation
@@ -44,7 +47,7 @@ npx @emaxe/agento
 - Node.js ≥ 18 (on Windows, Node 20+ and [Windows Terminal](https://aka.ms/terminal) are recommended)
 - One or more supported AI agent CLI tools installed (AgentO can install most of them for you)
 
-Everything works on all three systems: the TUI, `agento launch` (child and independent
+Supported workflows on all three systems include: the TUI, `agento launch` (child and independent
 modes), `agento restore`, installed-agent detection and the install wizard. See
 [Windows](#windows) for the platform-specific notes.
 
@@ -105,14 +108,14 @@ More detail — what was verified and what still needs manual acceptance — in
 **Notes:**
 - `claude-code` works with all 6 provider types. For non-`anthropic-compatible` providers, a local proxy handles protocol translation: Anthropic Scrubber for `fireworks`/`openrouter`; OpenAI-to-Anthropic proxy for `openai-compatible`; Responses Proxy for `responses-compatible`. For `openrouter` it uses OpenRouter's **Anthropic Skin** with `ANTHROPIC_AUTH_TOKEN` (Bearer auth).
 - `copilot` and `goose` work with every provider type; config is delivered entirely via environment variables (no settings file is patched).
-- `custom-api` is the escape hatch for a self-hosted endpoint or gateway: set `baseUrl` and enable the wire protocols it actually speaks via `customApiModes` (`openai`, `anthropic`, `responses`). At least one mode is required. AgentO appends the right suffix per mode — `/v1` for openai, nothing for anthropic (the client adds `/v1/messages` itself), `/v1/responses` for responses.
+- `custom-api` is the escape hatch for a self-hosted endpoint or gateway: set `baseUrl` and enable the wire protocols it actually speaks via `customApiModes` (`openai`, `anthropic`, `responses`). At least one mode is required. AgentO appends the right suffix per mode — `/v1` for openai, nothing for anthropic (the client adds `/v1/messages` itself), `/v1/responses` for responses. `baseUrl` is stored exactly as entered; a trailing `/v1` (or a pasted full `/v1/responses` endpoint) is accepted and never doubled.
 - `qwen` and `codex` are the only agents that cannot use `anthropic-compatible`; `qwen` and `pi` are the only ones that cannot use `responses-compatible`.
 
 ## API Keys & Git Safety
 
-Provider API keys live in `~/.agento/config.json` (directory mode `0700`, file mode `0600`) and are handed to the launched agent through its environment. They are **never** written into a generated agent config file.
+Provider API keys live in `~/.agento/config.json` (directory mode `0700`, file mode `0600`). AgentO uses environment variables where the adapter supports them; some adapters also write credentials into agent configuration files. Treat generated files and backup manifests as sensitive. Launch Preview shows the affected files and environment variable names without revealing values.
 
-The one thing to know about **project scope**: in that mode AgentO writes the agent's config *inside your repository* (`.claude/settings.json`, `.codex/config.toml`, …), and several of those paths are conventionally committed — Claude Code, for instance, treats `.claude/settings.json` as the shared team file and only gitignores `settings.local.json`.
+The one thing to know about **project scope**: in that mode AgentO selects the adapter's project configuration, which can include files *inside your repository* and global files (for example, Codex) (`.claude/settings.json`, `.codex/config.toml`, …), and several of those paths are conventionally committed — Claude Code, for instance, treats `.claude/settings.json` as the shared team file and only gitignores `settings.local.json`.
 
 So on every project-scope launch AgentO appends the generated paths to `.git/info/exclude` and tells you it did:
 
@@ -147,6 +150,10 @@ Defaults when adding a model: `image=true`, `video=false`, `audio=false`.
 > Existing configs from older versions (with `string[]` models) are auto-migrated on first read with default capabilities.
 
 ## Quick Start
+
+For guided setup, run `agento` and choose **Set up AgentO**. Connect a provider, choose or enter a model, save a profile, select an agent, review the changes, and launch. After that, **r** repeats the last confirmed launch.
+
+The equivalent CLI workflow is below. See the [0.11.0 release notes](CHANGELOG.md#0110---2026-10-30) for the full list of changes.
 
 ### 1. Add API Providers
 
@@ -214,78 +221,39 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 
 ### Main Menu
 
-```
-┌───────── AgentO v0.10.0 ──────────┐
-│ Providers: 1 · Profiles: 1        │
-│                                   │
-│   ▶  Launch Agent                 │
-│   2  Providers                    │
-│   3  Profiles                     │
-│   4  Agents                       │
-│   5  Settings                     │
-│                                   │
-│ Last: work → Claude Code          │
-│       (child, project)            │
-│                                   │
-│   ↑↓ navigate | Enter open        │
-│   1-5 jump | q/Esc quit           │
-└───────────────────────────────────┘
-```
+The first action is **Launch last** (**r**) when a previous launch is available, or **Set up AgentO** for a first launch. Below it are **New launch**, **Profiles**, **Providers**, **Agents & recovery**, and **Settings**. The menu shows the current directory and the last profile, agent, primary model, mode and scope. **1–6** open sections directly; **↑↓ / Enter** select, **?** opens help, and **q / Esc** quits.
 
-**Navigation:** **↑↓** to move, **Enter** to select, **1-5** to jump, **Esc / q** to quit.
-On a first run with no profiles the menu shows which step comes next
-(`Providers` → `Profiles` → `Launch Agent`). After a launch it shows the last
-profile and agent, and the launch wizard starts with that selection again.
+Active configuration backups have a separate notice. Press **b** to open recovery at an affected agent. After a child agent exits, the menu shows the agent result and configuration restoration result separately, including restoration failures.
 
-### Help
+### First Launch
 
-Press **`?`** on the main menu or any list screen (Providers, Profiles, Agents,
-Settings, and the profile/agent steps of the launch wizard) to open a help panel.
-It lists the screen's keys and explains `child` vs `independent`, `global` vs
-`project`, `mergeAgentConfigs`, and what an active backup means. Close it with
-**`?`**, **Esc** or **Enter**.
+Choose **Set up AgentO** to follow one route:
 
-### Screens Overview
+**Provider → Model → Profile → Agent → Review → Launch**
 
-| Screen | What You Can Do | Key Shortcuts |
-|--------|----------------|---------------|
-| **Launch Agent** | Select profile → select agent (with install hints) → launch; installed agents are listed first. `v` opens a read-only preview (files, env names, backup, warnings) before launching. Opens Install Wizard for uninstalled agents; install statuses (with detected versions) cached on disk. The last profile/agent/mode/scope is preselected. A footer shows the effective profile/mode/scope; installed agents show `u` update, `d` delete. Agents that cannot run the selected profile are listed with the reason | **Enter** select, **v** preview, **Esc** back, **u** update, **d** delete, **m** mode, **s** scope, **?** help |
-| **Providers** | View, add, edit, delete API providers; toggle model capabilities; `t` tests the API, `c` duplicates a provider, `/` filters by name/type/model. Keys are shown masked (`••••••••1234`). Deleting a provider that a profile uses is refused | **Enter/e** edit, **a** add, **d** delete, **t** test, **c** duplicate, **/** search, **i/v/a** toggle capability, **Esc** back, **?** help |
-| **Profiles** | View, add, delete profiles; `/` filters by name, model or provider. In profile details: add/remove/edit models. Tier choices already used by the profile are hidden, and “no tier” is offered only for a single-model profile; adding another model to an untiered profile first asks for a tier | **Enter** details, **a** add, **d** delete, **/** search, **Esc** back, **?** help |
-| **Agents** | Check config status (global/project), backup availability; selected row shows the config path. `/` filters by name/scope/path, `f` shows only modified configs. Restoring asks for confirmation first | **r** restore (then **y/Enter**), **f** modified only, **/** search, **↑↓** navigate, **Esc** back, **?** help |
-| **Settings** | Change default launch mode, default config scope, and whether to merge (keep unknown keys from) agent configs; selected setting shows an inline description of the current value | **↑↓** navigate, **Enter/Space** toggle, **Esc** save & back, **?** help |
+Select an existing provider or connect a known service/custom endpoint. **Load models** is optional: it retrieves the model catalog, without testing generation. If the endpoint is unavailable, retry or enter a model manually in **Models**. Connection data stays in the form after a request or save error. Save the provider explicitly, select a model, and accept or edit the suggested profile name. A single model does not require a tier.
 
-### Launch Agent Workflow
+Completed provider/profile saves remain available if you leave setup. A matching saved profile can be reused. Selecting an absent agent opens the installation wizard; compatibility checks use the same rules as CLI launch. The final review lists the model, provider, directory, actual files, environment variable names, and restoration behavior.
 
-1. **Select Profile** — Choose from your saved profiles. With no profiles yet, the screen offers `[p] Add provider` or `[a] Create profile` instead of a dead end; the same is true when `Profiles` has no providers to choose from.
-2. **Select Agent** — AgentO checks install status of all agents (spinner while checking). Uninstalled agents show a `(not installed)` hint; installed agents show their detected version (`v1.2.3`) and, when selected, `(u update, d delete)`. Agents that cannot run the selected profile are hidden, and a line under the list names them with the reason. Statuses (installed + version) are cached to `~/.agento/agent-status.json` so already-known-installed agents are skipped on the next launch.
+### New and Repeat Launches
 
-   A footer under both steps shows the effective `Profile / mode / scope`; press **m** to toggle child/independent or **s** to toggle project/global for this launch without leaving the wizard.
-   - Press **v** for a read-only **preview**: agent/profile, mode/scope, files that would be created or updated, env variable names (never values), backup state, git-exclude patterns and warnings. **Enter** launches from the preview, **Esc** returns to the agent list.
-   - If the selected agent **is installed** → press **Enter** to launch, **u** to update, or **d** to delete
-   - If the selected agent **is not installed** → opens the **Install Wizard**
-   - If the command is not found at launch time (ENOENT) → TUI relaunches with the error shown and the agent marked as not installed
-3. **Install Wizard** (if needed):
-   - **Auto-install** — checks environment (requires npm/brew/uv), then installs via the agent's native package manager
-   - **Manual install** — shows the exact command and a docs URL
-4. **Update / Delete Agent** (if triggered with `u`/`d` on an installed agent):
-   - Confirmation prompt (`Yes`/`No`)
-   - Runs the appropriate command (`npm update -g`, `brew upgrade`, `uv tool uninstall`, etc.) with live spinner
-   - On success → returns to agent list with updated install status
-   - On error → shows stderr; options to retry or go back
-5. **Launch** — AgentO patches the agent config and starts the agent
+**New launch** selects a profile and an agent. Profiles show their primary model and provider; **/** searches names, models and providers, including Unicode and pasted text. **m** changes child/independent mode and **s** changes global/project scope.
 
-```
-Profile: default
-├─ Agent: claude-code
-├─ Mode: child
-├─ Scope: global
-└─ [ Launch ]
-```
+Installed agents appear first and keep their selection as status checks finish. **i** opens incompatibility reasons; **e** edits the selected profile and returns to the same launch. Installing an absent agent remains available here. Manage updates and uninstallations in **Agents & recovery**.
 
-In **child mode**, you'll be returned to AgentO when the agent exits, and the original config is automatically restored. The wizard reopens on the profile/agent you just used so a second launch is one Enter away.
+A new or changed launch opens **Launch Preview** automatically. **Enter** accepts it; **v** always opens it manually. A confirmed, unchanged launch runs directly, including **r** from the main menu. Changing the profile, model, credentials, endpoint, mode, scope, directory, merge setting, or affected config paths requires another review. The cache stores a versioned digest, never credentials or generated configuration. Missing or obsolete confirmation data requires review.
 
-In **independent mode**, AgentO exits immediately and leaves the patched config in place.
+**Project scope can also change global files**, depending on the adapter. Review lists the actual files (including Codex's global files); env-only agents explicitly show that no files are written. **↑↓ / PgUp/PgDn** scroll long previews and help without hiding the main action.
+
+If preparation fails, **r** retries, **a** opens recovery, and **t** reveals technical details. An existing backup for the selected scope offers **Restore previous config and launch**, with affected files and known session state shown first. Existing transaction locks and live-session protections still apply; shared-file conflicts identify the backup that must be restored.
+
+In **child mode**, configuration is restored when the agent exits and AgentO returns to the main menu. In **independent mode**, AgentO exits and leaves configuration patched for later restoration.
+
+### Forms and Keyboard
+
+**Tab / Shift+Tab** move between fields. **Esc** cancels a model name edit, goes back a step, or asks before leaving an edited form. **Keep editing** is selected by default; choose **Discard changes** explicitly to leave. Forms show saving/saved/error states, prevent duplicate writes, and keep data available for retry after a failed save. API keys are masked by default; **Ctrl+R** explicitly reveals/hides the key in the provider form.
+
+Lists resize with the terminal, preserve selection by identity, and bound expanded details. Capability markers use **[iva]** for image/video/audio; a dash means disabled. Multi-model roles are **small** for quick tasks, **base** for everyday work, and **smart** for complex tasks.
 
 ### Providers Screen
 
@@ -293,13 +261,13 @@ Manage your API providers without memorizing CLI flags:
 
 - **View** all providers with their type, models, capability markers, and base URL
 - **Add** a new provider with guided prompts (name, type, API key, models, base URL)
-- **Edit** existing provider details — including per-model capability flags (`i`/`v`/`a` toggles). Models can be edited manually without running the API test; “Test API” and “Fetch models” are optional helpers
-- **Test** a provider from the list with `t`; the result (models count or error) is shown under the selected row
+- **Edit** existing provider details — including per-model capability flags (`i`/`v`/`a` toggles). Models can be edited manually; **Load models** and **Choose loaded models** are optional helpers
+- **Load models** from the list with `t`; the model count or error is shown under the selected row (no generation request is made)
 - **Duplicate** a provider with `c` — useful for a second key or base URL; the copy gets the next free name
 - **Filter** with `/` typed by provider name, type, base URL or model name
 - **Delete** providers you no longer need. A provider still referenced by a profile cannot be deleted: the screen lists the profiles that block it
 
-In edit view, models render as `▶ [i--] model-name`. Press `i` / `v` / `a` while a model row is highlighted to toggle image / video / audio capabilities. Use the `[+ add model]` row (Enter) to append models, `d` to delete, `e` to rename. API keys are masked in the list; the form still shows the value being edited.
+In edit view, models render as `▶ [i--] model-name`. Press `i` / `v` / `a` while a model row is highlighted to toggle image / video / audio capabilities. Use the `[+ add model]` row (Enter) to append models, `d` to delete, `e` to rename. API keys are masked in the list and form; **Ctrl+R** reveals/hides the key in the form.
 
 ### Profiles Screen
 
@@ -310,7 +278,7 @@ Organize your model configurations:
 - **Filter** the list with `/` typed by profile name, model or provider name
 - **In profile details:** add/remove/edit individual model assignments
 
-### Agents Screen
+### Agents & Recovery Screen
 
 Monitor the status of your agent configurations:
 
@@ -318,7 +286,8 @@ Monitor the status of your agent configurations:
 - Check if **backups** exist (indicating AgentO has previously patched the config)
 - View config file paths for each agent
 - Press **/** to filter by agent name, scope or config path; **f** toggles “modified only”
-- Press **r** to restore a modified config. AgentO asks for confirmation (`y/Enter: restore`, `n/Esc: cancel`) because restore replaces the current file and clears the backup
+- Press **i / u / d** to install / update / uninstall the selected agent.
+- Press **r** to restore a modified config. AgentO asks for confirmation (`y/Enter: restore`, `n/Esc: cancel`) with affected files and known session state shown before restore replaces/removes the files and clears the backup
 
 ### Settings Screen
 
@@ -330,7 +299,7 @@ Configure defaults for AgentO behavior:
 | **Default Config Scope** | `global` / `project` | Where agent configs are written |
 | **Merge Agent Configs** | `true` / `false` | Preserve unknown top-level keys when writing agent configs (conservative merge) |
 
-**Controls:** **↑↓** navigate between settings, **Enter** or **Space** toggle values, **Esc** save and return.
+**Controls:** **↑↓** navigate between settings, **Enter** or **Space** toggle values, **Esc** returns; each successful toggle is saved immediately.
 
 ### TUI vs CLI
 
@@ -375,10 +344,9 @@ agento          # Launch interactive TUI
 agento --dev    # Deprecated: all agents are shown; kept for compatibility
 ```
 
-On the first run the menu shows how many providers and profiles exist and points
-at the next step (`Providers` → `Profiles` → `Launch Agent`). After a launch it
-remembers the last profile, agent, mode and scope, and the launch wizard opens
-with those preselected.
+On the first run choose **Set up AgentO** to connect a provider, select a model,
+create a profile, and launch. Later, **r** repeats the last launch; changes to
+launch settings require a new review.
 
 ### `agento launch` — Launch Agent
 
@@ -541,8 +509,10 @@ AgentO stores its configuration in `~/.agento/config.json`:
 ### UI state
 
 The last launched profile/agent/mode/scope is cached in `~/.agento/ui-state.json`.
-It is optional: deleting it only loses the preselection. A malformed file is
-ignored, never fatal. `agento config path` prints this path, the config path and
+A versioned confirmation digest also remembers the reviewed launch configuration,
+including its directory. No credentials or generated configs are stored there.
+It is optional: deleting it loses preselection and requires review on the next launch.
+A malformed file or obsolete confirmation is ignored, never fatal. `agento config path` prints this path, the config path and
 the backups directory.
 
 ## How It Works
@@ -574,7 +544,7 @@ Each supported agent has a dedicated adapter that translates AgentO's generic co
 
 Before modifying any agent configuration, AgentO creates a v2 manifest backup at `~/.agento/backups/<agent>/<scope>.bak.json`.
 
-If an active backup already exists for the same agent/scope, launch is blocked until you run `agento restore -a <agent> -s <scope>`. This prevents repeated Independent launches from overwriting the original backup.
+If an active backup already exists for the same agent/scope, launch is blocked until you run `agento restore -a <agent> -s <scope>`. This prevents repeated Independent launches from overwriting the original backup. Launch is also blocked when another active backup reserves any of the same configuration files, including across scopes and project directories (for example, Codex project launches share global files). The error identifies the owning backup and project directory to restore. Preparation and restoration are serialized across AgentO processes; the backup reserves its files until restoration, including in Independent mode. After a crash, an abandoned operation lock expires after 10 seconds; the existing backup recovery rules still apply.
 
 In **Child Mode**, the original config is automatically restored when the agent exits or receives SIGTERM/SIGINT.
 

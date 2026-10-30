@@ -215,4 +215,24 @@ describe('runTuiLoop', () => {
 
     expect(spawnAgent).toHaveBeenCalledTimes(2);
   });
+  it('returns to the main menu with separate agent and cleanup results when restore fails', async () => {
+    const startTui = scriptedTui(
+      request({
+        relaunch: true,
+        cleanup: vi.fn().mockRejectedValue(new Error('disk unavailable')),
+      }),
+      null,
+    );
+    await runTuiLoop({ startTui, spawnAgent: vi.fn().mockResolvedValue(3), notice: vi.fn() });
+    expect(startTui).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        initialScreen: 'main',
+        outcome: {
+          agent: 'Claude Code exited (code 3).',
+          recovery: expect.stringContaining('restoration failed'),
+        },
+      }),
+    );
+  });
 });

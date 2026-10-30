@@ -1,8 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { sanitizeFieldValue } from '../sanitize-field-value.js';
 import { useKeyInput } from '../use-key-input.js';
+import { DiscardChanges } from '../components/DiscardChanges.js';
+import { useViewport } from '../use-terminal-size.js';
 import { SelectList } from '../components/SelectList.js';
 import type { Provider, Profile, ProfileModel } from '../../config/schema.js';
 import { capabilityMarker } from '../../config/schema.js';
@@ -14,7 +16,7 @@ type WizardStep = 'name' | 'select-provider' | 'select-model' | 'select-tier' | 
 interface ProfileWizardProps {
   providers: Provider[];
   profiles: Profile[];
-  onDone: (result: { name: string; models: ProfileModel[] }) => void;
+  onDone: (result: { name: string; models: ProfileModel[] }) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -36,10 +38,15 @@ export function ProfileWizard({
   const [customModel, setCustomModel] = useState('');
   const [reviewCursor, setReviewCursor] = useState(0);
   const [status, setStatus] = useState('');
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const viewport = useViewport(15);
   const canAddModel = formModels.length < 3;
   const firstUntieredModel = formModels.findIndex((model) => !model.tier);
 
-  const validateAndSubmit = useCallback(() => {
+  const validateAndSubmit = useCallback(async () => {
+    if (savingRef.current) return;
     try {
       const name = formName.trim();
       const modelsToSave: ProfileModel[] =
@@ -47,16 +54,26 @@ export function ProfileWizard({
           ? [{ providerId: formModels[0]!.providerId, model: formModels[0]!.model }]
           : formModels;
       validateProfile({ name, models: modelsToSave }, profiles, providers);
-      onDone({ name, models: modelsToSave });
+      savingRef.current = true;
+      setSaving(true);
+      setStatus('Saving...');
+      await onDone({ name, models: modelsToSave });
+      setStatus('Saved');
     } catch (err) {
-      setStatus(String(err));
+      setStatus(`Error: ${String(err)}`);
+      if (/name/i.test(String(err))) setStep('name');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   }, [formName, formModels, profiles, providers, onDone]);
 
   useKeyInput((input, key) => {
+    if (savingRef.current || confirmDiscard) return;
     if (step === 'name') {
       if (key.escape) {
-        onCancel();
+        if (formName || formModels.length) setConfirmDiscard(true);
+        else onCancel();
         return;
       }
       if (key.return) {
@@ -136,6 +153,12 @@ export function ProfileWizard({
         }
         if (!chosen) return;
         setStatus('');
+        if (formModels.length === 0) {
+          setFormModels([{ providerId: provider.id, model: chosen }]);
+          setReviewCursor(1);
+          setStep('review');
+          return;
+        }
         setPendingModel(chosen);
         const usedTiers = usedTiersOf(formModels);
         setTierCursor(defaultTierCursor(tierOptions(usedTiers, formModels.length === 0)));
@@ -255,13 +278,15 @@ export function ProfileWizard({
             setStep('select-provider');
           }
         } else {
-          validateAndSubmit();
+          void validateAndSubmit();
         }
       }
       return;
     }
   });
 
+  if (confirmDiscard)
+    return <DiscardChanges onKeep={() => setConfirmDiscard(false)} onDiscard={onCancel} />;
   if (step === 'name') {
     return (
       <Box flexDirection="column" padding={1}>
@@ -273,7 +298,7 @@ export function ProfileWizard({
             <TextInput
               value={formName}
               onChange={(v) => setFormName(sanitizeFieldValue(v))}
-              focus
+              focus={!saving}
               showCursor
             />
           </Box>
@@ -343,14 +368,17 @@ export function ProfileWizard({
             </Text>
           </Box>
           <Box flexDirection="column" marginTop={1}>
-            <Text>Select model:</Text>
-            {provider.models.map((m, i) => (
-              <Text key={m.name} color={i === modelCursor ? 'green' : undefined}>
-                {i === modelCursor ? '▶ ' : '  '}
-                <Text color="gray">{capabilityMarker(m.capabilities)} </Text>
-                {m.name}
-              </Text>
-            ))}
+            <Text>Select model · [iva]: image / video / audio</Text>
+            {provider.models
+              .map((m, i) => ({ m, i }))
+              .slice(Math.max(0, modelCursor - viewport + 1), Math.max(viewport, modelCursor + 1))
+              .map(({ m, i }) => (
+                <Text key={m.name} color={i === modelCursor ? 'green' : undefined}>
+                  {i === modelCursor ? '▶ ' : '  '}
+                  <Text color="gray">{capabilityMarker(m.capabilities)} </Text>
+                  {m.name}
+                </Text>
+              ))}
             <Box>
               <Text color={modelCursor === customIdx ? 'green' : 'cyan'}>
                 {modelCursor === customIdx ? '▶ ' : '  '}[custom]:{' '}
@@ -412,7 +440,7 @@ export function ProfileWizard({
           )}
           <Box marginTop={1}>
             <Text dimColor>
-              Tip: small=ANTHROPIC_SMALL_FAST/HAIKU, base=ANTHROPIC_MODEL/SONNET, smart=OPUS.
+              Roles: small for quick tasks, base for everyday work, smart for complex tasks.
             </Text>
           </Box>
         </Box>

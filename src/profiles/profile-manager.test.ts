@@ -41,6 +41,124 @@ async function seedProvider(): Promise<string> {
 }
 
 describe('profile manager', () => {
+  async function seedMultiModelProfile() {
+    const providerId = await seedProvider();
+    const { addProfile } = await getManager();
+    return addProfile({
+      name: 'Work',
+      models: [
+        { providerId, model: 'small-model', tier: 'small' },
+        { providerId, model: 'base-model', tier: 'base' },
+        { providerId, model: 'smart-model', tier: 'smart' },
+      ],
+    });
+  }
+
+  describe('editing and lookup', () => {
+    it('updates a profile in place, preserves its id and leaves other config intact', async () => {
+      const profile = await seedMultiModelProfile();
+      const { addProfile, updateProfile, listProfiles } = await getManager();
+      const other = await addProfile({ name: 'Other', models: [profile.models[0]] });
+      const { readConfig } = await import('../config/store.js');
+      const before = await readConfig();
+      const updated = await updateProfile(profile.id, { name: 'Renamed' });
+      expect(updated).toEqual({ ...profile, name: 'Renamed' });
+      expect(await listProfiles()).toEqual([updated, other]);
+      const after = await readConfig();
+      expect(after.providers).toEqual(before.providers);
+      expect(after.settings).toEqual(before.settings);
+    });
+
+    it('allows keeping the current name when updating models', async () => {
+      const profile = await seedMultiModelProfile();
+      const { updateProfile, findProfile } = await getManager();
+      const models = [profile.models[1]];
+      await updateProfile(profile.id, { name: profile.name, models });
+      expect(await findProfile(profile.id)).toEqual({ ...profile, models });
+    });
+
+    it.each(['duplicate name', 'unknown provider', 'duplicate tiers', 'no base', 'empty models'])(
+      'rejects an update with %s and preserves the stored config',
+      async (scenario) => {
+        const profile = await seedMultiModelProfile();
+        const { addProfile, updateProfile } = await getManager();
+        await addProfile({ name: 'Taken', models: [profile.models[0]] });
+        const { readConfig } = await import('../config/store.js');
+        const before = await readConfig();
+        const updates = {
+          'duplicate name': { name: 'Taken' },
+          'unknown provider': {
+            models: [{ ...profile.models[0], providerId: '00000000-0000-0000-0000-000000000099' }],
+          },
+          'duplicate tiers': { models: [profile.models[1], profile.models[1]] },
+          'no base': { models: [profile.models[0], profile.models[2]] },
+          'empty models': { models: [] },
+        }[scenario]!;
+        await expect(updateProfile(profile.id, updates)).rejects.toThrow();
+        expect(await readConfig()).toEqual(before);
+      },
+    );
+
+    it('finds profiles by id or name and returns undefined for an unknown profile', async () => {
+      const profile = await seedMultiModelProfile();
+      const { findProfile } = await getManager();
+      expect(await findProfile(profile.id)).toEqual(profile);
+      expect(await findProfile(profile.name)).toEqual(profile);
+      expect(await findProfile('missing')).toBeUndefined();
+    });
+
+    it('rejects update and removal of an unknown profile without changing existing data', async () => {
+      await seedMultiModelProfile();
+      const { updateProfile, removeProfile, listProfiles } = await getManager();
+      const before = await listProfiles();
+      await expect(updateProfile('missing', { name: 'New' })).rejects.toThrow('Profile not found');
+      await expect(removeProfile('missing')).rejects.toThrow('Profile not found');
+      expect(await listProfiles()).toEqual(before);
+    });
+  });
+
+  describe('model ordering', () => {
+    it.each(['up', 'down'] as const)(
+      'moves a model %s, preserving tiers and other profiles',
+      async (direction) => {
+        const profile = await seedMultiModelProfile();
+        const { addProfile, moveModelUp, moveModelDown, listProfiles } = await getManager();
+        const other = await addProfile({ name: 'Other', models: [profile.models[0]] });
+        const updated = await (direction === 'up' ? moveModelUp : moveModelDown)(profile.id, 1);
+        const expected =
+          direction === 'up'
+            ? [profile.models[1], profile.models[0], profile.models[2]]
+            : [profile.models[0], profile.models[2], profile.models[1]];
+        expect(updated).toEqual({ ...profile, models: expected });
+        expect(await listProfiles()).toEqual([updated, other]);
+      },
+    );
+
+    it.each([
+      ['up', -1],
+      ['up', 0],
+      ['up', 3],
+      ['down', -1],
+      ['down', 2],
+      ['down', 3],
+    ] as const)(
+      'ignores moving %s from boundary/out-of-range index %i',
+      async (direction, index) => {
+        const profile = await seedMultiModelProfile();
+        const { moveModelUp, moveModelDown, listProfiles } = await getManager();
+        const move = direction === 'up' ? moveModelUp : moveModelDown;
+        expect(await move(profile.id, index)).toEqual(profile);
+        expect(await listProfiles()).toEqual([profile]);
+      },
+    );
+
+    it('rejects reordering an unknown profile', async () => {
+      const { moveModelUp, moveModelDown } = await getManager();
+      await expect(moveModelUp('missing', 1)).rejects.toThrow('Profile not found');
+      await expect(moveModelDown('missing', 0)).rejects.toThrow('Profile not found');
+    });
+  });
+
   it('add then list contains the profile', async () => {
     const providerId = await seedProvider();
     const { addProfile, listProfiles } = await getManager();

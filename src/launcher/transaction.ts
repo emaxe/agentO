@@ -2,6 +2,7 @@ import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
 import { resolveBaseModel } from '../adapters/resolve-base-model.js';
 import { restoreBackupManifest } from '../config/backup-restore.js';
 import { addToGitExclude } from '../config/git-exclude.js';
+import { assertConfigFilesAvailable, withConfigOperation } from '../config/config-operation.js';
 import type { Profile, Provider } from '../config/schema.js';
 import {
   backupExists,
@@ -191,12 +192,14 @@ async function backupCurrentConfig(
   scope: LaunchScope,
   cwd: string | undefined,
   pid: number,
-): Promise<string[]> {
+): Promise<{ paths: string[]; sessionId: string }> {
   const files = adapter.snapshotConfigFiles
     ? await adapter.snapshotConfigFiles(scope, cwd)
     : await snapshotPrimaryConfigFile(adapter, scope, cwd);
 
-  await writeBackup(adapter.id, scope, {
+  await assertConfigFilesAvailable(files, adapter.id);
+
+  const sessionId = await writeBackup(adapter.id, scope, {
     cwd,
     pid,
     pidStartedAt: processStartedAt(pid),
@@ -206,7 +209,7 @@ async function backupCurrentConfig(
     })),
   });
 
-  return files.map((file) => file.path).filter(Boolean);
+  return { paths: files.map((file) => file.path).filter(Boolean), sessionId };
 }
 
 /**
@@ -312,15 +315,18 @@ async function maybeStartProxy(
 function createLaunchCleanup(
   adapter: AgentAdapter,
   scope: LaunchScope,
+  sessionId: string,
   cwd?: string,
 ): () => Promise<void> {
-  return async (): Promise<void> => {
-    const backup = await readBackup(adapter.id, scope, cwd);
-    if (backup !== null) {
-      await restoreBackupManifest(adapter, backup, scope, cwd);
-    }
-    await deleteBackup(adapter.id, scope, cwd);
-  };
+  return async (): Promise<void> =>
+    withConfigOperation(async () => {
+      const backup = await readBackup(adapter.id, scope, cwd);
+      if (backup && sessionId && backup.sessionId !== sessionId) return;
+      if (backup !== null) {
+        await restoreBackupManifest(adapter, backup, scope, cwd);
+      }
+      await deleteBackup(adapter.id, scope, cwd);
+    });
 }
 
 /**
@@ -334,6 +340,13 @@ function createLaunchCleanup(
  * so JSON-based configs can be merged conservatively rather than overwritten.
  */
 export async function prepareLaunchTransaction(
+  options: LaunchTransactionOptions,
+): Promise<LaunchTransactionResult> {
+  if (options.adapter.envOnly) return prepareLaunchTransactionUnlocked(options);
+  return withConfigOperation(() => prepareLaunchTransactionUnlocked(options));
+}
+
+async function prepareLaunchTransactionUnlocked(
   options: LaunchTransactionOptions,
 ): Promise<LaunchTransactionResult> {
   const { adapter, profile, providers, scope, cwd } = options;
@@ -354,7 +367,12 @@ export async function prepareLaunchTransaction(
     cwd,
     options.isProcessAlive ?? isProcessAlive,
   );
-  const configPaths = await backupCurrentConfig(adapter, scope, cwd, options.pid ?? process.pid);
+  const { paths: configPaths, sessionId } = await backupCurrentConfig(
+    adapter,
+    scope,
+    cwd,
+    options.pid ?? process.pid,
+  );
 
   const newConfig = adapter.buildConfig(profile, providers);
   const agentoConfig = await readConfig();
@@ -364,7 +382,7 @@ export async function prepareLaunchTransaction(
 
   const execReq = await buildExecRequest({ ...options, args });
   const stopProxy = await maybeStartProxy(adapter, profile, providers, scope, cwd, newConfig);
-  const baseCleanup = createLaunchCleanup(adapter, scope, cwd);
+  const baseCleanup = createLaunchCleanup(adapter, scope, sessionId, cwd);
 
   const cleanup = async (): Promise<void> => {
     if (stopProxy) {

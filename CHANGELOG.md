@@ -7,44 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-30
+
 ### Added
 
-- **Онбординг в TUI.** Главное меню показывает количество провайдеров/профилей и следующий шаг при первом запуске; пустой список профилей в мастере запуска и в разделе Profiles предлагает сразу перейти к созданию провайдера/профиля, а не упирается в «Add one first».
-- **Продолжение последнего запуска.** Профиль, агент, режим и scope сохраняются в `~/.agento/ui-state.json`; мастер открывается с этим выбором, а после выхода агента возвращается в мастер запуска, а не в главное меню.
-- **Пояснение скрытых агентов.** В выборе агента появилась строка о том, какие агенты несовместимы с выбранным профилем и почему.
-- **Маскирование ключей.** TUI и `agento provider list` показывают `••••••••1234` вместо первых символов ключа.
-- **Защита от битого профиля.** `provider remove` (CLI и TUI) отказывается удалять провайдера, который используется профилями, и перечисляет эти профили.
-- **Подтверждение restore.** Экран Agents спрашивает подтверждение перед восстановлением конфига (`y/Enter` — восстановить, `n/Esc` — отменить).
-- **Контекстная справка `?`.** На главном меню и списочных экранах панель объясняет клавиши, `child`/`independent`, `global`/`project`, `mergeAgentConfigs` и активный backup.
-- **Поиск и прокрутка.** `/` фильтрует провайдеров, профили и агентов; `f` на экране Agents оставляет только modified. `SelectList` и списки моделей показывают окно с индикаторами `↑/↓ N more`, длинные списки больше не уезжают за экран.
-- **Preview запуска.** `v` на шаге выбора агента открывает read-only экран с файлами, именами env-переменных, состоянием бэкапа, git-exclude и предупреждениями; `Enter` запускает оттуда. Тот же расчёт доступен как `agento launch --dry-run`.
-- **Действия провайдера в TUI.** `t` тестирует API, `c` дублирует провайдера; результат теста виден под выбранной строкой.
-- **CLI: провайдеры.** `provider list --json`, `provider edit`, `provider test`, `provider add --fetch-models`; ключи в JSON замаскированы.
-- **CLI: запуск и восстановление.** `launch` без `-p/-a` использует последний запуск, принимает регистронезависимые имена и уникальные префиксы; `restore --list` показывает активные бэкапы, `-s`/`-a` выводятся, если бэкап один.
-- **CLI: диагностика.** `agent status --json` и версия установленного агента, `agento config path`, `agento doctor`.
+- Guided **Set up AgentO** workflow: provider/service → model → profile → agent → review → launch, with existing provider reuse, suggested profile names, optional model loading, manual fallback, and agent installation.
+- **Launch last** (`r`) on the main menu, automatic review for new or changed launch configurations, and a versioned confirmation digest that stores no credentials or generated configs.
+- Launch Preview in TUI (`v`) and CLI (`launch --dry-run`), showing model/provider, directory, actual files, environment variable names, backup state, exclusions, and recovery behavior.
+- Context help (`?`), Unicode/paste search, terminal-aware list viewports, bounded details, and scrollable previews, help, and incompatibility reasons.
+- CLI provider editing, masked JSON listing, catalog checks/loading, profile/agent prefix resolution, `restore --list` with scope inference, `config path`, and `doctor` diagnostics.
+- Regression coverage for setup/repeat launches, failed saves and retries, provider dependencies, multi-file recovery, cross-process config reservations, installer flows, and 80×24 / 120×40 layouts.
 
 ### Changed
 
-- **Мастер профиля предлагает только валидные tier'ы.** Уже занятые tier'ы скрыты, «без tier» доступен только для одномодельного профиля; для multi-model показано напоминание про обязательный `base`.
-- **Ручное редактирование моделей провайдера больше не требует API-теста.** «Test API» и «Fetch models» остались необязательными помощниками.
-- **Enter в списке провайдеров открывает редактирование** (раньше Enter на существующем провайдере ничего не делал, а подсказка говорила «add»).
-- **Ошибки в `StatusLine` больше не исчезают через 5 секунд** — успешные сообщения по-прежнему скрываются автоматически.
-- **`--dev` помечен как устаревший.** Ни один адаптер не выставляет `dev: true`, поэтому флаг ничего не менял; теперь это честно написано в `--help` и README. Списки агентов в README/AGENTS синхронизированы с registry (9 агентов).
-- **Установленные агенты идут первыми** в выборе агента; выбранный агент сохраняется по id при обновлении статусов.
-- **После выхода агента печатается итог**: имя, код возврата (или signal) и восстановлен ли конфиг.
-- **`envOnly` в интерфейсе адаптера** (`copilot`, `goose`): preview и документация больше не считают, что эти агенты пишут файл конфига.
+- Main menu prioritizes launching and recovery. Child launches return with separate agent and configuration-restoration outcomes.
+- Installation/update/uninstall management lives in **Agents & recovery**; the launch picker retains installation for absent agents. Incompatible agents have expandable reasons and an **Edit profile** return path.
+- **Load models** describes the optional catalog request accurately; it does not test generation. Model editing remains available without a catalog request.
+- Forms await saves, block duplicate writes, retain data after failure, hide API keys by default (`Ctrl+R` reveals), and default exit confirmation to **Keep editing**. Single-model profiles skip tier selection.
+- Project-scope descriptions acknowledge global file changes. Recovery shows manifest files and session state, and uses **Restore previous config and launch**; shared-file conflicts open the owning scope and directory.
+- `--dev` remains accepted for compatibility; all nine registry agents are visible. README translations, badges, npm metadata, and GitHub discovery topics are refreshed.
 
 ### Fixed
 
-- **ENOENT после запуска агента показывал главное меню вместо ошибки.** TUI перезапускается сразу на экране запуска с сообщением о ненайденной команде.
-- **Удаление провайдера оставляло «висячие» профили**, которые падали только при запуске.
-- **В мастере профиля можно было выбрать уже занятый tier или «skip» для multi-model** — сохранение падало с ошибкой валидации.
-- **TUI мог запустить не того агента после сортировки по установленности.** Навигация и рендер шли по отсортированному списку, а launch/preview/overwrite — по исходному; теперь выбранный агент хранится по id, и все действия используют тот же список, что видит пользователь.
-- **`envOnly`-агенты (`copilot`, `goose`) создавали фантомный backup.** Для них больше не делаются backup, запись конфига и git-exclude; восстановление «упавшей» сессии не может удалить пользовательский файл по пути конфига агента.
-- **`--json` терял хвост вывода при передаче в пайп.** `provider`/`profile`/`agent`/`doctor`/`config`/`restore` больше не вызывают `process.exit` сразу после печати, поэтому stdout успевает сброситься и документы больше 64 КиБ парсятся (`jq`, CI).
-- **child-режим возвращал 0, если агент убит сигналом, и 1 вместо 127 при ENOENT.** Теперь код — `128 + signal` и `127`, как в independent-режиме.
-- **Мастер и редактор профиля не давали сохранить multi-model профиль после «skip» у первой модели.** При добавлении второй модели они сначала просят назначить tier существующей.
-- **Документация:** Kimi Code пишет TOML `~/.kimi/config.toml` (legacy `~/.kimi/config.json` читается), а не `~/.kimi-cli/.env`; `baseUrl` для `openai-compatible` не обязателен — используется `https://api.openai.com/v1`.
+- Update Zod and smol-toml within their existing major versions to address dependency security advisories.
+- Stabilize the onboarding interaction test by waiting for Ink input subscriptions before sending keys.
+- Escape discards the current model-name edit. Provider deletion dialogs show dependent profiles and keep operation errors visible.
+- Concurrent launches cannot overwrite shared configuration files across scopes/projects. Preparation and restore use a cross-process lock; active backups reserve files, and cleanup verifies session ownership.
+- Preserve the original backup on repeated independent launches and retain it after failed restoration. Multi-file Codex recovery restores every file; env-only agents create no phantom file backup.
+- Preserve provider endpoint paths (including `/v1`); resolve custom API URLs consistently across model loading and Kimi/PI adapters without doubled API suffixes.
+- Map Russian keyboard-layout input in API keys, reject other non-ASCII key characters with an actionable message, and report HTML/invalid catalog responses and network errors without breaking the terminal layout.
+- Keep agent/profile selection stable during filtering and install-status sorting; refresh both memory and disk install caches after agent management actions.
+- Prevent invalid provider removal and invalid multi-model tier combinations; assign an existing untiered model before adding another model.
+- Preserve child exit codes (`128 + signal`, `127` for ENOENT), restore configs after failed spawn, show missing-command errors in TUI, and avoid truncating large CLI JSON output.
 
 ## [0.10.0] - 2026-10-18
 
@@ -453,3 +447,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Qwen CLI adapter now correctly uses `"openai"` as the modelProviders key for all OpenAI-compatible providers (previously used provider name)
+
+[Unreleased]: https://github.com/emaxe/agentO/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/emaxe/agentO/compare/v0.10.0...v0.11.0

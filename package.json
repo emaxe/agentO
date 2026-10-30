@@ -1,22 +1,31 @@
 {
   "name": "@emaxe/agento",
-  "version": "0.10.0",
-  "description": "Manage AI agent configurations with profiles and providers",
+  "version": "0.11.0",
+  "description": "Launch AI coding agents with reusable model profiles, API providers, and safe config backup and restore.",
   "author": "emaxe",
   "license": "MIT",
   "keywords": [
     "ai",
-    "agent",
+    "ai-agents",
+    "coding-agents",
     "cli",
-    "configuration",
-    "claude",
-    "codex",
-    "qwen",
-    "opencode",
-    "profile",
-    "provider",
+    "tui",
     "terminal",
-    "tui"
+    "configuration",
+    "profiles",
+    "providers",
+    "llm",
+    "claude-code",
+    "codex",
+    "opencode",
+    "qwen-code",
+    "github-copilot",
+    "goose",
+    "pi",
+    "kilo-code",
+    "kimi-code",
+    "openrouter",
+    "cross-platform"
   ],
   "repository": {
     "type": "git",
@@ -33,7 +42,8 @@
   "files": [
     "dist",
     "CHANGELOG.md",
-    "AGENTS.md"
+    "AGENTS.md",
+    "README.ru.md"
   ],
   "publishConfig": {
     "access": "public"
@@ -59,14 +69,16 @@
     "https-proxy-agent": "^9.1.0",
     "ink": "^4.4.1",
     "ink-text-input": "^5.0.1",
+    "proper-lockfile": "^4.1.2",
     "react": "^18.3.1",
-    "smol-toml": "^1.8.0",
-    "zod": "^4.5.4"
+    "smol-toml": "^1.9.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^20.19.43",
+    "@types/proper-lockfile": "^4.1.4",
     "@types/react": "^18.3.3",
     "eslint": "^9.39.5",
     "globals": "^17.11.0",

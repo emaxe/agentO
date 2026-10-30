@@ -140,7 +140,7 @@ export function createProviderCommand(): Command {
     .requiredOption('-k, --api-key <key>', 'API key')
     .option(
       '-u, --base-url <url>',
-      'Base URL (for openai-compatible, responses-compatible, custom-api). For custom-api trailing /v1/ is stripped automatically',
+      'Base URL (for openai-compatible, responses-compatible, custom-api). For custom-api it is stored as-is; /v1 is applied per API mode',
     )
     .option(
       '-c, --custom-api-modes <json>',

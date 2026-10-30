@@ -1,3 +1,8 @@
+vi.mock('../config/config-operation.js', () => ({
+  withConfigOperation: async (operation: () => Promise<unknown>) => operation(),
+  assertConfigFilesAvailable: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { EventEmitter } from 'node:events';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AgentAdapter } from '../adapters/base.js';

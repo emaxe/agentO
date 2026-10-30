@@ -82,7 +82,8 @@ describe('agento provider CLI', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ data: [{ id: 'm1' }, { id: 'm2' }] }),
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ id: 'm1' }, { id: 'm2' }] }),
       }),
     );
 
@@ -107,7 +108,8 @@ describe('agento provider CLI', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({ data: [{ id: 'a' }, { id: 'b' }] }),
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ id: 'a' }, { id: 'b' }] }),
       }),
     );
 

@@ -46,17 +46,17 @@ describe('App first-run and last-launch wiring', () => {
     await rm(homeDir, { recursive: true, force: true });
   });
 
-  it('leads from the main menu to the provider screen when there is nothing configured', async () => {
+  it('starts guided setup from the main menu when there is nothing configured', async () => {
     const { App } = await import('./App.js');
     const { stdin, lastFrame } = render(<App />);
 
     await poll(lastFrame, (f) => f.includes('Providers: 0'), 'menu counts loaded');
     await settle();
     stdin.write('1'); // Launch Agent
-    await poll(lastFrame, (f) => f.includes('No profiles yet.'), 'launch empty state');
+    await poll(lastFrame, (f) => f.includes('Provider service'), 'setup service selection');
     await settle();
-    stdin.write('p');
-    await poll(lastFrame, (f) => f.includes('[+ Add provider]'), 'providers screen');
+    stdin.write('\r');
+    await poll(lastFrame, (f) => f.includes('Add Provider'), 'connection form');
   });
 
   it('shows the last launch recorded in the UI cache', async () => {

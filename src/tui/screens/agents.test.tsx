@@ -141,4 +141,33 @@ describe('Agents screen restore', () => {
     expect(await readToml(paths.defaultProfile)).toEqual(originalProfile);
     expect(backupExists('codex', 'project', projectDir)).toBe(false);
   });
+  it('opens and restores a conflicting project backup in its original directory', async () => {
+    const { writeBackup, backupExists } = await import('../../config/store.js');
+    const configPath = join(projectDir, 'opencode.json');
+    await writeBackup('opencode', 'project', {
+      cwd: projectDir,
+      files: [{ path: configPath, hadFile: true, content: { model: 'original' } }],
+    });
+    await writeFile(configPath, JSON.stringify({ model: 'patched' }));
+    vi.mocked(process.cwd).mockReturnValue(homeDir);
+    const { Agents } = await import('./Agents.js');
+    const ui = render(
+      <Agents
+        onBack={() => {}}
+        initialTarget={{ agentId: 'opencode', scope: 'project', cwd: projectDir }}
+      />,
+    );
+    await waitForFrame(ui.lastFrame, '▶ OpenCode [project]');
+    await new Promise((r) => setTimeout(r, 100));
+    ui.stdin.write('r');
+    await waitForFrame(ui.lastFrame, 'Restore OpenCode [project]?');
+    const details = await waitForFrame(ui.lastFrame, configPath);
+    expect(details).toContain('owner status unknown');
+    await new Promise((r) => setTimeout(r, 100));
+    ui.stdin.write('y');
+    await waitForFrame(ui.lastFrame, 'Restored OpenCode');
+    expect(JSON.parse(await readFile(configPath, 'utf8'))).toEqual({ model: 'original' });
+    expect(backupExists('opencode', 'project', projectDir)).toBe(false);
+    ui.unmount();
+  });
 });

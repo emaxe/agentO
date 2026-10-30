@@ -3,6 +3,9 @@
  */
 import React, { useEffect, useState } from 'react';
 import { useApp } from 'ink';
+import { SetupWizard } from './wizards/SetupWizard.js';
+import { listAdapters } from '../agents/registry.js';
+import { backupExists } from '../config/store.js';
 import { MainMenu, type MainMenuState } from './screens/MainMenu.js';
 import { LaunchAgent } from './screens/LaunchAgent.js';
 import { Providers } from './screens/Providers.js';
@@ -16,9 +19,11 @@ import type { ExecRequest } from '../launcher/independent.js';
 import type { AgentInstallStatus } from '../config/store.js';
 
 /** Available screens in the TUI. */
-export type Screen = 'main' | 'launch' | 'providers' | 'profiles' | 'agents' | 'settings';
+export type Screen =
+  'main' | 'setup' | 'repeat' | 'launch' | 'providers' | 'profiles' | 'agents' | 'settings';
 
 interface AppProps {
+  outcome?: { agent: string; recovery: string };
   dev?: boolean;
   initialScreen?: Screen;
   onExec?: (req: ExecRequest) => void;
@@ -29,6 +34,7 @@ interface AppProps {
 /** Root Ink component that switches between TUI screens. */
 export function App({
   dev,
+  outcome,
   initialScreen = 'main',
   onExec,
   launchError,
@@ -49,13 +55,22 @@ export function App({
           ? config.profiles.find((candidate) => candidate.id === last.profileId)
           : undefined;
         const agent = last ? getAgent(last.agentId, { dev: true }) : undefined;
+        const recoveryTargets = listAdapters({ dev }).flatMap((adapter) =>
+          (['global', 'project'] as const)
+            .filter((scope) => backupExists(adapter.id, scope, process.cwd()))
+            .map((scope) => ({ agentId: adapter.id, scope })),
+        );
         setMenuState({
+          recoveryTarget: recoveryTargets[0],
+          recoveryCount: recoveryTargets.length,
           providers: config.providers.length,
           profiles: config.profiles.length,
           ...(last && profile && agent
             ? {
                 lastLaunch: {
                   profileName: profile.name,
+                  model: (profile.models.find((m) => m.tier === 'base') ?? profile.models[0])
+                    ?.model,
                   agentLabel: agent.label,
                   mode: last.mode,
                   scope: last.scope,
@@ -92,12 +107,24 @@ export function App({
   };
 
   if (screen === 'main') {
-    return <MainMenu state={menuState} onSelect={navigate} onExit={exit} />;
+    return <MainMenu outcome={outcome} state={menuState} onSelect={navigate} onExit={exit} />;
   }
 
-  if (screen === 'launch') {
+  if (screen === 'setup')
+    return (
+      <SetupWizard
+        dev={dev}
+        agentStatusCache={agentStatusCache}
+        onBack={goBack}
+        onExec={handleExec}
+      />
+    );
+
+  if (screen === 'launch' || screen === 'repeat') {
     return (
       <LaunchAgent
+        key={screen}
+        repeatLast={screen === 'repeat'}
         dev={dev}
         onBack={goBack}
         onNavigate={navigate}
@@ -117,7 +144,14 @@ export function App({
   }
 
   if (screen === 'agents') {
-    return <Agents dev={dev} onBack={goBack} />;
+    return (
+      <Agents
+        agentStatusCache={agentStatusCache}
+        dev={dev}
+        initialTarget={menuState?.recoveryTarget}
+        onBack={goBack}
+      />
+    );
   }
 
   if (screen === 'settings') {

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Box, Text } from 'ink';
+import { DiscardChanges } from '../components/DiscardChanges.js';
+import { useViewport } from '../use-terminal-size.js';
 import TextInput from 'ink-text-input';
 import { sanitizeFieldValue } from '../sanitize-field-value.js';
 import { useKeyInput } from '../use-key-input.js';
@@ -7,6 +9,7 @@ import type { Provider, ModelConfig, ProviderType } from '../../config/schema.js
 import { capabilityMarker, PROVIDER_TYPES } from '../../config/schema.js';
 import { validateProvider } from '../../config/validation.js';
 import { isOpenAICompatible, resolveModelsBaseUrl, fetchProviderModels } from '../provider-api.js';
+import { mapRussianLayout } from '../keyboard-layout.js';
 
 /** All possible field names, including conditional API-test fields. */
 type FieldName =
@@ -26,7 +29,7 @@ type StringField = 'name' | 'apiKey' | 'baseUrl';
 /** Active screen within the provider form. */
 type SubMode = 'form' | 'models' | 'model-selection';
 
-interface FormState {
+export interface ProviderDraft {
   name: string;
   type: ProviderType;
   apiKey: string;
@@ -35,7 +38,7 @@ interface FormState {
   models: ModelConfig[];
 }
 
-const INITIAL_FORM: FormState = {
+const INITIAL_FORM: ProviderDraft = {
   name: '',
   type: 'openai-compatible',
   apiKey: '',
@@ -44,13 +47,10 @@ const INITIAL_FORM: FormState = {
   models: [],
 };
 
-/** How many fetched models are visible at once in the selection list. */
-const MODEL_VIEWPORT = 20;
-/** How many saved model rows are visible at once in the editor. */
-const MODEL_EDIT_VIEWPORT = 12;
-
 interface ProviderFormProps {
   provider?: Provider;
+  initialDraft?: ProviderDraft;
+  onDraftChange?: (draft: ProviderDraft) => void;
   providers: Provider[];
   onSubmit: (data: {
     name: string;
@@ -59,7 +59,7 @@ interface ProviderFormProps {
     baseUrl?: string;
     customApiModes?: { openai: boolean; anthropic: boolean; responses: boolean };
     models: ModelConfig[];
-  }) => Promise<void> | void;
+  }) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -89,26 +89,39 @@ function labelFor(f: FieldName): string {
 
 export function ProviderForm({
   provider,
+  initialDraft,
+  onDraftChange,
   providers,
   onSubmit,
   onCancel,
 }: ProviderFormProps): React.JSX.Element {
-  const [form, setForm] = useState<FormState>(
-    provider
-      ? {
-          name: provider.name,
-          type: provider.type,
-          apiKey: provider.apiKey,
-          baseUrl: provider.baseUrl ?? '',
-          customApiModes: provider.customApiModes
-            ? { ...provider.customApiModes }
-            : provider.type === 'custom-api'
-              ? { openai: false, anthropic: false, responses: false }
-              : null,
-          models: provider.models.map((m) => ({ ...m, capabilities: { ...m.capabilities } })),
-        }
-      : INITIAL_FORM,
+  const [form, setForm] = useState<ProviderDraft>(
+    initialDraft ??
+      (provider
+        ? {
+            name: provider.name,
+            type: provider.type,
+            apiKey: provider.apiKey,
+            baseUrl: provider.baseUrl ?? '',
+            customApiModes: provider.customApiModes
+              ? { ...provider.customApiModes }
+              : provider.type === 'custom-api'
+                ? { openai: false, anthropic: false, responses: false }
+                : null,
+            models: provider.models.map((m) => ({ ...m, capabilities: { ...m.capabilities } })),
+          }
+        : INITIAL_FORM),
   );
+  const MODEL_VIEWPORT = useViewport(10);
+  const MODEL_EDIT_VIEWPORT = useViewport(10);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [showKey, setShowKey] = useState(false);
+  const [modelDraft, setModelDraft] = useState('');
+  const [fieldError, setFieldError] = useState<FieldName | null>(null);
+  useEffect(() => {
+    onDraftChange?.(form);
+  }, [form, onDraftChange]);
   const [activeFieldIndex, setActiveFieldIndex] = useState(0);
   const [subMode, setSubMode] = useState<SubMode>('form');
   const [modelsListIndex, setModelsListIndex] = useState(0);
@@ -137,6 +150,12 @@ export function ProviderForm({
 
   /** Ref to the in-flight AbortController so we can cancel stale requests. */
   const abortControllerRef = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      abortControllerRef.current?.abort();
+    },
+    [],
+  );
 
   /** Snapshot of the form as it was when opened; used to detect unsaved edits. */
   const initialSnapshot = useRef(JSON.stringify(form));
@@ -154,6 +173,7 @@ export function ProviderForm({
 
   // Reset API-test state whenever credentials or type change.
   useEffect(() => {
+    abortControllerRef.current?.abort();
     setApiTestStatus('idle');
     setApiTestError('');
     setCachedModels([]);
@@ -184,7 +204,7 @@ export function ProviderForm({
 
   const activeField: FieldName = fields[activeFieldIndex] ?? 'name';
 
-  /** Tests the API by fetching /models; caches model list on success. */
+  /** Loads the optional /models catalog; this does not test generation. */
   const doTest = useCallback(async () => {
     abortControllerRef.current?.abort();
     const controller = new AbortController();
@@ -210,12 +230,25 @@ export function ProviderForm({
     }
   }, [form.type, form.baseUrl, form.apiKey]);
 
+  /**
+   * Writes a text field through the shared sanitizer.
+   *
+   * API keys are ASCII bearer tokens, so a Cyrillic character there is always the
+   * Russian layout leaking into the terminal — mapping it to the QWERTY key is what
+   * the user meant, and it keeps the value usable in an `Authorization` header.
+   */
+  const updateTextField = useCallback((field: StringField, value: string) => {
+    const normalized = field === 'apiKey' ? mapRussianLayout(value) : value;
+    setForm((f) => ({ ...f, [field]: sanitizeFieldValue(normalized) }));
+  }, []);
+
   const isDirty = useCallback(
     (): boolean => JSON.stringify(form) !== initialSnapshot.current,
     [form],
   );
 
-  const doSubmit = useCallback(() => {
+  const doSubmit = useCallback(async () => {
+    if (savingRef.current) return;
     const models = form.models.map((m) => ({ ...m, name: m.name.trim() })).filter((m) => m.name);
     try {
       validateProvider(
@@ -230,292 +263,305 @@ export function ProviderForm({
         providers,
         provider?.id,
       );
+      savingRef.current = true;
+      setSaving(true);
+      setFieldError(null);
       setStatus('Saving...');
-      const result = onSubmit({
+      await onSubmit({
         ...form,
         models,
         customApiModes: form.customApiModes ?? undefined,
       });
-      if (result instanceof Promise) {
-        result.catch((err: unknown) => setStatus(`Error: ${String(err)}`));
-      }
+      setStatus('Saved');
+      initialSnapshot.current = JSON.stringify(form);
     } catch (err) {
-      setStatus(String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      const field: FieldName = /API key/i.test(message)
+        ? 'apiKey'
+        : /baseUrl/i.test(message)
+          ? 'baseUrl'
+          : /API mode/i.test(message)
+            ? 'customApiModes'
+            : /model/i.test(message)
+              ? 'models'
+              : 'name';
+      if (!savingRef.current) {
+        setFieldError(field);
+        setActiveFieldIndex(Math.max(0, fields.indexOf(field)));
+      }
+      setStatus(`Error: ${message}`);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-  }, [form, providers, provider, onSubmit]);
+  }, [fields, form, providers, provider, onSubmit]);
 
-  useKeyInput((input, key) => {
-    // --- model-selection sub-mode ---
-    if (subMode === 'model-selection') {
+  useKeyInput(
+    (input, key) => {
+      if (savingRef.current || confirmDiscard) return;
+      if (activeField === 'apiKey' && key.ctrl && input === 'r') {
+        setShowKey((v) => !v);
+        return;
+      }
+      // --- model-selection sub-mode ---
+      if (subMode === 'model-selection') {
+        if (key.escape) {
+          setSubMode('form');
+          return;
+        }
+        if (key.pageDown) {
+          setModelSelectionCursor((i) => Math.min(filteredModels.length - 1, i + MODEL_VIEWPORT));
+          return;
+        }
+        if (key.pageUp) {
+          setModelSelectionCursor((i) => Math.max(0, i - MODEL_VIEWPORT));
+          return;
+        }
+        // Terminals report the Backspace key as either 0x7f (delete) or Ctrl+H.
+        if (key.backspace || key.delete) {
+          setModelFilter((f) => [...f].slice(0, -1).join(''));
+          setModelSelectionCursor(0);
+          return;
+        }
+        if (input === ' ') {
+          const modelId = filteredModels[modelSelectionCursor];
+          if (modelId !== undefined) {
+            setModelSelectionSelected((prev) => {
+              const next = new Set(prev);
+              if (next.has(modelId)) next.delete(modelId);
+              else next.add(modelId);
+              return next;
+            });
+          }
+          return;
+        }
+        if (
+          input.length > 0 &&
+          !key.ctrl &&
+          !key.meta &&
+          !key.upArrow &&
+          !key.downArrow &&
+          [...input].every(
+            (char) => (char.codePointAt(0) ?? 0) >= 32 && char.codePointAt(0) !== 127,
+          )
+        ) {
+          setModelFilter((f) => f + input);
+          setModelSelectionCursor(0);
+          return;
+        }
+        if (key.upArrow) {
+          setModelSelectionCursor((i) => Math.max(0, i - 1));
+          return;
+        }
+        if (key.downArrow) {
+          setModelSelectionCursor((i) => Math.min(filteredModels.length - 1, i + 1));
+          return;
+        }
+        if (key.return) {
+          const existingNames = new Set(form.models.map((m) => m.name));
+          const toAdd = [...modelSelectionSelected]
+            .filter((id) => !existingNames.has(id))
+            .map((id): ModelConfig => ({
+              name: id,
+              capabilities: { image: true, video: false, audio: false },
+            }));
+          if (toAdd.length > 0) {
+            setForm((f) => ({ ...f, models: [...f.models, ...toAdd] }));
+          }
+          setSubMode('form');
+          return;
+        }
+        return;
+      }
+
+      // --- models sub-mode ---
+      if (subMode === 'models') {
+        if (key.escape) {
+          if (modelsEditingIndex !== null) {
+            setModelsEditingIndex(null);
+            return;
+          }
+          if (modelsAddingNew) {
+            setModelsAddingNew(false);
+            return;
+          }
+          setSubMode('form');
+          return;
+        }
+
+        if (modelsEditingIndex !== null || modelsAddingNew) {
+          return;
+        }
+
+        if (key.pageDown) {
+          setModelsListIndex((i) => Math.min(form.models.length, i + MODEL_EDIT_VIEWPORT));
+          return;
+        }
+        if (key.pageUp) {
+          setModelsListIndex((i) => Math.max(0, i - MODEL_EDIT_VIEWPORT));
+          return;
+        }
+
+        if (key.upArrow) {
+          setModelsListIndex((i) => Math.max(0, i - 1));
+          return;
+        }
+        if (key.downArrow) {
+          setModelsListIndex((i) => Math.min(form.models.length, i + 1));
+          return;
+        }
+
+        if (modelsListIndex < form.models.length) {
+          if (input === 'i') {
+            setForm((f) => ({
+              ...f,
+              models: f.models.map((m, j) =>
+                j === modelsListIndex
+                  ? { ...m, capabilities: { ...m.capabilities, image: !m.capabilities.image } }
+                  : m,
+              ),
+            }));
+            return;
+          }
+          if (input === 'v') {
+            setForm((f) => ({
+              ...f,
+              models: f.models.map((m, j) =>
+                j === modelsListIndex
+                  ? { ...m, capabilities: { ...m.capabilities, video: !m.capabilities.video } }
+                  : m,
+              ),
+            }));
+            return;
+          }
+          if (input === 'a') {
+            setForm((f) => ({
+              ...f,
+              models: f.models.map((m, j) =>
+                j === modelsListIndex
+                  ? { ...m, capabilities: { ...m.capabilities, audio: !m.capabilities.audio } }
+                  : m,
+              ),
+            }));
+            return;
+          }
+        }
+
+        if (input === 'd' && form.models.length > 0 && modelsListIndex < form.models.length) {
+          setForm((f) => ({ ...f, models: f.models.filter((_, idx) => idx !== modelsListIndex) }));
+          setModelsListIndex((i) => Math.max(0, i - 1));
+          return;
+        }
+
+        if (key.return || input === 'e') {
+          if (modelsListIndex < form.models.length) {
+            setModelDraft(form.models[modelsListIndex]!.name);
+            setModelsEditingIndex(modelsListIndex);
+          } else {
+            setModelsAddingNew(true);
+            setModelsNewValue('');
+          }
+          return;
+        }
+
+        return;
+      }
+
       if (key.escape) {
-        setSubMode('form');
+        if (isDirty()) {
+          setConfirmDiscard(true);
+          return;
+        }
+        onCancel();
         return;
       }
-      if (key.pageDown) {
-        setModelSelectionCursor((i) => Math.min(filteredModels.length - 1, i + MODEL_VIEWPORT));
+
+      if (activeField === 'models' && key.return) {
+        setStatus('');
+        setSubMode('models');
+        setModelsListIndex(0);
+        setModelsEditingIndex(null);
+        setModelsAddingNew(false);
         return;
       }
-      if (key.pageUp) {
-        setModelSelectionCursor((i) => Math.max(0, i - MODEL_VIEWPORT));
+
+      if (activeField === 'apiTest' && key.return) {
+        if (apiTestStatus !== 'testing') void doTest();
         return;
       }
-      // Terminals report the Backspace key as either 0x7f (delete) or Ctrl+H.
-      if (key.backspace || key.delete) {
-        setModelFilter((f) => f.slice(0, -1));
+
+      if (activeField === 'fetchModels' && key.return) {
         setModelSelectionCursor(0);
-        return;
-      }
-      if (input === ' ') {
-        const modelId = filteredModels[modelSelectionCursor];
-        if (modelId !== undefined) {
-          setModelSelectionSelected((prev) => {
-            const next = new Set(prev);
-            if (next.has(modelId)) next.delete(modelId);
-            else next.add(modelId);
-            return next;
-          });
-        }
-        return;
-      }
-      if (
-        input.length === 1 &&
-        !key.ctrl &&
-        !key.meta &&
-        !key.upArrow &&
-        !key.downArrow &&
-        input >= ' ' &&
-        input <= '~'
-      ) {
-        setModelFilter((f) => f + input);
-        setModelSelectionCursor(0);
-        return;
-      }
-      if (key.upArrow) {
-        setModelSelectionCursor((i) => Math.max(0, i - 1));
-        return;
-      }
-      if (key.downArrow) {
-        setModelSelectionCursor((i) => Math.min(filteredModels.length - 1, i + 1));
-        return;
-      }
-      if (key.return) {
-        const existingNames = new Set(form.models.map((m) => m.name));
-        const toAdd = [...modelSelectionSelected]
-          .filter((id) => !existingNames.has(id))
-          .map((id): ModelConfig => ({
-            name: id,
-            capabilities: { image: true, video: false, audio: false },
-          }));
-        if (toAdd.length > 0) {
-          setForm((f) => ({ ...f, models: [...f.models, ...toAdd] }));
-        }
-        setSubMode('form');
-        return;
-      }
-      return;
-    }
-
-    // --- models sub-mode ---
-    if (subMode === 'models') {
-      if (key.escape) {
-        if (modelsEditingIndex !== null) {
-          setModelsEditingIndex(null);
-          return;
-        }
-        if (modelsAddingNew) {
-          setModelsAddingNew(false);
-          return;
-        }
-        setSubMode('form');
+        setModelSelectionSelected(new Set());
+        setModelFilter('');
+        setSubMode('model-selection');
         return;
       }
 
-      if (modelsEditingIndex !== null || modelsAddingNew) {
-        return;
-      }
-
-      if (key.pageDown) {
-        setModelsListIndex((i) => Math.min(form.models.length, i + MODEL_EDIT_VIEWPORT));
-        return;
-      }
-      if (key.pageUp) {
-        setModelsListIndex((i) => Math.max(0, i - MODEL_EDIT_VIEWPORT));
-        return;
-      }
-
-      if (key.upArrow) {
-        setModelsListIndex((i) => Math.max(0, i - 1));
-        return;
-      }
-      if (key.downArrow) {
-        setModelsListIndex((i) => Math.min(form.models.length, i + 1));
-        return;
-      }
-
-      if (modelsListIndex < form.models.length) {
-        if (input === 'i') {
-          setForm((f) => ({
-            ...f,
-            models: f.models.map((m, j) =>
-              j === modelsListIndex
-                ? { ...m, capabilities: { ...m.capabilities, image: !m.capabilities.image } }
-                : m,
-            ),
-          }));
-          return;
-        }
-        if (input === 'v') {
-          setForm((f) => ({
-            ...f,
-            models: f.models.map((m, j) =>
-              j === modelsListIndex
-                ? { ...m, capabilities: { ...m.capabilities, video: !m.capabilities.video } }
-                : m,
-            ),
-          }));
+      if (activeField === 'customApiModes' && form.customApiModes) {
+        if (input === 'o') {
+          setForm((f) =>
+            f.customApiModes
+              ? { ...f, customApiModes: { ...f.customApiModes, openai: !f.customApiModes.openai } }
+              : f,
+          );
           return;
         }
         if (input === 'a') {
-          setForm((f) => ({
-            ...f,
-            models: f.models.map((m, j) =>
-              j === modelsListIndex
-                ? { ...m, capabilities: { ...m.capabilities, audio: !m.capabilities.audio } }
-                : m,
-            ),
-          }));
+          setForm((f) =>
+            f.customApiModes
+              ? {
+                  ...f,
+                  customApiModes: { ...f.customApiModes, anthropic: !f.customApiModes.anthropic },
+                }
+              : f,
+          );
+          return;
+        }
+        if (input === 'r') {
+          setForm((f) =>
+            f.customApiModes
+              ? {
+                  ...f,
+                  customApiModes: { ...f.customApiModes, responses: !f.customApiModes.responses },
+                }
+              : f,
+          );
           return;
         }
       }
 
-      if (input === 'd' && form.models.length > 0 && modelsListIndex < form.models.length) {
-        setForm((f) => ({ ...f, models: f.models.filter((_, idx) => idx !== modelsListIndex) }));
-        setModelsListIndex((i) => Math.max(0, i - 1));
+      if ((key.tab && key.shift) || key.upArrow) {
+        setActiveFieldIndex((i) => (i - 1 + fields.length) % fields.length);
+        return;
+      }
+      if ((key.tab && !key.shift) || key.downArrow) {
+        setActiveFieldIndex((i) => (i + 1) % fields.length);
         return;
       }
 
-      if (key.return) {
-        if (modelsListIndex < form.models.length) {
-          setModelsEditingIndex(modelsListIndex);
-        } else {
-          setModelsAddingNew(true);
-          setModelsNewValue('');
+      if (activeField === 'type') {
+        if (key.return || input === ' ' || key.leftArrow || key.rightArrow) {
+          const currentIndex = PROVIDER_TYPES.indexOf(form.type);
+          const nextIndex = key.leftArrow
+            ? (currentIndex - 1 + PROVIDER_TYPES.length) % PROVIDER_TYPES.length
+            : (currentIndex + 1) % PROVIDER_TYPES.length;
+          setForm((f) => ({ ...f, type: PROVIDER_TYPES[nextIndex]! }));
+          return;
         }
+      }
+
+      if (activeField === 'save' && key.return) {
+        void doSubmit();
         return;
       }
-
-      return;
-    }
-
-    // --- form sub-mode ---
-    if (confirmDiscard) {
-      const lower = input.toLowerCase();
-      if (key.return || lower === 'y') {
-        onCancel();
-      } else if (key.escape || lower === 'n') {
-        setConfirmDiscard(false);
-      }
-      return;
-    }
-
-    if (key.escape) {
-      if (isDirty()) {
-        setConfirmDiscard(true);
-        return;
-      }
-      onCancel();
-      return;
-    }
-
-    if (activeField === 'models' && key.return) {
-      setStatus('');
-      setSubMode('models');
-      setModelsListIndex(0);
-      setModelsEditingIndex(null);
-      setModelsAddingNew(false);
-      return;
-    }
-
-    if (activeField === 'apiTest' && key.return) {
-      if (apiTestStatus !== 'testing') void doTest();
-      return;
-    }
-
-    if (activeField === 'fetchModels' && key.return) {
-      setModelSelectionCursor(0);
-      setModelSelectionSelected(new Set());
-      setModelFilter('');
-      setSubMode('model-selection');
-      return;
-    }
-
-    if (activeField === 'customApiModes' && form.customApiModes) {
-      if (input === 'o') {
-        setForm((f) =>
-          f.customApiModes
-            ? { ...f, customApiModes: { ...f.customApiModes, openai: !f.customApiModes.openai } }
-            : f,
-        );
-        return;
-      }
-      if (input === 'a') {
-        setForm((f) =>
-          f.customApiModes
-            ? {
-                ...f,
-                customApiModes: { ...f.customApiModes, anthropic: !f.customApiModes.anthropic },
-              }
-            : f,
-        );
-        return;
-      }
-      if (input === 'r') {
-        setForm((f) =>
-          f.customApiModes
-            ? {
-                ...f,
-                customApiModes: { ...f.customApiModes, responses: !f.customApiModes.responses },
-              }
-            : f,
-        );
-        return;
-      }
-    }
-
-    if ((key.tab && key.shift) || key.upArrow) {
-      setActiveFieldIndex((i) => (i - 1 + fields.length) % fields.length);
-      return;
-    }
-    if ((key.tab && !key.shift) || key.downArrow) {
-      setActiveFieldIndex((i) => (i + 1) % fields.length);
-      return;
-    }
-
-    if (activeField === 'type') {
-      if (key.return || input === ' ' || key.leftArrow || key.rightArrow) {
-        const currentIndex = PROVIDER_TYPES.indexOf(form.type);
-        const nextIndex = key.leftArrow
-          ? (currentIndex - 1 + PROVIDER_TYPES.length) % PROVIDER_TYPES.length
-          : (currentIndex + 1) % PROVIDER_TYPES.length;
-        setForm((f) => ({ ...f, type: PROVIDER_TYPES[nextIndex]! }));
-        return;
-      }
-    }
-
-    if (activeField === 'save' && key.return) {
-      doSubmit();
-      return;
-    }
-  });
+    },
+    { textInput: subMode === 'model-selection' },
+  );
 
   // --- discard-confirmation dialog ---
   if (confirmDiscard) {
-    return (
-      <Box flexDirection="column" padding={1}>
-        <Text bold>Unsaved changes</Text>
-        <Text>Discard changes? y/Enter: discard | n/Esc: keep editing</Text>
-      </Box>
-    );
+    return <DiscardChanges onKeep={() => setConfirmDiscard(false)} onDiscard={onCancel} />;
   }
 
   // --- model-selection sub-mode render ---
@@ -569,6 +615,7 @@ export function ProviderForm({
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>Edit Models</Text>
+        <Text dimColor>[iva]: image / video / audio; - means disabled</Text>
         <Text dimColor>
           {inEdit
             ? 'Enter: save  Esc: cancel'
@@ -596,17 +643,19 @@ export function ProviderForm({
                       <Text color="cyan">{modelsListIndex === idx && !inEdit ? '▶ ' : '  '}</Text>
                       {modelsEditingIndex === idx ? (
                         <TextInput
-                          value={model.name}
+                          value={modelDraft}
                           focus
-                          onChange={(v) =>
+                          onChange={(v) => setModelDraft(sanitizeFieldValue(v))}
+                          onSubmit={() => {
+                            if (!modelDraft.trim()) return;
                             setForm((f) => ({
                               ...f,
                               models: f.models.map((m, j) =>
-                                j === idx ? { ...m, name: sanitizeFieldValue(v) } : m,
+                                j === idx ? { ...m, name: modelDraft.trim() } : m,
                               ),
-                            }))
-                          }
-                          onSubmit={() => setModelsEditingIndex(null)}
+                            }));
+                            setModelsEditingIndex(null);
+                          }}
                         />
                       ) : (
                         <Text>
@@ -671,7 +720,7 @@ export function ProviderForm({
         : activeField === 'customApiModes'
           ? 'o/a/r: toggle modes  Tab: navigate  Esc: cancel'
           : activeField === 'apiTest'
-            ? 'Enter: test API  Tab: next field'
+            ? 'Enter: load models  Tab: next field'
             : activeField === 'fetchModels'
               ? 'Enter: fetch model list  Tab: next field'
               : 'Tab/↑↓: navigate  Space/←→: toggle type  Esc: cancel';
@@ -679,7 +728,7 @@ export function ProviderForm({
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold>{provider ? 'Edit Provider' : 'Add Provider'}</Text>
-      {status && (
+      {status && !fieldError && (
         <Text
           color={status.startsWith('Error') ? 'red' : status === 'Saving...' ? 'cyan' : 'yellow'}
         >
@@ -724,18 +773,20 @@ export function ProviderForm({
                       }
                       bold={focused}
                     >
-                      {focused ? '[ Test API ]' : ' Test API '}
+                      {focused ? '[ Load models ]' : ' Load models '}
                     </Text>
-                    {apiTestStatus === 'testing' && <Text color="cyan"> Testing...</Text>}
+                    {apiTestStatus === 'testing' && <Text color="cyan"> Loading...</Text>}
                     {apiTestStatus === 'success' && (
                       <Text color="green"> ✓ OK — {cachedModels.length} models</Text>
                     )}
-                    {apiTestStatus === 'error' && <Text color="red"> ✗ {apiTestError}</Text>}
+                    {apiTestStatus === 'error' && (
+                      <Text color="red"> ✗ {apiTestError} · Retry or enter a model in Models.</Text>
+                    )}
                   </Box>
                 )}
                 {field === 'fetchModels' && (
                   <Text color={focused ? 'green' : 'gray'} bold={focused}>
-                    {focused ? '[ Fetch model list ]' : '  Fetch model list  '}
+                    {focused ? '[ Choose loaded models ]' : '  Choose loaded models  '}
                   </Text>
                 )}
                 {field !== 'type' &&
@@ -745,16 +796,15 @@ export function ProviderForm({
                   field !== 'apiTest' &&
                   field !== 'fetchModels' && (
                     <TextInput
+                      mask={field === 'apiKey' && !showKey ? '*' : undefined}
                       value={form[field as StringField]}
-                      onChange={(value) =>
-                        setForm((f) => ({ ...f, [field]: sanitizeFieldValue(value) }))
-                      }
-                      focus={focused}
-                      showCursor={focused}
+                      onChange={(value) => updateTextField(field as StringField, value)}
+                      focus={focused && !saving}
+                      showCursor={focused && !saving}
                       placeholder={
                         field === 'baseUrl'
                           ? form.type === 'custom-api'
-                            ? '(required, /v1/ stripped automatically)'
+                            ? '(required, e.g. https://api.example.com/v1)'
                             : form.type === 'responses-compatible'
                               ? '(required)'
                               : form.type === 'openai-compatible'
@@ -765,6 +815,23 @@ export function ProviderForm({
                     />
                   )}
               </Box>
+              {field === 'type' && focused && (
+                <Text dimColor>
+                  {form.type === 'openai-compatible'
+                    ? 'Chat Completions: messages in, generated text out.'
+                    : form.type === 'responses-compatible'
+                      ? 'Responses: OpenAI-style responses and tool calls.'
+                      : form.type === 'anthropic-compatible'
+                        ? 'Messages: Anthropic-compatible conversation API.'
+                        : form.type === 'custom-api'
+                          ? 'Choose the API formats supported by your endpoint below.'
+                          : 'Known service defaults; custom Base URL is optional.'}
+                </Text>
+              )}
+              {fieldError === field && <Text color="red">{status}</Text>}
+              {field === 'apiKey' && focused && (
+                <Text dimColor>Ctrl+R: {showKey ? 'hide' : 'reveal'} API key</Text>
+              )}
               {field === 'customApiModes' && form.customApiModes && (
                 <Box flexDirection="column" paddingLeft={4}>
                   <Text dimColor={!focused}>
@@ -784,7 +851,7 @@ export function ProviderForm({
               {field === 'models' && (
                 <Box flexDirection="column" paddingLeft={4}>
                   {form.models.length === 0 && <Text dimColor>(no models)</Text>}
-                  {form.models.map((model, idx) => (
+                  {form.models.slice(0, 2).map((model, idx) => (
                     <Box key={idx}>
                       <Text dimColor={!focused}>
                         <Text color="gray">{capabilityMarker(model.capabilities)} </Text>
@@ -792,6 +859,9 @@ export function ProviderForm({
                       </Text>
                     </Box>
                   ))}
+                  {form.models.length > 2 && (
+                    <Text dimColor>{form.models.length - 2} more · Enter to edit</Text>
+                  )}
                   <Text
                     color={focused && modelsListIndex === form.models.length ? 'green' : 'cyan'}
                     dimColor={!(focused && modelsListIndex === form.models.length)}

@@ -138,3 +138,17 @@ describe('isBackupConflictError', () => {
     );
   });
 });
+
+describe('recovery return context', () => {
+  it('opens the owning scope and project for a shared-file conflict', async () => {
+    const { recoveryTargetForError } = await import('./useLaunchWizard.js');
+    const { p } = await import('../../test-utils/paths.js');
+    const directory = p('workspace', 'other project');
+    const error = `Active backup already exists for codex (project): shared config file config.toml. Run "agento restore -a codex -s project" in ${directory} before launching again. Backup: backup.json`;
+    expect(recoveryTargetForError(error, { agentId: 'codex', scope: 'global' })).toEqual({
+      agentId: 'codex',
+      scope: 'project',
+      cwd: directory,
+    });
+  });
+});

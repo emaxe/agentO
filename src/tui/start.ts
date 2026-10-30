@@ -16,6 +16,7 @@ import type { Screen } from './App.js';
 const agentStatusCache: Record<string, AgentInstallStatus> = {};
 
 export interface StartTuiOptions {
+  outcome?: { agent: string; recovery: string };
   dev?: boolean;
   launchError?: { agentId: string; profileId?: string; error?: string };
   /** Screen to open first — after an agent exits, return to the launch wizard. */
@@ -32,6 +33,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<ExecReque
   const { waitUntilExit } = render(
     React.createElement(App, {
       dev: options.dev,
+      outcome: options.outcome,
       initialScreen: options.initialScreen,
       launchError: options.launchError,
       agentStatusCache,

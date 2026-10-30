@@ -1,18 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text } from 'ink';
+import { useStableSelection } from '../use-stable-selection.js';
 import { useKeyInput } from '../use-key-input.js';
 import { useHelp } from '../use-help.js';
 import { HelpOverlay } from '../components/HelpOverlay.js';
+import { readConfig } from '../../config/store.js';
+import { StatusLine } from '../components/StatusLine.js';
 import { ProviderList, type ProviderTestStatus } from './ProviderList.js';
 import { ProviderForm } from './ProviderForm.js';
-import {
-  listProviders,
-  addProvider,
-  updateProvider,
-  removeProvider,
-} from '../../providers/provider-manager.js';
+import { addProvider, updateProvider, removeProvider } from '../../providers/provider-manager.js';
 import { fetchProviderModels, isOpenAICompatible, resolveModelsBaseUrl } from '../provider-api.js';
-import type { Provider } from '../../config/schema.js';
+import type { Profile, Provider } from '../../config/schema.js';
 
 type Mode = 'list' | 'add' | 'edit' | 'confirm-delete';
 
@@ -22,6 +20,8 @@ interface ProvidersProps {
 
 /** Ink component for managing API providers (list, add, edit, delete). */
 export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [deleting, setDeleting] = useState(false);
   const [mode, setMode] = useState<Mode>('list');
   const [providers, setProviders] = useState<Provider[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -34,7 +34,12 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
   const help = useHelp();
 
   const reload = useCallback(() => {
-    listProviders().then(setProviders).catch(console.error);
+    readConfig()
+      .then((config) => {
+        setProviders(config.providers);
+        setProfiles(config.profiles);
+      })
+      .catch((err) => setStatus(`Error: ${String(err)}`));
   }, []);
 
   useEffect(() => {
@@ -52,9 +57,11 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
       )
     : providers;
 
-  useEffect(() => {
-    setSelectedIndex((i) => Math.min(i, filteredProviders.length));
-  }, [query, providers.length, filteredProviders.length]);
+  useStableSelection(
+    filteredProviders.map((item) => item.id),
+    selectedIndex,
+    setSelectedIndex,
+  );
 
   const testProvider = useCallback((provider: Provider) => {
     if (!isOpenAICompatible(provider.type)) {
@@ -70,7 +77,7 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
 
     setTestStatus((prev) => ({
       ...prev,
-      [provider.id]: { state: 'testing', message: 'testing...' },
+      [provider.id]: { state: 'testing', message: 'loading models...' },
     }));
     fetchProviderModels(
       resolveModelsBaseUrl(provider.type, provider.baseUrl ?? ''),
@@ -121,104 +128,125 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
     [providers, reload],
   );
 
-  useKeyInput((input, key) => {
-    if (mode === 'list' && !searchOpen && help.handleKey(input, key)) return;
+  useKeyInput(
+    (input, key) => {
+      if (mode === 'list' && !searchOpen && help.handleKey(input, key)) return;
 
-    if (mode === 'list' && searchOpen) {
-      if (key.escape) {
-        setSearchOpen(false);
-        setQuery('');
-        return;
-      }
-      if (key.return) {
-        setSearchOpen(false);
-        return;
-      }
-      if (key.backspace || key.delete) {
-        setQuery((q) => q.slice(0, -1));
-        return;
-      }
-      if (key.upArrow) {
-        setSelectedIndex((i) => Math.max(0, i - 1));
-        return;
-      }
-      if (key.downArrow) {
-        setSelectedIndex((i) => Math.min(Math.max(0, filteredProviders.length - 1), i + 1));
-        return;
-      }
-      if (
-        input.length > 0 &&
-        !key.ctrl &&
-        !key.meta &&
-        [...input].every((char) => char >= ' ' && char <= '~')
-      ) {
-        setQuery((q) => q + input);
-        setSelectedIndex(0);
-        return;
-      }
-      return;
-    }
-
-    if (mode === 'list') {
-      if (key.escape || input === 'q') {
-        if (query) {
+      if (mode === 'list' && searchOpen) {
+        if (key.escape) {
+          setSearchOpen(false);
           setQuery('');
-          setSelectedIndex(0);
           return;
         }
-        onBack();
+        if (key.return) {
+          setSearchOpen(false);
+          return;
+        }
+        if (key.backspace || key.delete) {
+          setQuery((q) => [...q].slice(0, -1).join(''));
+          return;
+        }
+        if (key.upArrow) {
+          setSelectedIndex((i) => Math.max(0, i - 1));
+          return;
+        }
+        if (key.downArrow) {
+          setSelectedIndex((i) => Math.min(Math.max(0, filteredProviders.length - 1), i + 1));
+          return;
+        }
+        if (
+          input.length > 0 &&
+          !key.ctrl &&
+          !key.meta &&
+          [...input].every(
+            (char) => (char.codePointAt(0) ?? 0) >= 32 && char.codePointAt(0) !== 127,
+          )
+        ) {
+          const id = filteredProviders[selectedIndex]?.id;
+          const nextQuery = query + input;
+          setQuery(nextQuery);
+          setSelectedIndex(
+            Math.max(
+              0,
+              providers
+                .filter((p) =>
+                  `${p.name} ${p.type} ${p.baseUrl ?? ''} ${p.models.map((m) => m.name).join(' ')}`
+                    .toLowerCase()
+                    .includes(nextQuery.toLowerCase()),
+                )
+                .findIndex((p) => p.id === id),
+            ),
+          );
+          return;
+        }
         return;
       }
-      if (input === '/') {
-        setSearchOpen(true);
-        return;
-      }
-      if (key.upArrow) setSelectedIndex((i) => Math.max(0, i - 1));
-      else if (key.downArrow) {
-        setSelectedIndex((i) => Math.min(filteredProviders.length, i + 1));
-      } else if (input === 'a') {
-        setStatus('');
-        setMode('add');
-      } else if (key.return && filteredProviders[selectedIndex]) {
-        setEditTarget(filteredProviders[selectedIndex]!);
-        setStatus('');
-        setMode('edit');
-      } else if (input === 'e' && filteredProviders[selectedIndex]) {
-        setEditTarget(filteredProviders[selectedIndex]!);
-        setStatus('');
-        setMode('edit');
-      } else if (input === 'd' && filteredProviders[selectedIndex]) {
-        setDeleteTarget(filteredProviders[selectedIndex] ?? null);
-        setMode('confirm-delete');
-      } else if (input === 't' && filteredProviders[selectedIndex]) {
-        testProvider(filteredProviders[selectedIndex]!);
-      } else if (input === 'c' && filteredProviders[selectedIndex]) {
-        duplicateProvider(filteredProviders[selectedIndex]!);
-      } else if (key.return && selectedIndex === filteredProviders.length) {
-        setStatus('');
-        setMode('add');
-      }
-      return;
-    }
 
-    if (mode === 'confirm-delete') {
-      const lowerInput = input.toLowerCase();
-      if ((key.return || lowerInput === 'y') && deleteTarget) {
-        removeProvider(deleteTarget.id)
-          .then(() => {
-            setStatus(`Deleted "${deleteTarget.name}"`);
+      if (mode === 'list') {
+        if (key.escape || input === 'q') {
+          if (query) {
             setQuery('');
-            setSearchOpen(false);
-            reload();
-            setMode('list');
-          })
-          .catch((err) => setStatus(`Error: ${String(err)}`));
-      } else if (key.escape || lowerInput === 'n' || input === 'q') {
-        setMode('list');
+            return;
+          }
+          onBack();
+          return;
+        }
+        if (input === '/') {
+          setSearchOpen(true);
+          return;
+        }
+        if (key.upArrow) setSelectedIndex((i) => Math.max(0, i - 1));
+        else if (key.downArrow) {
+          setSelectedIndex((i) => Math.min(filteredProviders.length, i + 1));
+        } else if (input === 'a') {
+          setStatus('');
+          setMode('add');
+        } else if (key.return && filteredProviders[selectedIndex]) {
+          setEditTarget(filteredProviders[selectedIndex]!);
+          setStatus('');
+          setMode('edit');
+        } else if (input === 'e' && filteredProviders[selectedIndex]) {
+          setEditTarget(filteredProviders[selectedIndex]!);
+          setStatus('');
+          setMode('edit');
+        } else if (input === 'd' && filteredProviders[selectedIndex]) {
+          setStatus('');
+          setDeleteTarget(filteredProviders[selectedIndex] ?? null);
+          setMode('confirm-delete');
+        } else if (input === 't' && filteredProviders[selectedIndex]) {
+          testProvider(filteredProviders[selectedIndex]!);
+        } else if (input === 'c' && filteredProviders[selectedIndex]) {
+          duplicateProvider(filteredProviders[selectedIndex]!);
+        } else if (key.return && selectedIndex === filteredProviders.length) {
+          setStatus('');
+          setMode('add');
+        }
+        return;
       }
-      return;
-    }
-  });
+
+      if (mode === 'confirm-delete') {
+        if (deleting) return;
+        const lowerInput = input.toLowerCase();
+        if ((key.return || lowerInput === 'y') && deleteTarget) {
+          setDeleting(true);
+          removeProvider(deleteTarget.id)
+            .then(() => {
+              setStatus(`Deleted "${deleteTarget.name}"`);
+              setQuery('');
+              setSearchOpen(false);
+              reload();
+              setMode('list');
+            })
+            .catch((err) => setStatus(`Error: ${String(err)}`))
+            .finally(() => setDeleting(false));
+        } else if (key.escape || lowerInput === 'n' || input === 'q') {
+          setMode('list');
+        }
+        return;
+      }
+    },
+    { textInput: searchOpen },
+  );
 
   if (help.open) {
     return <HelpOverlay topic="providers" />;
@@ -230,6 +258,17 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
         <Text>
           Delete provider <Text bold>"{deleteTarget?.name}"</Text>? y/Enter: confirm | n/Esc: cancel
         </Text>
+        {profiles
+          .filter((p) => p.models.some((m) => m.providerId === deleteTarget?.id))
+          .map((p) => (
+            <Text key={p.id} color="yellow">
+              Used by profile: {p.name}
+            </Text>
+          ))}
+        {profiles.some((p) => p.models.some((m) => m.providerId === deleteTarget?.id)) && (
+          <Text dimColor>Edit or remove these profiles before deleting this provider.</Text>
+        )}
+        <StatusLine message={deleting ? 'Deleting...' : status} />
       </Box>
     );
   }
@@ -302,6 +341,7 @@ export function Providers({ onBack }: ProvidersProps): React.JSX.Element {
       }}
       onDelete={() => {
         if (filteredProviders[selectedIndex]) {
+          setStatus('');
           setDeleteTarget(filteredProviders[selectedIndex] ?? null);
           setMode('confirm-delete');
         }

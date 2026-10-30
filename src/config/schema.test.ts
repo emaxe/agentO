@@ -43,22 +43,65 @@ describe('resolveCustomApiUrl', () => {
     );
   });
 
-  it('anthropic mode never re-introduces a doubled /v1/v1 segment when baseUrl already ends in /v1', () => {
-    // ProviderSchema strips a trailing /v1 from custom-api baseUrl on parse (schema.ts:50-51),
-    // so a user-entered "https://opencode.ai/zen/v1" normalizes to "https://opencode.ai/zen"
-    // before resolveCustomApiUrl ever sees it.
+  it('anthropic mode never re-introduces a doubled /v1/v1 segment when baseUrl ends in /v1', () => {
+    // The form stores what the user typed, so a baseUrl may legitimately carry /v1.
+    // Anthropic clients append /v1/messages themselves, so the suffix must be dropped.
     const parsed = ProviderSchema.parse({ ...baseProvider, baseUrl: 'https://opencode.ai/zen/v1' });
-    expect(parsed.baseUrl).toBe('https://opencode.ai/zen');
     const resolved = resolveCustomApiUrl(parsed, 'anthropic');
     expect(resolved).toBe('https://opencode.ai/zen');
     expect(resolved).not.toMatch(/\/v1\/v1/);
   });
 
-  it('openai mode adds exactly one /v1 even when baseUrl already ends in /v1 pre-normalization', () => {
+  it('openai mode adds exactly one /v1 even when baseUrl ends in /v1', () => {
     const parsed = ProviderSchema.parse({ ...baseProvider, baseUrl: 'https://opencode.ai/zen/v1' });
     const resolved = resolveCustomApiUrl(parsed, 'openai');
     expect(resolved).toBe('https://opencode.ai/zen/v1');
     expect(resolved).not.toMatch(/\/v1\/v1/);
+  });
+
+  it('ignores a trailing slash and a pasted full responses endpoint', () => {
+    const withSlash = ProviderSchema.parse({
+      ...baseProvider,
+      baseUrl: 'https://opencode.ai/zen/v1/',
+    });
+    expect(resolveCustomApiUrl(withSlash, 'openai')).toBe('https://opencode.ai/zen/v1');
+
+    const withEndpoint = ProviderSchema.parse({
+      ...baseProvider,
+      baseUrl: 'https://opencode.ai/zen/v1/responses',
+    });
+    expect(resolveCustomApiUrl(withEndpoint, 'responses')).toBe(
+      'https://opencode.ai/zen/v1/responses',
+    );
+    expect(resolveCustomApiUrl(withEndpoint, 'openai')).toBe('https://opencode.ai/zen/v1');
+  });
+});
+
+// A custom-api baseUrl used to be rewritten on save: a trailing /v1 was silently
+// dropped for every mode. The form therefore showed a value the user never typed,
+// and "Test API" (which probes the stored baseUrl) hit /models instead of
+// /v1/models — the request failed until /v1 was typed in again. Storage now keeps
+// the value verbatim and resolveCustomApiUrl derives each mode's path itself.
+describe('ProviderSchema custom-api baseUrl round-trip', () => {
+  const provider = {
+    id: '00000000-0000-0000-0000-000000000002',
+    name: 'Custom',
+    type: 'custom-api' as const,
+    apiKey: 'sk-custom',
+    customApiModes: { openai: true, anthropic: false, responses: false },
+    models: [{ name: 'm', capabilities: { image: true, video: false, audio: false } }],
+  };
+
+  it('keeps a user-entered /v1 exactly as typed', () => {
+    expect(
+      ProviderSchema.parse({ ...provider, baseUrl: 'https://api.example.com/v1' }).baseUrl,
+    ).toBe('https://api.example.com/v1');
+  });
+
+  it('keeps a bare host untouched', () => {
+    expect(ProviderSchema.parse({ ...provider, baseUrl: 'https://api.example.com' }).baseUrl).toBe(
+      'https://api.example.com',
+    );
   });
 });
 

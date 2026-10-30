@@ -28,6 +28,17 @@ async function getStore() {
 }
 
 describe('config store', () => {
+  it('allows only one concurrent backup creator', async () => {
+    const { writeBackup, readBackup } = await getStore();
+    const results = await Promise.allSettled(
+      ['first', 'second'].map((sessionId) =>
+        writeBackup('claude-code', 'global', { sessionId, files: [] }),
+      ),
+    );
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(['first', 'second']).toContain((await readBackup('claude-code', 'global'))?.sessionId);
+  });
   it('readConfig returns default config when file does not exist', async () => {
     const { readConfig } = await getStore();
     const config = await readConfig();

@@ -58,6 +58,7 @@ export async function runTuiLoop(
       warn(`Warning: ${warning}`);
     }
 
+    let cleanupError = '';
     let missingCommand = false;
     let exitCode: number | null = null;
     try {
@@ -72,16 +73,28 @@ export async function runTuiLoop(
       // the launch failed left the config patched with its backup still active,
       // which blocks the next launch with "Active backup already exists" and
       // needs a manual `agento restore` to clear.
-      await execReq.cleanup?.();
+      try {
+        await execReq.cleanup?.();
+      } catch (err) {
+        cleanupError = String(err);
+      }
     }
 
     const label = execReq.agentId
       ? (getAgent(execReq.agentId, { dev: true })?.label ?? execReq.command)
       : execReq.command;
-    const outcome = exitCode === null ? 'exited (signal)' : `exited (code ${exitCode})`;
-    notice(
-      `${label} ${outcome}. ${execReq.cleanup ? 'Config restored.' : 'Config left patched (independent mode).'}`,
-    );
+    const outcome = missingCommand
+      ? 'could not start (command not found)'
+      : exitCode === null
+        ? 'exited (signal)'
+        : `exited (code ${exitCode})`;
+    const recovery = cleanupError
+      ? `Error: config restoration failed: ${cleanupError}. Open Agents & recovery to retry.`
+      : execReq.cleanup
+        ? 'Config restored.'
+        : 'Config left patched (independent mode).';
+    const result = { agent: `${label} ${outcome}.`, recovery };
+    notice(`${result.agent} ${result.recovery}`);
 
     // agento was told to terminate (SIGTERM, window closed): the config is restored, so leave.
     if (shouldStop?.()) break;
@@ -99,7 +112,7 @@ export async function runTuiLoop(
       continue;
     }
 
-    if (!execReq.relaunch) break;
-    execReq = await startTui({ ...options, initialScreen: 'launch' });
+    if (!execReq.relaunch && !cleanupError) break;
+    execReq = await startTui({ ...options, initialScreen: 'main', outcome: result });
   }
 }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useViewport } from '../use-terminal-size.js';
 import { Box, Text } from 'ink';
 import type { Provider } from '../../config/schema.js';
 import { capabilityMarker } from '../../config/schema.js';
@@ -25,7 +26,6 @@ interface ProviderListProps {
 }
 
 /** Rows visible at once; the window follows the cursor. */
-const VIEWPORT = 10;
 
 export function ProviderList({
   providers,
@@ -35,6 +35,7 @@ export function ProviderList({
   searchOpen = false,
   testStatus = {},
 }: ProviderListProps): React.JSX.Element {
+  const VIEWPORT = useViewport(16);
   const anchor = Math.min(selected, Math.max(0, providers.length - 1));
   const start = Math.max(
     0,
@@ -48,8 +49,8 @@ export function ProviderList({
     <Box flexDirection="column" padding={1}>
       <Text bold>Providers</Text>
       <Text dimColor>
-        ↑↓ navigate | Enter/e: edit | a: add | d: delete | t: test | c: duplicate | /: search | ?
-        help | Esc: back
+        ↑↓ navigate | Enter/e: edit | a: add | d: delete | t: load models | c: duplicate | /: search
+        | ? help | Esc: back
       </Text>
       <StatusLine message={status ?? ''} />
       {(searchOpen || filter) && (
@@ -70,13 +71,18 @@ export function ProviderList({
               {i === selected && (
                 <Box flexDirection="column" paddingLeft={3}>
                   <Text dimColor>key: {maskSecret(p.apiKey)}</Text>
-                  <Text dimColor>
+                  <Text dimColor wrap="truncate-end">
                     models:{' '}
                     {p.models
+                      .slice(0, 2)
                       .map((m) => `${capabilityMarker(m.capabilities)} ${m.name}`)
                       .join(', ')}
                   </Text>
-                  {p.baseUrl && <Text dimColor>url: {p.baseUrl}</Text>}
+                  {p.baseUrl && (
+                    <Text dimColor wrap="truncate-middle">
+                      url: {p.baseUrl}
+                    </Text>
+                  )}
                   {test && (
                     <Text
                       color={

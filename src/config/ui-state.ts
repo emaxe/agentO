@@ -29,6 +29,7 @@ export interface LastLaunch {
 
 export interface UiState {
   lastLaunch?: LastLaunch;
+  confirmedLaunch?: { version: 1; fingerprint: string };
 }
 
 function uiStatePath(): string {
@@ -55,7 +56,15 @@ export function parseUiState(raw: unknown): UiState {
   ) {
     return {};
   }
+  const confirmation =
+    isRecord(raw.confirmedLaunch) &&
+    raw.confirmedLaunch.version === 1 &&
+    typeof raw.confirmedLaunch.fingerprint === 'string' &&
+    /^[a-f0-9]{64}$/.test(raw.confirmedLaunch.fingerprint)
+      ? { confirmedLaunch: { version: 1 as const, fingerprint: raw.confirmedLaunch.fingerprint } }
+      : {};
   return {
+    ...confirmation,
     lastLaunch: {
       profileId: last.profileId,
       agentId: agent.data,
@@ -77,9 +86,13 @@ export async function readUiState(): Promise<UiState> {
 }
 
 /** Records the launch the user just started, preserving any other UI state. */
-export async function writeLastLaunch(lastLaunch: LastLaunch): Promise<void> {
+export async function writeLastLaunch(lastLaunch: LastLaunch, fingerprint?: string): Promise<void> {
   const current = await readUiState();
-  const next: UiState = { ...current, lastLaunch };
+  const next: UiState = {
+    ...current,
+    lastLaunch,
+    ...(fingerprint ? { confirmedLaunch: { version: 1 as const, fingerprint } } : {}),
+  };
   await mkdir(join(homedir(), '.agento'), { recursive: true, mode: 0o700 });
   await writeJsonAtomic(uiStatePath(), next);
 }

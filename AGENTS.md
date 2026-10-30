@@ -94,12 +94,13 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── start.ts           # Точка входа в TUI
 │   │   ├── run-loop.ts        # Цикл TUI → spawn агента → cleanup → relaunch
 │   │   ├── use-key-input.ts   # Хук для обработки клавиш (ЙЦУКЕН → QWERTY)
+│   │   ├── keyboard-layout.ts # Маппинг ЙЦУКЕН → QWERTY: клавиши и текстовые поля (API-ключ)
 │   │   ├── use-help.ts        # `?` help: открытие/закрытие и перехват клавиш
 │   │   ├── provider-api.ts    # Сетевой слой формы провайдера (test API / fetch models)
 │   │   ├── tier-options.ts    # Допустимые tier-опции профиля (без повторов и skip для multi-model)
 │   │   ├── components/        # SelectList (viewport), TextField, StatusLine, HelpOverlay
 │   │   ├── hooks/
-│   │   │   └── useLaunchWizard.ts # Машина состояний мастера запуска (profile/agent/preview/install/action)
+│   │   │   └── useLaunchWizard.ts # Машина состояний мастера запуска (profile/agent/preview/install/edit-profile/recovery)
 │   │   ├── wizards/
 │   │   │   └── ProfileWizard.tsx  # Мастер добавления профиля
 │   │   └── screens/           # Экраны TUI (MainMenu, LaunchAgent, LaunchPreview, Providers, Profiles, Agents, Settings, формы)
@@ -347,6 +348,8 @@ agento doctor [--json]        # Диагностика: версии, конфи
 
 Шаги подготовки (backup → write config → env/PATH → cleanup factory) выполняет `src/launcher/transaction.ts`. `prepareChild` — тонкая обертка для TUI, а `launchChild` использует тот же prepared `ExecRequest`, что и TUI.
 
+Подготовка запуска и восстановление сериализуются между процессами через `src/config/config-operation.ts`. Активные manifest-бэкапы резервируют физические файлы: пересечение блокирует запуск даже между разными scope и cwd. Cleanup проверяет sessionId, чтобы не восстановить чужую новую сессию.
+
 Если active backup для этого agent/scope уже существует, запуск останавливается до записи нового конфига. Сначала нужно выполнить `agento restore -a <agent> -s <scope>`.
 
 ### Independent Mode
@@ -364,11 +367,12 @@ Independent mode использует тот же `src/launcher/transaction.ts` 
 
 Запускается по умолчанию при вызове `agento` без аргументов.
 
-- **MainMenu**: Выбор раздела (↑↓, Enter, 1-5 jump, Esc/q), снизу — строка-подсказка клавиш
-- **LaunchAgent**: Двухшаговый выбор (профиль → агент → запуск). Внизу обоих шагов футер `Profile / mode (m) / scope (s)` — `m`/`s` переключают child/independent и project/global для этого запуска (дефолты берутся из Settings). `AgentSelect` показывает версию установленного агента (`v1.2.3`). При ошибке запуска вариант `Overwrite and launch` предлагается только для `Active backup already exists`
+- **MainMenu**: Первое действие `Launch last` (`r`) или `Set up AgentO`, далее New launch / Profiles / Providers / Agents & recovery / Settings (1–6). Показывает cwd, сводку прошлого запуска, активные backups (`b` открывает первый) и раздельные результаты агента/cleanup после child-запуска.
+- **LaunchAgent**: Двухшаговый выбор (профиль → агент → запуск). Внизу обоих шагов футер `Profile / mode (m) / scope (s)` — `m`/`s` переключают child/independent и project/global для этого запуска (дефолты берутся из Settings). `AgentSelect` показывает версию установленного агента (`v1.2.3`). Новые/изменённые сочетания открывают review автоматически; знакомые запускаются сразу, `v` всегда открывает review. При `Active backup already exists` для выбранного scope предлагается `Restore previous config and launch`; пересечения shared files направляют в recovery. `t` раскрывает ошибку; `r` повторяет; `a` открывает recovery. `i` раскрывает причины несовместимости, `e` открывает ProfileEdit и возвращает в мастер.
+- **SetupWizard**: Единый маршрут service/provider → connection/models → model → profile → agent → review → launch. Подтверждённые provider/profile сохраняются; ошибки загрузки моделей допускают ручной ввод. Черновик имени профиля сохраняется при возврате; сохранённый профиль используется повторно.
 - **Providers**: ↑↓ navigate | Enter/a: add | e: edit | d: delete | Esc: back. В режиме edit: `[+ add model]` row → Enter добавляет модель, `i`/`v`/`a` переключают image/video/audio для выделенной модели, `e` редактирует имя, `d` удаляет
 - **Profiles**: В списке ↑↓ navigate | Enter: детали | a: add | d: delete | Esc: back. В деталях профиля: ↑↓ navigate models | a: add model | d: delete model | e: edit | Esc: back. При выборе модели в add/edit wizard рядом с именем отображаются capability-маркеры. «Без tier» доступен только для одномодельного профиля; при добавлении второй модели мастер сначала просит назначить tier существующей
-- **Agents**: Просмотр статуса конфигов (global/project, backup наличие); выделенная строка показывает путь к конфигу, `r` — restore через `restoreBackupForAgent` (полный манифест, multi-file безопасен) с подтверждением `y/Enter`
+- **Agents & recovery**: `i/u/d` открывают install/update/uninstall (в launch оставлена только установка отсутствующего агента). Просмотр статуса конфигов (global/project, backup наличие); выделенная строка показывает путь к конфигу, `r` — restore через `restoreBackupForAgent` (полный манифест, multi-file безопасен) с подтверждением `y/Enter` и показом файлов manifest/статуса PID; ошибка остаётся в диалоге
 - **Settings**: Настройки по умолчанию: `defaultLaunchMode`, `defaultConfigScope`, `mergeAgentConfigs`
 
 - **Help**: `?` открывает контекстную панель (`HelpOverlay`) на главном меню, Providers/Profiles/Agents/Settings и шагах profile/agent; при открытой панели все клавиши перехватываются, закрытие — `?`/Esc/Enter. Логика в `use-help.ts`.
@@ -376,7 +380,9 @@ Independent mode использует тот же `src/launcher/transaction.ts` 
 - **Preview**: `v` на шаге агента открывает `LaunchPreview` (read-only), `Enter` запускает, `Esc` возвращает. Тот же `describeLaunch` используется в `agento launch --dry-run`.
 - **Сортировка агентов**: установленные агенты идут первыми, неизвестные — в середине, неустановленные — в конце; выбранный агент сохраняется по id при обновлении статусов.
 
-Конвенция: **все UI-строки TUI на английском** (ЙЦУКЕН-маппинг прозрачен для пользователя); guard-тест `src/tui/english-ui.test.ts` не допускает кириллицу в rendered-строках `src/tui` (кроме самой карты маппинга). Подтверждения удаления/отмены/восстановления: `y`/`Y`/Enter — подтвердить, `n`/`N`/Esc — отменить, остальной ввод игнорируется. Статус-сообщения — через общий `StatusLine` (красный для `Error: ...`); успех скрывается через 5 секунд, ошибка остаётся до следующего действия. Кэш статусов `~/.agento/agent-status.json` хранит `{installed, version?}` (старые boolean нормализуются при чтении). Last launch хранится в `~/.agento/ui-state.json` (`profileId`, `agentId`, `mode`, `scope`); битый файл игнорируется.
+Конвенция: **все UI-строки TUI на английском** (ЙЦУКЕН-маппинг прозрачен для пользователя); guard-тест `src/tui/english-ui.test.ts` не допускает кириллицу в rendered-строках `src/tui` (кроме `keyboard-layout.ts` — там карта маппинга). Маппинг применяется и к клавишам (`useKeyInput`), и к полю API-ключа в форме провайдера: ключ — ASCII-токен, поэтому кириллица там всегда означает неверную раскладку и молча чинится; имена провайдеров при этом остаются как введены (кириллица разрешена). Подтверждения удаления/отмены/восстановления: `y`/`Y`/Enter — подтвердить, `n`/`N`/Esc — отменить, остальной ввод игнорируется. Статус-сообщения — через общий `StatusLine` (красный для `Error: ...`); успех скрывается через 5 секунд, ошибка остаётся до следующего действия. Кэш статусов `~/.agento/agent-status.json` хранит `{installed, version?}` (старые boolean нормализуются при чтении). Last launch хранится в `~/.agento/ui-state.json` (`profileId`, `agentId`, `mode`, `scope`); битый файл игнорируется. `confirmedLaunch: {version: 1, fingerprint}` — SHA-256 от влияющих на запуск данных (включая credentials, cwd, mode/scope, config paths, merge). Сохраняется только digest после успешной подготовки подтверждённого запуска; секреты/сгенерированный config не сохраняются. Отсутствие или устаревшая версия требуют review.
+
+Формы ProviderForm/ProfileWizard/ProfileEdit ожидают `Promise<void>` от callbacks сохранения, сами показывают ошибки и блокируют повторное сохранение. `DiscardChanges` выбирает Keep editing по умолчанию; Esc в редакторе имени модели отменяет только текущий черновик. API key скрыт по умолчанию (Ctrl+R). `useTerminalSize` имеет одну общую resize-подписку; `useViewport` ограничивает списки, `ScrollableLines` — длинные preview/help/reasons. Unicode-поиск передаётся в `useKeyInput` с `{textInput: true}` без ЙЦУКЕН-преобразования. Общий каркас новых экранов — `ScreenFrame`.
 
 Важно: перед передачей управления child process TUI вызывает `process.stdin.pause()` чтобы сбросить состояние stdin.
 
@@ -395,6 +401,9 @@ npm run test:watch  # Watch mode
 |------|---------------|
 | `src/adapters/*.test.ts` | Генерацию конфигов для каждого агента |
 | `src/config/store.test.ts` | Чтение/запись `~/.agento/config.json` и бэкапов |
+| `src/config/atomic-write-exclusive.test.ts` | Атомарная публикация бэкапов: конкурентные записи, запрет перезаписи и очистка временных файлов |
+| `src/config/config-operation.test.ts` | Межпроцессная блокировка, резервирование общих файлов, симлинки, legacy и повреждённые бэкапы |
+| `src/config/backup-restore.test.ts` | Восстановление всех файлов, сохранение бэкапа при ошибке и повторная попытка |
 | `src/config/ui-state.test.ts` | Кеш last launch: round-trip и терпимость к битому JSON |
 | `src/config/mask.test.ts` | Маскирование API-ключей |
 | `src/launcher/preview.test.ts` | Read-only preview: файлы, env-ключи, git-exclude, backup, env-only |
@@ -402,6 +411,7 @@ npm run test:watch  # Watch mode
 | `src/tui/screens/help.test.tsx` | `?` help overlay |
 | `src/cli/commands/provider.test.ts` | CLI provider list --json/edit/test/fetch-models |
 | `src/cli/commands/agent.test.ts` | CLI agent status --json и текст |
+| `src/cli/commands/doctor.test.ts` | Диагностика в JSON и тексте, ошибки конфигурации и проверки установленных агентов, коды выхода |
 | `src/launcher/child.test.ts` | Child launch flow (backup/restore) |
 | `src/launcher/independent.test.ts` | Independent launch backup flow |
 | `src/launcher/transaction.test.ts` | Общий launch transaction: backup/write/env/cleanup |
@@ -410,10 +420,11 @@ npm run test:watch  # Watch mode
 | `src/cli/commands/restore.test.ts` | CLI restore через registry, валидация scope, удаление backup |
 | `src/cli/commands/restore.codex.test.ts` | Crash-like CLI restore для Codex project multi-file backup |
 | `src/launcher/shell-path-resolver.test.ts` | Резолвинг PATH |
-| `src/profiles/profile-manager.test.ts` | CRUD профилей |
+| `src/profiles/profile-manager.test.ts` | CRUD профилей, валидация изменений, перестановка моделей и граничные индексы |
 | `src/providers/provider-manager.test.ts` | CRUD провайдеров, запрет удаления используемого провайдера |
 | `src/tui/tier-options.test.ts` | Допустимые tier-опции профиля |
 | `src/tui/screens/*.test.tsx` | Экраны TUI: меню, launch wizard, провайдеры, профили, агенты, настройки, подтверждения |
+| `src/tui/screens/agent-install.test.tsx` | Автоустановка, ручные инструкции, отсутствующие зависимости, ошибки, retry и ввод во время установки |
 | `src/tui/components/StatusLine.test.tsx` | Цвет статуса и поведение авто-скрытия |
 
 Тесты работают напрямую с `src/` (не требуют сборки).

@@ -234,6 +234,24 @@ describe('PiAdapter', () => {
       )?.models as Array<Record<string, string>>;
       expect(models?.[0]?.api).toBe('anthropic-messages');
     });
+
+    it('normalizes a custom-api baseUrl that already ends in /v1', () => {
+      const anthropicConfig = adapter.buildConfig(testProfileCustomAnthropic, [
+        { ...customApiAnthropicProvider, baseUrl: 'https://custom-ant.api/v1' },
+      ]);
+      const anthropicModels = anthropicConfig.__agento_models_json__ as {
+        providers: Record<string, { baseUrl?: string }>;
+      };
+      expect(anthropicModels.providers.anthropic?.baseUrl).toBe('https://custom-ant.api');
+
+      const openaiConfig = adapter.buildConfig(testProfileCustomOpenAi, [
+        { ...customApiOpenAiProvider, baseUrl: 'https://custom.api/v1/' },
+      ]);
+      const openaiModels = openaiConfig.__agento_models_json__ as {
+        providers: Record<string, { baseUrl?: string }>;
+      };
+      expect(openaiModels.providers.openai?.baseUrl).toBe('https://custom.api/v1');
+    });
   });
 
   describe('buildEnv', () => {

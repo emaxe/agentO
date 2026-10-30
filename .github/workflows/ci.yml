@@ -64,7 +64,10 @@ jobs:
         run: npm run build
 
       - name: Smoke-check the built CLI
-        run: node dist/bin/agento.js --version
+        run: |
+          node dist/bin/agento.js --version
+          node dist/bin/agento.js config path --json
+          node dist/bin/agento.js launch --help
 
       # Native-shell checks: the bash steps above do not exercise PowerShell or cmd.exe.
       - name: Smoke-check the built CLI (PowerShell)

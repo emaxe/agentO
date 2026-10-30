@@ -23,6 +23,9 @@ export interface LaunchPreview {
   agentId: string;
   agentLabel: string;
   profileName: string;
+  cwd: string;
+  model: string;
+  providerName: string;
   mode: LaunchMode;
   scope: LaunchScope;
   envOnly: boolean;
@@ -135,6 +138,9 @@ export async function describeLaunch(options: DescribeLaunchOptions): Promise<La
     agentId: adapter.id,
     agentLabel,
     profileName: profile.name,
+    cwd,
+    model: resolveBaseModel(profile, providers).model.model,
+    providerName: resolveBaseModel(profile, providers).provider.name,
     mode,
     scope,
     envOnly: Boolean(adapter.envOnly),
@@ -155,8 +161,10 @@ export function describePreviewLines(preview: LaunchPreview): string[] {
   const lines = [
     `Agent:    ${preview.agentLabel} (${preview.agentId})`,
     `Profile:  ${preview.profileName}`,
+    `Model:    ${preview.model} (${preview.providerName})`,
+    `Directory: ${preview.cwd}`,
     `Mode:     ${preview.mode} — ${preview.mode === 'child' ? 'config is restored when the agent exits' : 'config stays patched; restore later'}`,
-    `Scope:    ${preview.scope} — ${preview.scope === 'global' ? 'home directory config (all projects)' : 'config inside the current repository'}`,
+    `Scope:    ${preview.scope} — ${preview.scope === 'global' ? 'home directory config (all projects)' : 'adapter-selected files listed below; may include home directory config'}`,
   ];
 
   if (preview.envOnly) {

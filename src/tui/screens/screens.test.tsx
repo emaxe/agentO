@@ -224,6 +224,7 @@ describe('AgentSelect', () => {
         installStatuses={{}}
         checkProgress={{}}
         statusChecking={false}
+        showReasons
         hiddenAgents={[{ label: 'Qwen CLI', reason: 'does not support anthropic-compatible' }]}
         onSelect={() => {}}
         onBack={() => {}}

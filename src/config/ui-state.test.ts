@@ -64,4 +64,23 @@ describe('ui state', () => {
     await writeFile(path, JSON.stringify({ lastLaunch: { agentId: 'nope' } }), 'utf-8');
     expect(await readUiState()).toEqual({});
   });
+  it('accepts versioned confirmation digests and drops obsolete or malformed confirmations', async () => {
+    const { parseUiState, writeLastLaunch, readUiState } = await getState();
+    const lastLaunch = {
+      profileId: 'p',
+      agentId: 'copilot' as const,
+      mode: 'child' as const,
+      scope: 'project' as const,
+    };
+    const fingerprint = 'a'.repeat(64);
+    await writeLastLaunch(lastLaunch, fingerprint);
+    expect((await readUiState()).confirmedLaunch).toEqual({ version: 1, fingerprint });
+    expect(
+      parseUiState({ lastLaunch, confirmedLaunch: { version: 0, fingerprint } }).confirmedLaunch,
+    ).toBeUndefined();
+    expect(
+      parseUiState({ lastLaunch, confirmedLaunch: { version: 1, fingerprint: 'secret' } })
+        .confirmedLaunch,
+    ).toBeUndefined();
+  });
 });

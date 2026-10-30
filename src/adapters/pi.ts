@@ -6,6 +6,7 @@ import { writeJsonAtomic } from '../config/atomic-write.js';
 import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider, ProviderType } from '../config/schema.js';
+import { resolveCustomApiUrl } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
 import { resolveBaseModel } from './resolve-base-model.js';
 
@@ -118,7 +119,16 @@ export class PiAdapter implements AgentAdapter<PiConfig> {
       const providerOverride = (modelsJson.providers as Record<string, Record<string, unknown>>)[
         piProvider
       ];
-      providerOverride.baseUrl = provider.baseUrl;
+      // custom-api keeps the user's baseUrl verbatim; PI speaks a single wire
+      // protocol per provider, so derive that mode's root (anthropic clients add
+      // /v1 themselves, openai-style clients need it in the base).
+      providerOverride.baseUrl =
+        provider.type === 'custom-api'
+          ? (resolveCustomApiUrl(
+              provider,
+              provider.customApiModes?.anthropic ? 'anthropic' : 'openai',
+            ) ?? provider.baseUrl)
+          : provider.baseUrl;
     }
 
     const config: PiConfig = {

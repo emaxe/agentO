@@ -19,6 +19,7 @@ import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import type { AgentAdapter, AgentConfigPaths } from './base.js';
 import type { LaunchScope } from './base.js';
 import type { Profile, Provider } from '../config/schema.js';
+import { resolveCustomApiUrl } from '../config/schema.js';
 import { mergeAgentConfig } from './merge-config.js';
 import { resolveBaseModel } from './resolve-base-model.js';
 
@@ -163,16 +164,19 @@ export class KimiAdapter implements AgentAdapter<KimiConfig> {
     const kimiType = mapToKimiProviderType(provider.type, provider);
     const providerName = provider.name.toLowerCase().replace(/\s+/g, '-');
 
-    // Determine base URL
+    // Determine base URL. custom-api keeps the user's baseUrl verbatim, so the
+    // mode-specific root (with or without /v1) is derived here as well.
     let baseUrl = provider.baseUrl ?? '';
-    if (!baseUrl) {
+    if (provider.type === 'custom-api') {
+      const mode = provider.customApiModes?.anthropic
+        ? 'anthropic'
+        : provider.customApiModes?.responses
+          ? 'responses'
+          : 'openai';
+      baseUrl = resolveCustomApiUrl(provider, mode) ?? '';
+    } else if (!baseUrl) {
       if (provider.type === 'fireworks') baseUrl = DEFAULT_BASE_URLS.fireworks;
       else if (provider.type === 'openrouter') baseUrl = DEFAULT_BASE_URLS.openrouter;
-      else if (provider.type === 'custom-api') {
-        // For custom-api, use provider baseUrl if set; Kimi CLI does not define
-        // a universal default, so an empty string is acceptable.
-        baseUrl = provider.baseUrl ?? '';
-      }
     }
 
     const modelName = base.model;

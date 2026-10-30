@@ -17,6 +17,23 @@ export type ProviderInput = Omit<Provider, 'id' | 'type'> & { type: string };
 export type ProfileInput = Omit<Profile, 'id'>;
 
 /**
+ * Returns the first non-ASCII character in an API key, if any.
+ *
+ * API keys are ASCII bearer tokens, so a Cyrillic letter means one was typed with a
+ * non-Latin keyboard layout. Such a key cannot even be put into an `Authorization`
+ * header — `fetch` rejects the whole request with an opaque ByteString error — and
+ * the agent would fail the same way later, so it must be reported up front.
+ */
+export function findNonAsciiApiKeyChar(apiKey: string): { index: number; char: string } | null {
+  let index = 0;
+  for (const char of apiKey) {
+    if ((char.codePointAt(0) ?? 0) > 0x7f) return { index, char };
+    index += char.length;
+  }
+  return null;
+}
+
+/**
  * Validates provider domain rules.
  * @param data - Input data (without `id`). `type` is accepted as `string`; this function validates it against `ProviderTypeSchema`.
  * @param existingProviders - Current list of providers from config.
@@ -34,6 +51,15 @@ export function validateProvider(
 
   if (!data.apiKey || !data.apiKey.trim()) {
     throw new Error('Provider API key is required.');
+  }
+
+  const badKeyChar = findNonAsciiApiKeyChar(data.apiKey);
+  if (badKeyChar) {
+    throw new Error(
+      `API key contains the non-ASCII character "${badKeyChar.char}" at position ${String(
+        badKeyChar.index + 1,
+      )}. API keys are ASCII — check the keyboard layout.`,
+    );
   }
 
   // type must be a known ProviderType

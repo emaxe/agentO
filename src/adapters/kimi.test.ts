@@ -199,6 +199,35 @@ describe('KimiAdapter', () => {
     expect(custom.api_key).toBe('sk-custom-ant-test');
   });
 
+  it('buildConfig normalizes a custom-api baseUrl that already ends in /v1', () => {
+    const profile: Profile = {
+      id: '00000000-0000-0000-0000-000000000016',
+      name: 'Test Custom Anthropic V1',
+      models: [{ providerId: customApiAnthropicProvider.id, model: 'custom-model' }],
+    };
+    // Anthropic clients append /v1/messages themselves.
+    const anthropicConfig = adapter.buildConfig(profile, [
+      { ...customApiAnthropicProvider, baseUrl: 'https://custom-ant.api/v1' },
+    ]);
+    const anthropicProviders = anthropicConfig.providers as Record<string, unknown>;
+    expect((anthropicProviders['custom-anthropic'] as Record<string, unknown>).base_url).toBe(
+      'https://custom-ant.api',
+    );
+
+    // OpenAI-style clients append only the endpoint path, so /v1 has to stay.
+    const openaiProfile: Profile = {
+      ...profile,
+      models: [{ ...profile.models[0]!, providerId: customApiOpenAiProvider.id }],
+    };
+    const openaiConfig = adapter.buildConfig(openaiProfile, [
+      { ...customApiOpenAiProvider, baseUrl: 'https://custom.api/v1/' },
+    ]);
+    const openaiProviders = openaiConfig.providers as Record<string, unknown>;
+    expect((openaiProviders['custom-openai'] as Record<string, unknown>).base_url).toBe(
+      'https://custom.api/v1',
+    );
+  });
+
   it('buildConfig sets correct capabilities based on model capabilities', () => {
     const providerWithVideo: Provider = {
       ...anthropicProvider,

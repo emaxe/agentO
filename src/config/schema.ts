@@ -36,22 +36,15 @@ export const ModelConfigSchema = z.object({
 export type ModelConfig = z.infer<typeof ModelConfigSchema>;
 
 // Провайдер API (REQ-1)
-export const ProviderSchema = z
-  .object({
-    id: z.guid(),
-    name: z.string().min(1),
-    type: ProviderTypeSchema,
-    apiKey: z.string().min(1),
-    baseUrl: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
-    models: z.array(ModelConfigSchema).min(1),
-    customApiModes: CustomApiModesSchema.optional(),
-  })
-  .transform((data) => {
-    if (data.baseUrl && data.type === 'custom-api') {
-      data.baseUrl = data.baseUrl.replace(/\/v1\/?$/, '');
-    }
-    return data;
-  });
+export const ProviderSchema = z.object({
+  id: z.guid(),
+  name: z.string().min(1),
+  type: ProviderTypeSchema,
+  apiKey: z.string().min(1),
+  baseUrl: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
+  models: z.array(ModelConfigSchema).min(1),
+  customApiModes: CustomApiModesSchema.optional(),
+});
 export type Provider = z.infer<typeof ProviderSchema>;
 
 /** Маркер capabilities для отображения в UI: [i--], [iva] и т.д. */
@@ -60,8 +53,18 @@ export function capabilityMarker(caps: ModelCapabilities): string {
 }
 
 /**
+ * Drops a trailing API version segment (`/v1` or `/v1/responses`) and any
+ * trailing slash, so a mode-specific URL can be rebuilt from a baseUrl that
+ * the user may have entered with the version already in it.
+ */
+export function stripApiVersionSuffix(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, '').replace(/\/(?:v1\/responses|v1)$/, '');
+}
+
+/**
  * Resolves the effective API base URL for a provider.
- * For `custom-api`, it appends the endpoint suffix based on the requested mode:
+ * For `custom-api`, the stored baseUrl is kept exactly as the user typed it
+ * and this function derives the endpoint root for the requested mode:
  *   openai       → baseUrl + '/v1'   (client appends only /chat/completions —
  *                  see DEFAULT_BASE_URLS in defaults.ts, which bakes /v1 into
  *                  every OpenAI-style default for the same reason)
@@ -75,6 +78,9 @@ export function capabilityMarker(caps: ModelCapabilities): string {
  * all — they only ever append the endpoint path — so `/v1` must be added here or
  * requests land on the wrong path entirely (e.g. a bare custom-api host without
  * `/v1` produced a 404 web-app fallback page for Qwen instead of hitting the API).
+ * A trailing `/v1` (or a pasted full `/v1/responses` endpoint) in the stored
+ * baseUrl is tolerated: it is stripped before the mode suffix is applied, so no
+ * suffix is ever doubled.
  * Returns `undefined` when the provider is not custom-api or the requested mode is not enabled.
  */
 export function resolveCustomApiUrl(
@@ -87,8 +93,12 @@ export function resolveCustomApiUrl(
   if (!provider.customApiModes?.[mode]) {
     return undefined;
   }
+  if (!provider.baseUrl) {
+    return undefined;
+  }
+  const base = stripApiVersionSuffix(provider.baseUrl);
   const suffix = mode === 'anthropic' ? '' : mode === 'openai' ? '/v1' : '/v1/responses';
-  return provider.baseUrl ? provider.baseUrl + suffix : undefined;
+  return base + suffix;
 }
 
 // Уровень модели в профиле (REQ: small / base / smart)

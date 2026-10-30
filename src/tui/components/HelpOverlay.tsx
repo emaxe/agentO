@@ -7,6 +7,8 @@
  */
 import React from 'react';
 import { Box, Text } from 'ink';
+import { ScrollableLines } from './ScrollableLines.js';
+import { useTerminalSize } from '../use-terminal-size.js';
 import { tuiBorderStyle } from '../border-style.js';
 
 export type HelpTopic = 'main' | 'launch' | 'providers' | 'profiles' | 'agents' | 'settings';
@@ -23,13 +25,13 @@ const TOPICS: Record<HelpTopic, HelpContent> = {
     keys: [
       '↑↓        move the cursor',
       'Enter    open the selected section',
-      '1-5      jump straight to a section',
+      '1-6      jump straight to a section',
       '?        show this help',
       'q / Esc  quit',
     ],
     notes: [
-      'First run: add a provider (2), then create a profile (3), then launch (1).',
-      'The menu remembers your last profile and agent, and shows them under the list.',
+      'First run: Set up AgentO connects a provider, model, profile and agent in one flow.',
+      'r repeats the last launch. Changed settings require a new review.',
     ],
   },
   launch: {
@@ -39,7 +41,9 @@ const TOPICS: Record<HelpTopic, HelpContent> = {
       'Enter    confirm',
       'm        toggle child / independent for this launch',
       's        toggle global / project for this launch',
-      'u / d    update / uninstall the selected installed agent',
+      'v        open launch preview',
+      '/        search profiles',
+      'i / e    show incompatibility reasons / edit profile',
       '?        show this help',
       'Esc      back',
     ],
@@ -47,8 +51,8 @@ const TOPICS: Record<HelpTopic, HelpContent> = {
       'child: AgentO patches the config, runs the agent, then restores the original on exit.',
       'independent: the patched config stays; restore later with `agento restore`.',
       'global: the agent config in your home directory (all projects).',
-      'project: the agent config inside the current repository (this project only).',
-      'Agents that cannot run the selected profile are listed below with the reason.',
+      'project: adapter-selected files; some agents also change global settings. Review lists all files.',
+      'Use Agents & recovery to install, update, uninstall or restore an agent.',
     ],
   },
   providers: {
@@ -58,16 +62,16 @@ const TOPICS: Record<HelpTopic, HelpContent> = {
       'Enter/e  edit the selected provider',
       'a        add a provider',
       'd        delete the selected provider',
-      't        test the API / list models',
+      't        load the model list (no generation test)',
       'c        duplicate the selected provider',
       'i / v / a  (in models) toggle image / video / audio',
       '?        show this help',
       'Esc      back',
     ],
     notes: [
-      'API keys are masked in the list; the edit form shows the value being edited.',
+      'API keys are masked. Ctrl+R reveals the key in the connection form.',
       'A provider used by a profile cannot be deleted until the profile is changed.',
-      'Models can be edited manually; Test API and Fetch models are optional helpers.',
+      'Models can be edited manually; Load models and Choose loaded models are optional helpers.',
     ],
   },
   profiles: {
@@ -88,10 +92,12 @@ const TOPICS: Record<HelpTopic, HelpContent> = {
     ],
   },
   agents: {
-    title: 'Agent Config Status',
+    title: 'Agents & recovery',
     keys: [
       '↑↓        choose an agent / scope',
       'r        restore the original config (asks for confirmation)',
+      'i / u / d  install / update / uninstall the selected agent',
+      'f / /    modified only / search',
       '?        show this help',
       'Esc      back',
     ],
@@ -111,7 +117,7 @@ const TOPICS: Record<HelpTopic, HelpContent> = {
     ],
     notes: [
       'Default launch mode: child restores the config on exit; independent leaves it patched.',
-      'Default config scope: global patches the home config; project patches the current repo.',
+      'Project scope may also touch global settings. Review the actual files before launch.',
       'mergeAgentConfigs keeps unknown keys from the existing agent config when writing.',
     ],
   },
@@ -124,7 +130,7 @@ export interface HelpOverlayProps {
 /** Full-screen help panel; the parent screen handles the close key. */
 export function HelpOverlay({ topic }: HelpOverlayProps): React.JSX.Element {
   const content = TOPICS[topic];
-  const columns = process.stdout.columns ?? 80;
+  const { columns } = useTerminalSize();
   const width = Math.min(78, Math.max(50, columns - 4));
 
   return (
@@ -136,18 +142,11 @@ export function HelpOverlay({ topic }: HelpOverlayProps): React.JSX.Element {
       width={width}
     >
       <Text bold>{content.title}</Text>
-      <Box flexDirection="column" marginTop={1}>
-        {content.keys.map((line) => (
-          <Text key={line}>{line}</Text>
-        ))}
-      </Box>
-      <Box flexDirection="column" marginTop={1}>
-        {content.notes.map((line) => (
-          <Text key={line} dimColor>
-            {line}
-          </Text>
-        ))}
-      </Box>
+      <ScrollableLines
+        lines={[...content.keys, '', ...content.notes]}
+        reserved={7}
+        width={width - 4}
+      />
       <Box marginTop={1}>
         <Text dimColor>? / Esc / Enter: close</Text>
       </Box>
