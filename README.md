@@ -2,6 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/%40emaxe%2Fagento)](https://www.npmjs.com/package/@emaxe/agento)
 [![CI](https://github.com/emaxe/agentO/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/emaxe/agentO/actions/workflows/ci.yml)
+[![Changelog](https://img.shields.io/badge/changelog-0.12.0-blue)](CHANGELOG.md#0120---2026-10-30)
 [![Node.js](https://img.shields.io/node/v/%40emaxe%2Fagento)](https://www.npmjs.com/package/@emaxe/agento)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue)](https://github.com/emaxe/agentO#installation)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -153,7 +154,7 @@ Defaults when adding a model: `image=true`, `video=false`, `audio=false`.
 
 For guided setup, run `agento` and choose **Set up AgentO**. Connect a provider, choose or enter a model, save a profile, select an agent, review the changes, and launch. After that, **r** repeats the last confirmed launch.
 
-The equivalent CLI workflow is below. See the [0.11.0 release notes](CHANGELOG.md#0110---2026-10-30) for the full list of changes.
+The equivalent CLI workflow is below. See the [0.12.0 release notes](CHANGELOG.md#0120---2026-10-30) for the full list of changes.
 
 ### 1. Add API Providers
 
@@ -329,7 +330,7 @@ Use **TUI** for exploration and interactive workflows. Use **CLI** for scripting
 - `qwen` and `codex` cannot use `anthropic-compatible`; `qwen` and `pi` cannot use `responses-compatible`
 - `custom-api` works only when `customApiModes` enables at least one wire protocol (openai, anthropic or responses)
 - For `openrouter` Claude Code uses `ANTHROPIC_AUTH_TOKEN` (Bearer) — not `apiKeyHelper`
-- Provider API keys are never written into a generated config file; they are passed to the agent through the environment
+- Some adapters write API keys into generated config files; treat those files and backups as sensitive
 - `copilot` and `goose` deliver all config via env vars — no settings file is ever patched or restored
 - `fireworks` and `openrouter` are the most flexible — work with every supported agent
 
@@ -530,7 +531,7 @@ Each supported agent has a dedicated adapter that translates AgentO's generic co
   
 - **OpenCode** (supports `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api`): Generates `~/.config/opencode/config.json` using Vercel AI SDK with provider-prefixed model names. Full function calling support via `@ai-sdk/openai-compatible`. Emits per-model `modalities: { input: [...], output: ["text"] }` derived from capability flags.
   
-- **Qwen CLI** (supports `openai-compatible`, `fireworks`, `openrouter`, `custom-api`): Generates `~/.qwen/settings.json` with OpenAI-compatible provider structure. Requires `baseUrl` for all providers. Auto-defaults for `fireworks` type. Passes capability flags via `generationConfig.modalities`. During the launch, models that reject `max_tokens` (OpenAI o-series, gpt-5 and newer including gpt-6, plus unrecognized names on `api.openai.com`) go through a local pass-through proxy that swaps `max_tokens` for `max_completion_tokens`; Qwen-native models, DeepSeek, Ollama and third-party gateways keep their direct connection.
+- **Qwen CLI** (supports `openai-compatible`, `fireworks`, `openrouter`, `custom-api`): Generates `~/.qwen/settings.json` with OpenAI-compatible provider structure and passes capability flags via `generationConfig.modalities`. During launch, OpenAI o-series, gpt-5 and newer, and unrecognized models on `api.openai.com` use a local pass-through proxy that swaps `max_tokens` for `max_completion_tokens`; known legacy models such as gpt-4 remain direct. Other gateways remain direct unless the model name matches a proxied family. For gpt-6 and newer with tools, the proxy sets `reasoning_effort: "none"`; the proxy stops during launch cleanup.
   
 - **Codex CLI**: Generates `~/.codex/config.toml` with `wire_api: responses` and `model_providers`, plus a separate `~/.codex/default.config.toml` (flat `model` + `model_provider`) for the active profile. In project scope, splits config between global (`model_providers` + base `model`) and project (`model`) configs. Supports all provider types. Capability flags are not propagated (Codex `responses` API has no modality config).
 

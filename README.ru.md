@@ -2,6 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/%40emaxe%2Fagento)](https://www.npmjs.com/package/@emaxe/agento)
 [![CI](https://github.com/emaxe/agentO/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/emaxe/agentO/actions/workflows/ci.yml)
+[![Changelog](https://img.shields.io/badge/changelog-0.12.0-blue)](CHANGELOG.md#0120---2026-10-30)
 [![Node.js](https://img.shields.io/node/v/%40emaxe%2Fagento)](https://www.npmjs.com/package/@emaxe/agento)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue)](https://github.com/emaxe/agentO/blob/main/README.ru.md#установка)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -154,7 +155,7 @@ agento
 
 Для настройки через мастер запустите `agento` и выберите **Set up AgentO**: провайдер → модель → профиль → агент → сводка → запуск. Затем клавиша **r** повторяет последний подтверждённый запуск.
 
-Ниже — тот же сценарий через CLI. Полный список изменений — в [релизе 0.11.0](CHANGELOG.md#0110---2026-10-30).
+Ниже — тот же сценарий через CLI. Полный список изменений — в [релизе 0.12.0](CHANGELOG.md#0120---2026-10-30).
 
 ### 1. Добавьте API-провайдер
 
@@ -467,7 +468,7 @@ AgentO хранит свою конфигурацию в `~/.agento/config.json`
   - Для `responses-compatible`: автоматически стартует локальный **Responses Proxy** (`src/proxy/responses-proxy.ts`), транслирующий Anthropic-запросы в формат OpenAI Responses API с поддержкой streaming.
   - Для `openrouter` использует **Anthropic Skin** — `ANTHROPIC_AUTH_TOKEN` (Bearer). Флаги возможностей не пробрасываются.
 - **OpenCode** (`anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api`): Генерирует `~/.config/opencode/config.json` через Vercel AI SDK. Использует нативный `@ai-sdk/openai` для реальных OpenAI API (автоопределение по `baseUrl`). Полная поддержка function calling. Для каждой модели генерируется `modalities: { input: [...], output: ["text"] }` из флагов возможностей.
-- **Qwen CLI** (`openai-compatible`, `fireworks`, `openrouter`): Генерирует `~/.qwen/settings.json` со структурой OpenAI-совместимого провайдера. Требует `baseUrl`. Пробрасывает флаги возможностей через `generationConfig.modalities`.
+- **Qwen CLI** (`openai-compatible`, `fireworks`, `openrouter`, `custom-api`): Генерирует `~/.qwen/settings.json` со структурой OpenAI-совместимого провайдера и пробрасывает флаги возможностей через `generationConfig.modalities`. При запуске OpenAI o-series, gpt-5 и новее, а также неизвестные модели на `api.openai.com` проходят через локальный proxy, заменяющий `max_tokens` на `max_completion_tokens`; известные старые модели, например gpt-4, остаются на прямом соединении. Другие шлюзы тоже остаются прямыми, если имя модели не относится к проксируемому семейству. Для gpt-6 и новее при использовании tools proxy выставляет `reasoning_effort: "none"`; при cleanup proxy останавливается.
 - **Codex CLI**: Генерирует `~/.codex/config.toml` с `wire_api: responses` и `model_providers`, а профиль (`model` + `model_provider`) записывает в отдельный `~/.codex/default.config.toml` (новый формат Codex CLI v0.134.0+). При project-области разделяет конфиг между глобальным и проектным. Поддерживает `openai-compatible`, `fireworks`, `openrouter`. Флаги возможностей не пробрасываются.
 - **Copilot** (все типы провайдеров): Не записывает и не изменяет файл настроек. Весь конфиг передаётся через `COPILOT_MODEL`, `COPILOT_PROVIDER_TYPE`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_PROVIDER_BASE_URL`. Типы `fireworks` и `openrouter` отображаются как `COPILOT_PROVIDER_TYPE=openai`. Для моделей семейства gpt-5 автоматически добавляется `COPILOT_PROVIDER_WIRE_API=responses`.
 - **Goose** (все типы провайдеров): Не изменяет файл настроек. Весь конфиг через `GOOSE_PROVIDER` + `GOOSE_MODEL` + ключи провайдера. `anthropic-compatible` → `ANTHROPIC_API_KEY`; `openrouter` → `OPENROUTER_API_KEY`; `fireworks`/`openai-compatible` → `OPENAI_API_KEY` + `OPENAI_HOST`. Суффикс `/v1` автоматически убирается из `OPENAI_HOST` (Goose сам дописывает `/v1/chat/completions`).
