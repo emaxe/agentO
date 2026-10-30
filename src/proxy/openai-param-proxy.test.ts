@@ -4,6 +4,7 @@ import {
   startOpenAIParamProxy,
   shouldProxyModel,
   collectProxyUpstreams,
+  responsesEndpointPath,
   type ProxyServer,
 } from './openai-param-proxy.js';
 
@@ -461,5 +462,374 @@ describe('proxy routing helpers', () => {
       { model: 'qwen3.8-max', baseUrl: 'https://dashscope.example.com/v1' },
     ]);
     expect(upstreams).toEqual(['https://api.openai.com/v1']);
+  });
+});
+
+describe('responsesEndpointPath', () => {
+  it('replaces the chat completions tail', () => {
+    expect(responsesEndpointPath('/v1/chat/completions')).toBe('/v1/responses');
+    expect(responsesEndpointPath('/api/v1/chat/completions/')).toBe('/api/v1/responses');
+  });
+
+  it('falls back to the sibling responses path', () => {
+    expect(responsesEndpointPath('/v1/completions')).toBe('/v1/responses');
+    expect(responsesEndpointPath('/chat/completions')).toBe('/responses');
+  });
+});
+
+describe('chat completions to responses bridge', () => {
+  let proxy: ProxyServer | undefined;
+  let bridgeUpstream: http.Server;
+  let bridgeUpstreamUrl: string;
+
+  beforeEach(async () => {
+    bridgeUpstream = http.createServer();
+    await new Promise<void>((resolve) => bridgeUpstream.listen(0, '127.0.0.1', resolve));
+    const addr = bridgeUpstream.address();
+    if (!addr || typeof addr === 'string') throw new Error('Invalid upstream address');
+    bridgeUpstreamUrl = `http://127.0.0.1:${addr.port}`;
+  });
+
+  afterEach(async () => {
+    await proxy?.stop();
+    await new Promise<void>((resolve) => bridgeUpstream.close(() => resolve()));
+  });
+
+  const TOOL = {
+    type: 'function',
+    function: { name: 'ping', description: 'ping', parameters: { type: 'object', properties: {} } },
+  };
+  const TOOLS_ERROR = {
+    error: {
+      message:
+        "Function tools with reasoning_effort are not supported for gpt-6.1-sol in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
+    },
+  };
+  const NONE_ERROR = {
+    error: {
+      message:
+        "Unsupported value: 'reasoning_effort' does not support 'none' with this model. Supported values are: 'low', 'medium', 'high', and 'xhigh'.",
+    },
+  };
+  const SSE_BODY = [
+    'event: response.created',
+    'data: {"type":"response.created"}',
+    '',
+    'event: response.output_text.delta',
+    'data: {"type":"response.output_text.delta","output_index":0,"delta":"hi"}',
+    '',
+    'event: response.completed',
+    'data: {"type":"response.completed","response":{"id":"resp_1","model":"gpt-6.1-sol","usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5},"output":[{"type":"message","content":[{"type":"output_text","text":"hi"}]}]}}',
+    '',
+  ].join('\n');
+
+  async function readJsonBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req)
+      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
+    return JSON.parse(Buffer.concat(chunks).toString('utf-8')) as Record<string, unknown>;
+  }
+
+  function sendJson(res: http.ServerResponse, status: number, payload: unknown): void {
+    res.writeHead(status, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(payload));
+  }
+
+  it('bridges to the responses endpoint when none is rejected', async () => {
+    const bridgeBodies: Array<Record<string, unknown>> = [];
+    bridgeUpstream.on('request', async (req, res) => {
+      const body = await readJsonBody(req);
+      if (req.url === '/v1/responses') {
+        bridgeBodies.push(body);
+        sendJson(res, 200, {
+          id: 'resp_1',
+          model: 'gpt-6.1-sol',
+          status: 'completed',
+          output: [
+            { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'hi' }] },
+          ],
+          usage: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
+        });
+        return;
+      }
+      sendJson(res, 400, NONE_ERROR);
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl: bridgeUpstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [TOOL],
+        temperature: 0.2,
+        stream: false,
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.object).toBe('chat.completion');
+    expect(body.choices[0].message.content).toBe('hi');
+    expect(body.usage.prompt_tokens).toBe(3);
+
+    expect(bridgeBodies).toHaveLength(1);
+    const bridgeBody = bridgeBodies[0];
+    expect(bridgeBody.instructions).toBeUndefined();
+    expect((bridgeBody.tools as any)[0]).toMatchObject({ type: 'function', name: 'ping' });
+    expect(bridgeBody.reasoning).toBeUndefined();
+    expect(bridgeBody.temperature).toBeUndefined();
+  });
+
+  it('bridges a streamed answer into chat chunks and ends with done', async () => {
+    const bridgeBodies: Array<Record<string, unknown>> = [];
+    bridgeUpstream.on('request', async (req, res) => {
+      if (req.url === '/v1/responses') {
+        bridgeBodies.push(await readJsonBody(req));
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.end(SSE_BODY);
+        return;
+      }
+      sendJson(res, 400, NONE_ERROR);
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl: bridgeUpstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [TOOL],
+        stream: true,
+      }),
+    });
+
+    const text = await res.text();
+    expect(res.status).toBe(200);
+    expect(text).toContain('"object":"chat.completion.chunk"');
+    expect(text).toContain('hi');
+    expect(text.endsWith('data: [DONE]\n\n')).toBe(true);
+    expect(bridgeBodies[0].stream).toBe(true);
+  });
+
+  it('does not bridge a request without tools', async () => {
+    let calls = 0;
+    bridgeUpstream.on('request', async (_req, res) => {
+      calls += 1;
+      sendJson(res, 400, NONE_ERROR);
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl: bridgeUpstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as any;
+    expect(body.error.message).toBe(NONE_ERROR.error.message);
+    expect(calls).toBe(1);
+  });
+
+  it('bridges only once', async () => {
+    const urls: string[] = [];
+    bridgeUpstream.on('request', async (req, res) => {
+      urls.push(req.url ?? '');
+      await readJsonBody(req);
+      if (req.url === '/v1/responses') {
+        res.writeHead(404, { 'content-type': 'text/html' });
+        res.end('<html>nope</html>');
+        return;
+      }
+      const chatCalls = urls.filter((url) => url === '/v1/chat/completions').length;
+      sendJson(res, 400, chatCalls === 1 ? TOOLS_ERROR : NONE_ERROR);
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl: bridgeUpstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'vendor-alpha-latest',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [TOOL],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as any;
+    expect(body.error.message).toBe(NONE_ERROR.error.message);
+    expect(urls.filter((url) => url === '/v1/chat/completions')).toHaveLength(2);
+    expect(urls.filter((url) => url === '/v1/responses')).toHaveLength(1);
+  });
+
+  it('returns the original 400 when the bridge endpoint is missing', async () => {
+    bridgeUpstream.on('request', async (req, res) => {
+      if (req.url === '/v1/responses') {
+        res.writeHead(404, { 'content-type': 'text/html' });
+        res.end('<html>nope</html>');
+        return;
+      }
+      sendJson(res, 400, NONE_ERROR);
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl: bridgeUpstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [TOOL],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual(NONE_ERROR);
+  });
+
+  it('preserves the client reasoning effort through the bridge', async () => {
+    const bridgeBodies: Array<Record<string, unknown>> = [];
+    bridgeUpstream.on('request', async (req, res) => {
+      if (req.url === '/v1/responses') {
+        bridgeBodies.push(await readJsonBody(req));
+        sendJson(res, 200, {
+          id: 'resp_1',
+          model: 'gpt-6.1-sol',
+          status: 'completed',
+          output: [{ type: 'message', content: [{ type: 'output_text', text: 'ok' }] }],
+        });
+        return;
+      }
+      sendJson(res, 400, TOOLS_ERROR);
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl: bridgeUpstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [TOOL],
+        reasoning_effort: 'high',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(bridgeBodies[0].reasoning).toEqual({ effort: 'high' });
+  });
+
+  it('surfaces a failed responses status as an error', async () => {
+    bridgeUpstream.on('request', async (req, res) => {
+      if (req.url === '/v1/responses') {
+        sendJson(res, 200, {
+          id: 'resp_1',
+          status: 'failed',
+          error: { message: 'model exploded' },
+        });
+        return;
+      }
+      sendJson(res, 400, NONE_ERROR);
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl: bridgeUpstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [TOOL],
+      }),
+    });
+
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as any;
+    expect(body.error.message).toBe('model exploded');
+  });
+
+  it('forwards a bridge upstream failure', async () => {
+    bridgeUpstream.on('request', async (req, res) => {
+      if (req.url === '/v1/responses') {
+        sendJson(res, 500, { error: { message: 'bridge down', type: 'api_error' } });
+        return;
+      }
+      sendJson(res, 400, NONE_ERROR);
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl: bridgeUpstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [TOOL],
+      }),
+    });
+
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as any;
+    expect(body.error.message).toBe('bridge down');
+  });
+
+  it('tears down the bridge stream when the client aborts', async () => {
+    const bridgeClosed = new Promise<boolean>((resolve) => {
+      bridgeUpstream.on('request', (req, res) => {
+        if (req.url === '/v1/responses') {
+          res.writeHead(200, { 'content-type': 'text/event-stream' });
+          res.write('data: {"type":"response.created"}\n\n');
+          res.on('close', () => resolve(!res.writableEnded));
+          return;
+        }
+        res.writeHead(400, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(NONE_ERROR));
+      });
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl: bridgeUpstreamUrl });
+    const clientReq = http.request(`${proxy.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+    });
+    clientReq.end(
+      JSON.stringify({
+        model: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [TOOL],
+        stream: true,
+      }),
+    );
+
+    let aborted = false;
+    const clientAborted = new Promise<void>((resolve, reject) => {
+      clientReq.on('response', (clientRes) => {
+        clientRes.on('data', () => {
+          if (aborted) return;
+          aborted = true;
+          clientRes.destroy();
+          clientReq.destroy();
+          resolve();
+        });
+      });
+      clientReq.on('error', (err) => {
+        if (!aborted) reject(err);
+      });
+    });
+    await withTimeout(clientAborted, 2000, 'client never received mid-stream data');
+
+    const sawPrematureClose = await withTimeout(
+      bridgeClosed,
+      2000,
+      'bridge upstream response was not closed after client abort',
+    );
+    expect(sawPrematureClose).toBe(true);
   });
 });

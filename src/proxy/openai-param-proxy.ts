@@ -4,12 +4,22 @@ import { URL } from 'node:url';
 import {
   gptMajorVersion,
   isMaxTokensUnsupportedError,
+  isReasoningEffortValueUnsupportedError,
   isToolsReasoningUnsupportedError,
   requiresMaxCompletionTokens,
   withMaxCompletionTokens,
   withReasoningDisabledForTools,
   type OpenAIRequest,
 } from './openai-adapter.js';
+import {
+  chatCompletionToStreamChunks,
+  convertChatRequestToResponses,
+  convertResponsesEventToChatChunks,
+  convertResponsesToChatResponse,
+  createChatStreamState,
+  type ChatRequest,
+  responsesSseToChatResponse,
+} from './chat-responses-adapter.js';
 import { getOutboundAgent, stopServer } from './proxy-utils.js';
 
 /** Options for starting the OpenAI parameter pass-through proxy server. */
@@ -76,6 +86,40 @@ export function collectProxyUpstreams(candidates: ProxyCandidate[]): string[] {
   return upstreams;
 }
 
+/** Type guard for plain objects. */
+function isRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === 'object' && x !== null;
+}
+
+/** Parse the JSON `data:` lines of one SSE block. */
+function parseSseBlock(block: string): Array<Record<string, unknown>> {
+  const events: Array<Record<string, unknown>> = [];
+  for (const line of block.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data: ')) continue;
+    const payload = trimmed.slice(6);
+    if (payload === '[DONE]') continue;
+    try {
+      const parsed = JSON.parse(payload);
+      if (isRecord(parsed)) events.push(parsed);
+    } catch {
+      // Ignore malformed frames.
+    }
+  }
+  return events;
+}
+
+/** Derive the Responses endpoint from the incoming Chat Completions path. */
+export function responsesEndpointPath(requestPath: string): string {
+  const trimmed = requestPath.replace(/\/+$/, '');
+  if (trimmed.endsWith('/chat/completions')) {
+    return trimmed.slice(0, -'/chat/completions'.length) + '/responses';
+  }
+  const slash = trimmed.lastIndexOf('/');
+  const dir = slash <= 0 ? '' : trimmed.slice(0, slash);
+  return dir + '/responses';
+}
+
 /** Read the full body of an incoming message into a Buffer. */
 async function readBody(req: http.IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -96,9 +140,9 @@ function isJsonRequest(req: http.IncomingMessage): boolean {
  * hop-by-hop framing headers (`host`, `content-length`, `transfer-encoding`).
  *
  * Unlike `buildProxyHeaders`, no `x-api-key` → `Authorization` rewrite (the
- * OpenAI SDK already sends `Authorization`) and no `accept-encoding: identity`
- * forcing (the response is piped through untouched, so upstream encodings must
- * reach the client unmodified).
+ * OpenAI SDK already sends `Authorization`). `accept-encoding` is forced to
+ * `identity` because the proxy buffers 400 bodies to inspect them for a
+ * retry: a compressed error body would silently defeat every detector.
  */
 function copyForwardHeaders(incomingHeaders: http.IncomingHttpHeaders): http.OutgoingHttpHeaders {
   const headers: http.OutgoingHttpHeaders = {};
@@ -108,6 +152,7 @@ function copyForwardHeaders(incomingHeaders: http.IncomingHttpHeaders): http.Out
     if (lower === 'host' || lower === 'content-length' || lower === 'transfer-encoding') continue;
     headers[key] = value;
   }
+  headers['accept-encoding'] = 'identity';
   return headers;
 }
 
@@ -143,7 +188,8 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
 
       // Inspect the request body only: POST/PATCH/PUT with a JSON content type.
       let body: Buffer | undefined;
-      let parsedRequest: OpenAIRequest | undefined;
+      let parsedRequest: ChatRequest | undefined;
+      let originalReasoningEffort: string | undefined;
       const shouldRewrite =
         (req.method === 'POST' || req.method === 'PATCH' || req.method === 'PUT') &&
         isJsonRequest(req);
@@ -152,8 +198,9 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
         const raw = await readBody(req);
         if (raw.length > 0) {
           try {
-            const parsed = JSON.parse(raw.toString('utf-8')) as OpenAIRequest;
+            const parsed = JSON.parse(raw.toString('utf-8')) as ChatRequest;
             parsedRequest = parsed;
+            originalReasoningEffort = parsed.reasoning_effort;
             let rewritten = parsed;
             if (requiresMaxCompletionTokens(String(parsed.model))) {
               rewritten = withMaxCompletionTokens(rewritten);
@@ -179,7 +226,197 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
 
       let retriedMaxTokens = false;
       let retriedToolsReasoning = false;
+      let bridged = false;
       let activeRequest: http.ClientRequest | undefined;
+
+      /**
+       * Replay the request against the upstream Responses endpoint and translate
+       * the answer back into Chat Completions.
+       *
+       * Used once, only after the upstream proved that `/v1/chat/completions`
+       * cannot serve this request: reasoning-only models (`gpt-6.1-sol`,
+       * `gpt-6-astra`) refuse function tools no matter what `reasoning_effort`
+       * is set to. Framing follows the client's `stream` flag, not the upstream
+       * content type, and a failed Responses answer is surfaced as an error
+       * rather than an empty completion.
+       */
+      const sendViaBridge = (request: ChatRequest, originalBody: Buffer): void => {
+        const bridgeBody = Buffer.from(
+          JSON.stringify(convertChatRequestToResponses(request, { originalReasoningEffort })),
+          'utf-8',
+        );
+        const bridgeUrl = new URL(
+          responsesEndpointPath(targetUrl.pathname) + targetUrl.search,
+          upstream.origin,
+        );
+        const bridgeHeaders: http.OutgoingHttpHeaders = {
+          ...headers,
+          'content-length': bridgeBody.length,
+          'accept-encoding': 'identity',
+        };
+        const wantsStream = request.stream === true;
+        const model = String(request.model ?? '');
+
+        const replyJson = (status: number, payload: unknown): void => {
+          if (res.writableEnded) return;
+          const out = Buffer.from(JSON.stringify(payload), 'utf-8');
+          if (!res.headersSent) {
+            res.writeHead(status, {
+              'content-type': 'application/json',
+              'content-length': out.length,
+            });
+          }
+          res.end(out);
+        };
+        const replyFailed = (message: string): void => {
+          replyJson(502, { error: { message, type: 'api_error' } });
+        };
+
+        const bridgeReq = upstreamModule.request(
+          bridgeUrl,
+          { method: 'POST', headers: bridgeHeaders, agent: getOutboundAgent(upstream) },
+          (bridgeRes) => {
+            const status = bridgeRes.statusCode ?? 502;
+            const rawContentType = bridgeRes.headers['content-type'];
+            const contentType = Array.isArray(rawContentType) ? rawContentType[0] : rawContentType;
+            const isSse =
+              typeof contentType === 'string' && contentType.includes('text/event-stream');
+
+            if (status < 200 || status >= 300) {
+              const chunks: Buffer[] = [];
+              bridgeRes.on('data', (chunk) => {
+                chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
+              });
+              bridgeRes.on('end', () => {
+                const rawError = Buffer.concat(chunks);
+                let hasError = false;
+                try {
+                  const parsed = JSON.parse(rawError.toString('utf-8'));
+                  hasError =
+                    isRecord(parsed) && parsed.error !== undefined && parsed.error !== null;
+                } catch {
+                  hasError = false;
+                }
+                if (hasError) {
+                  if (res.writableEnded) return;
+                  res.writeHead(status, {
+                    'content-type': 'application/json',
+                    'content-length': rawError.length,
+                  });
+                  res.end(rawError);
+                  return;
+                }
+                // Opaque bridge failure (missing endpoint, HTML page): the original
+                // Chat Completions 400 still names the real reason and the
+                // /v1/responses hint, so it is more useful than a bare 404.
+                if (res.writableEnded) return;
+                res.writeHead(400, {
+                  'content-type': 'application/json',
+                  'content-length': originalBody.length,
+                });
+                res.end(originalBody);
+              });
+              bridgeRes.on('error', () => replyFailed('responses bridge failed'));
+              return;
+            }
+
+            if (isSse) {
+              let buffer = '';
+              const events: Array<Record<string, unknown>> = [];
+              const chunkState = createChatStreamState(
+                'chatcmpl-' + Date.now(),
+                model,
+                Math.floor(Date.now() / 1000),
+              );
+              if (wantsStream) {
+                const streamHeaders = { ...bridgeRes.headers };
+                delete streamHeaders['content-length'];
+                delete streamHeaders['transfer-encoding'];
+                res.writeHead(200, { ...streamHeaders, 'content-type': 'text/event-stream' });
+                res.on('close', () => {
+                  if (!res.writableEnded && !bridgeRes.destroyed) bridgeRes.destroy();
+                });
+              }
+              const emit = (event: Record<string, unknown>): void => {
+                if (!wantsStream) {
+                  events.push(event);
+                  return;
+                }
+                for (const chunk of convertResponsesEventToChatChunks(event, chunkState)) {
+                  res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                }
+              };
+              bridgeRes.on('data', (chunk) => {
+                buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf-8');
+                const blocks = buffer.split('\n\n');
+                buffer = blocks.pop() ?? '';
+                for (const block of blocks) {
+                  for (const event of parseSseBlock(block)) emit(event);
+                }
+              });
+              bridgeRes.on('end', () => {
+                if (buffer.trim()) {
+                  for (const event of parseSseBlock(buffer)) emit(event);
+                }
+                if (wantsStream) {
+                  res.write('data: [DONE]\n\n');
+                  res.end();
+                  return;
+                }
+                replyJson(200, responsesSseToChatResponse(events, model));
+              });
+              bridgeRes.on('error', () => replyFailed('responses bridge stream failed'));
+              return;
+            }
+
+            const chunks: Buffer[] = [];
+            bridgeRes.on('data', (chunk) => {
+              chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
+            });
+            bridgeRes.on('end', () => {
+              let parsed: unknown;
+              try {
+                parsed = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+              } catch {
+                replyFailed('responses bridge returned an invalid body');
+                return;
+              }
+              const response = isRecord(parsed) ? parsed : {};
+              const error = isRecord(response.error) ? response.error : undefined;
+              if (response.status === 'failed' || error !== undefined) {
+                replyFailed(String(error?.message ?? 'responses bridge: request failed'));
+                return;
+              }
+              const completion = convertResponsesToChatResponse(response, model);
+              if (wantsStream) {
+                if (res.writableEnded) return;
+                res.writeHead(200, { 'content-type': 'text/event-stream' });
+                for (const chunk of chatCompletionToStreamChunks(completion)) {
+                  res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+                }
+                res.write('data: [DONE]\n\n');
+                res.end();
+                return;
+              }
+              const out = Buffer.from(JSON.stringify(completion), 'utf-8');
+              if (res.writableEnded) return;
+              res.writeHead(status, {
+                'content-type': 'application/json',
+                'content-length': out.length,
+              });
+              res.end(out);
+            });
+            bridgeRes.on('error', () => replyFailed('responses bridge failed'));
+          },
+        );
+
+        activeRequest = bridgeReq;
+        bridgeReq.setTimeout(timeoutMs, () => bridgeReq.destroy(new Error('upstream timeout')));
+        bridgeReq.on('error', (err) => {
+          replyFailed(err.message);
+        });
+        bridgeReq.end(bridgeBody);
+      };
 
       const sendUpstream = (payload: Buffer | undefined): void => {
         const proxyReq = upstreamModule.request(
@@ -234,6 +471,23 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
                   const retryBody = Buffer.from(JSON.stringify(parsedRequest), 'utf-8');
                   headers['content-length'] = retryBody.length;
                   sendUpstream(retryBody);
+                  return;
+                }
+
+                // The upstream proved Chat Completions cannot serve tools for
+                // this model (reasoning-only families). Replay through the
+                // Responses API once.
+                if (
+                  !bridged &&
+                  parsedRequest !== undefined &&
+                  parsedBody !== undefined &&
+                  Array.isArray(parsedRequest.tools) &&
+                  parsedRequest.tools.length > 0 &&
+                  (isToolsReasoningUnsupportedError(parsedBody) ||
+                    isReasoningEffortValueUnsupportedError(parsedBody))
+                ) {
+                  bridged = true;
+                  sendViaBridge(parsedRequest, raw);
                   return;
                 }
 

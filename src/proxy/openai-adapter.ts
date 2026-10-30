@@ -151,7 +151,7 @@ export function isReasoningEffortValueUnsupportedError(payload: unknown): boolea
  * it for function tools. Requests without tools, other model families and
  * already-disabled reasoning are returned unchanged.
  */
-export function withReasoningDisabledForTools(req: OpenAIRequest): OpenAIRequest {
+export function withReasoningDisabledForTools<T extends OpenAIRequest>(req: T): T {
   if (!requiresReasoningDisabledForTools(req.model)) return req;
   if (!Array.isArray(req.tools) || req.tools.length === 0) return req;
   if (req.reasoning_effort === 'none') return req;
@@ -174,10 +174,10 @@ export function isMaxTokensUnsupportedError(payload: unknown): boolean {
 }
 
 /** Returns a copy of `req` with `max_tokens` renamed to `max_completion_tokens`. */
-export function withMaxCompletionTokens(req: OpenAIRequest): OpenAIRequest {
+export function withMaxCompletionTokens<T extends OpenAIRequest>(req: T): T {
   if (req.max_tokens === undefined || req.max_completion_tokens !== undefined) return req;
   const { max_tokens: maxTokens, ...rest } = req;
-  return { ...rest, max_completion_tokens: maxTokens };
+  return { ...rest, max_completion_tokens: maxTokens } as T;
 }
 
 /** Convert a single Anthropic message into one or more OpenAI messages. */
