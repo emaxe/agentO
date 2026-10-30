@@ -2,6 +2,9 @@ import http from 'node:http';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { startOpenAIParamProxy, type ProxyServer } from './openai-param-proxy.js';
 
+const MAX_TOKENS_UNSUPPORTED_MESSAGE =
+  "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.";
+
 describe('startOpenAIParamProxy', () => {
   let proxy: ProxyServer | undefined;
   let upstream: http.Server;
@@ -161,5 +164,67 @@ describe('startOpenAIParamProxy', () => {
     expect(text).toContain('data: {"id":"c","choices":[{"delta":{"role":"assistant"}');
     expect(text).toContain('"delta":{"content":"Hi"},"finish_reason":null}');
     expect(text.trimEnd().endsWith('data: [DONE]')).toBe(true);
+  });
+
+  it('retries once with max_completion_tokens when the upstream rejects max_tokens', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    upstream.on('request', async (req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req)
+        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
+      bodies.push(JSON.parse(Buffer.concat(chunks).toString('utf-8')) as Record<string, unknown>);
+      if (bodies.length === 1) {
+        res.writeHead(400, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: MAX_TOKENS_UNSUPPORTED_MESSAGE } }));
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl });
+    const res = await fetch(`${proxy.url}/api/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'vendor-alpha-latest',
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 100,
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).toMatchObject({ model: 'vendor-alpha-latest', max_tokens: 100 });
+    expect(bodies[1]).toMatchObject({ model: 'vendor-alpha-latest', max_completion_tokens: 100 });
+    expect(bodies[1]).not.toHaveProperty('max_tokens');
+  });
+
+  it('does not retry a second time when the retried request is also rejected', async () => {
+    let calls = 0;
+    upstream.on('request', async (req, res) => {
+      calls += 1;
+      const drained: Buffer[] = [];
+      for await (const chunk of req)
+        drained.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
+      void drained;
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: { message: MAX_TOKENS_UNSUPPORTED_MESSAGE } }));
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl });
+    const res = await fetch(`${proxy.url}/api/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'vendor-alpha-latest',
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 100,
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: { message: MAX_TOKENS_UNSUPPORTED_MESSAGE } });
+    expect(calls).toBe(2);
   });
 });

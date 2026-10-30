@@ -2,6 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';
 import {
+  isMaxTokensUnsupportedError,
   requiresMaxCompletionTokens,
   withMaxCompletionTokens,
   type OpenAIRequest,
@@ -68,8 +69,11 @@ function copyForwardHeaders(incomingHeaders: http.IncomingHttpHeaders): http.Out
  * - The incoming path and query are forwarded verbatim (`targetUrl` is built
  *   from the upstream origin only), so a base URL that already includes the
  *   upstream path works without normalization.
- * - Only the request direction is inspected; responses (including SSE and
- *   compressed bodies) stream through via `pipe` with their headers intact.
+ * - Only the request direction is inspected; responses stream through via
+ *   `pipe` with their headers intact — except a 400, which is buffered solely
+ *   to allow a single retry with `max_completion_tokens` when the upstream
+ *   flags `max_tokens` as unsupported (for models the name heuristic does not
+ *   know).
  * - Requests are never logged.
  */
 export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise<ProxyServer> {
@@ -85,6 +89,7 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
 
       // Inspect the request body only: POST/PATCH/PUT with a JSON content type.
       let body: Buffer | undefined;
+      let parsedRequest: OpenAIRequest | undefined;
       const shouldRewrite =
         (req.method === 'POST' || req.method === 'PATCH' || req.method === 'PUT') &&
         isJsonRequest(req);
@@ -94,6 +99,7 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
         if (raw.length > 0) {
           try {
             const parsed = JSON.parse(raw.toString('utf-8')) as OpenAIRequest;
+            parsedRequest = parsed;
             if (requiresMaxCompletionTokens(String(parsed.model))) {
               body = Buffer.from(JSON.stringify(withMaxCompletionTokens(parsed)), 'utf-8');
             } else {
@@ -116,45 +122,104 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
         headers['content-length'] = Array.isArray(cl) ? cl[0] : cl;
       }
 
-      const proxyReq = upstreamModule.request(
-        targetUrl,
-        { method: req.method, headers, agent: getOutboundAgent(upstream) },
-        (proxyRes) => {
-          // Response direction is untouched: status and content headers
-          // (including SSE and compressed bodies) pass through verbatim.
-          res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
-          proxyRes.pipe(res);
-          proxyRes.on('error', () => {
-            if (!res.headersSent) {
-              res.writeHead(502, { 'content-type': 'application/json' });
+      let retriedMaxTokens = false;
+      let activeRequest: http.ClientRequest | undefined;
+
+      const sendUpstream = (payload: Buffer | undefined): void => {
+        const proxyReq = upstreamModule.request(
+          targetUrl,
+          { method: req.method, headers, agent: getOutboundAgent(upstream) },
+          (proxyRes) => {
+            // The model-name heuristic can lag behind a new model family, so
+            // the upstream 400 is the source of truth: retry once with
+            // `max_completion_tokens`. Buffer the body only for a 400; every
+            // other response is piped through untouched.
+            if ((proxyRes.statusCode ?? 0) === 400) {
+              const chunks: Buffer[] = [];
+              proxyRes.on('data', (chunk) => {
+                chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
+              });
+              proxyRes.on('end', () => {
+                const raw = Buffer.concat(chunks);
+                let parsedBody: unknown;
+                try {
+                  parsedBody = JSON.parse(raw.toString('utf-8'));
+                } catch {
+                  parsedBody = undefined;
+                }
+
+                if (
+                  !retriedMaxTokens &&
+                  payload !== undefined &&
+                  parsedBody !== undefined &&
+                  parsedRequest !== undefined &&
+                  isMaxTokensUnsupportedError(parsedBody)
+                ) {
+                  retriedMaxTokens = true;
+                  const retryBody = Buffer.from(
+                    JSON.stringify(withMaxCompletionTokens(parsedRequest)),
+                    'utf-8',
+                  );
+                  // Rebuild content-length from the new body; all other
+                  // forwarded headers stay as-is.
+                  headers['content-length'] = retryBody.length;
+                  sendUpstream(retryBody);
+                  return;
+                }
+
+                // Not retrying: pass the 400 through verbatim.
+                res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+                res.end(raw);
+              });
+              proxyRes.on('error', () => {
+                if (!res.headersSent) {
+                  res.writeHead(502, { 'content-type': 'application/json' });
+                }
+                res.end();
+              });
+              return;
             }
+
+            // Response direction is untouched: status and content headers
+            // (including SSE and compressed bodies) pass through verbatim.
+            res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+            proxyRes.pipe(res);
+            proxyRes.on('error', () => {
+              if (!res.headersSent) {
+                res.writeHead(502, { 'content-type': 'application/json' });
+              }
+              res.end();
+            });
+          },
+        );
+
+        activeRequest = proxyReq;
+
+        proxyReq.setTimeout(timeoutMs, () => {
+          proxyReq.destroy(new Error('upstream timeout'));
+        });
+
+        proxyReq.on('error', (err) => {
+          if (!res.headersSent) {
+            res.writeHead(502, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ error: { message: err.message, type: 'api_error' } }));
+          } else {
             res.end();
-          });
-        },
-      );
+          }
+        });
 
-      proxyReq.setTimeout(timeoutMs, () => {
-        proxyReq.destroy(new Error('upstream timeout'));
-      });
-
-      proxyReq.on('error', (err) => {
-        if (!res.headersSent) {
-          res.writeHead(502, { 'content-type': 'application/json' });
-          res.end(JSON.stringify({ error: { message: err.message, type: 'api_error' } }));
+        if (payload !== undefined) {
+          proxyReq.end(payload);
         } else {
-          res.end();
+          req.pipe(proxyReq);
         }
-      });
+      };
 
       req.on('error', () => {
-        proxyReq.destroy();
+        activeRequest?.destroy();
       });
 
-      if (body !== undefined) {
-        proxyReq.end(body);
-      } else {
-        req.pipe(proxyReq);
-      }
+      sendUpstream(body);
     } catch {
       if (!res.headersSent) {
         res.writeHead(500, { 'content-type': 'application/json' });
