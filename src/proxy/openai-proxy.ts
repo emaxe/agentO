@@ -7,6 +7,9 @@ import {
   convertError,
   createStreamState,
   convertStreamChunk,
+  isMaxTokensUnsupportedError,
+  withMaxCompletionTokens,
+  type OpenAIRequest,
 } from './openai-adapter.js';
 import {
   buildProxyHeaders,
@@ -88,6 +91,7 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
       targetUrl.search = reqUrl.search;
 
       let body: Buffer | undefined;
+      let convertedRequest: OpenAIRequest | undefined;
       const shouldRewrite = req.method === 'POST' && isJsonRequest(req) && isMessagesEndpoint;
 
       if (shouldRewrite) {
@@ -96,6 +100,7 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
           try {
             const parsed = JSON.parse(raw.toString('utf-8'));
             const converted = convertRequest(parsed);
+            convertedRequest = converted;
             body = Buffer.from(JSON.stringify(converted), 'utf-8');
           } catch {
             body = raw;
@@ -103,92 +108,163 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
         }
       }
 
-      const headers = buildProxyHeaders(req.headers, body?.length);
+      let headers = buildProxyHeaders(req.headers, body?.length);
+      let retriedMaxTokens = false;
+      let activeRequest: http.ClientRequest | undefined;
 
-      const proxyReq = upstreamModule.request(
-        targetUrl,
-        { method: req.method, headers, agent: getOutboundAgent(upstream) },
-        (proxyRes) => {
-          const contentType = proxyRes.headers['content-type'];
-          const ct = Array.isArray(contentType) ? contentType[0] : contentType;
-          const isStream = typeof ct === 'string' && ct.includes('text/event-stream');
-          const isJson = typeof ct === 'string' && ct.includes('application/json');
+      const sendUpstream = (payload: Buffer | undefined): void => {
+        const proxyReq = upstreamModule.request(
+          targetUrl,
+          { method: req.method, headers, agent: getOutboundAgent(upstream) },
+          (proxyRes) => {
+            const contentType = proxyRes.headers['content-type'];
+            const ct = Array.isArray(contentType) ? contentType[0] : contentType;
+            const isStream = typeof ct === 'string' && ct.includes('text/event-stream');
+            const isJson = typeof ct === 'string' && ct.includes('application/json');
 
-          if (
-            isMessagesEndpoint &&
-            (proxyRes.statusCode ?? 200) >= 200 &&
-            (proxyRes.statusCode ?? 200) < 300
-          ) {
-            if (isStream) {
-              const streamHeaders = { ...proxyRes.headers };
-              delete streamHeaders['content-length'];
-              delete streamHeaders['transfer-encoding'];
-              res.writeHead(proxyRes.statusCode ?? 200, {
-                ...streamHeaders,
-                'content-type': 'text/event-stream',
-              });
-              const state = createStreamState('msg-proxy-' + Date.now(), 'unknown');
-              let buffer = '';
-              proxyRes.on('data', (chunk) => {
-                buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf-8');
-                const lines = buffer.split('\n\n');
-                buffer = lines.pop() ?? '';
-                for (const block of lines) {
-                  const parsedEvents = sseLineToEvent(block);
-                  for (const parsed of parsedEvents) {
-                    const events = convertStreamChunk(parsed, state);
-                    for (const ev of events) {
-                      res.write(
-                        `event: ${String(ev.type ?? 'unknown')}\ndata: ${JSON.stringify(ev)}\n\n`,
-                      );
+            if (
+              isMessagesEndpoint &&
+              (proxyRes.statusCode ?? 200) >= 200 &&
+              (proxyRes.statusCode ?? 200) < 300
+            ) {
+              if (isStream) {
+                const streamHeaders = { ...proxyRes.headers };
+                delete streamHeaders['content-length'];
+                delete streamHeaders['transfer-encoding'];
+                res.writeHead(proxyRes.statusCode ?? 200, {
+                  ...streamHeaders,
+                  'content-type': 'text/event-stream',
+                });
+                const state = createStreamState('msg-proxy-' + Date.now(), 'unknown');
+                let buffer = '';
+                proxyRes.on('data', (chunk) => {
+                  buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf-8');
+                  const lines = buffer.split('\n\n');
+                  buffer = lines.pop() ?? '';
+                  for (const block of lines) {
+                    const parsedEvents = sseLineToEvent(block);
+                    for (const parsed of parsedEvents) {
+                      const events = convertStreamChunk(parsed, state);
+                      for (const ev of events) {
+                        res.write(
+                          `event: ${String(ev.type ?? 'unknown')}\ndata: ${JSON.stringify(ev)}\n\n`,
+                        );
+                      }
                     }
                   }
-                }
-              });
-              proxyRes.on('end', () => {
-                if (buffer.trim()) {
-                  const parsedEvents = sseLineToEvent(buffer);
-                  for (const parsed of parsedEvents) {
-                    const events = convertStreamChunk(parsed, state);
-                    for (const ev of events) {
-                      res.write(
-                        `event: ${String(ev.type ?? 'unknown')}\ndata: ${JSON.stringify(ev)}\n\n`,
-                      );
+                });
+                proxyRes.on('end', () => {
+                  if (buffer.trim()) {
+                    const parsedEvents = sseLineToEvent(buffer);
+                    for (const parsed of parsedEvents) {
+                      const events = convertStreamChunk(parsed, state);
+                      for (const ev of events) {
+                        res.write(
+                          `event: ${String(ev.type ?? 'unknown')}\ndata: ${JSON.stringify(ev)}\n\n`,
+                        );
+                      }
                     }
                   }
-                }
-                res.end();
-              });
-              proxyRes.on('error', () => {
-                if (!res.headersSent) {
-                  res.writeHead(502);
-                }
-                res.end();
-              });
-              req.on('close', () => {
-                if (!proxyRes.destroyed) proxyRes.destroy();
-              });
-            } else if (isJson) {
+                  res.end();
+                });
+                proxyRes.on('error', () => {
+                  if (!res.headersSent) {
+                    res.writeHead(502);
+                  }
+                  res.end();
+                });
+                req.on('close', () => {
+                  if (!proxyRes.destroyed) proxyRes.destroy();
+                });
+              } else if (isJson) {
+                const chunks: Buffer[] = [];
+                proxyRes.on('data', (chunk) => {
+                  chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
+                });
+                proxyRes.on('end', () => {
+                  try {
+                    const parsed = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
+                    const converted = convertResponse(parsed);
+                    const out = Buffer.from(JSON.stringify(converted), 'utf-8');
+                    const responseHeaders = { ...proxyRes.headers };
+                    delete responseHeaders['transfer-encoding'];
+                    res.writeHead(proxyRes.statusCode ?? 200, {
+                      ...responseHeaders,
+                      'content-length': out.length,
+                    });
+                    res.end(out);
+                  } catch {
+                    res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
+                    res.end(Buffer.concat(chunks));
+                  }
+                });
+                proxyRes.on('error', (err) => {
+                  if (!res.headersSent) {
+                    res.writeHead(502, { 'content-type': 'application/json' });
+                  }
+                  res.end(
+                    JSON.stringify(convertError(err instanceof Error ? err.message : String(err))),
+                  );
+                });
+              } else {
+                res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
+                proxyRes.pipe(res);
+                proxyRes.on('error', () => {
+                  if (!res.headersSent) {
+                    res.writeHead(502);
+                  }
+                  res.end();
+                });
+              }
+            } else if (isMessagesEndpoint && isJson) {
               const chunks: Buffer[] = [];
               proxyRes.on('data', (chunk) => {
                 chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
               });
               proxyRes.on('end', () => {
+                const raw = Buffer.concat(chunks);
+                let parsed: unknown;
                 try {
-                  const parsed = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
-                  const converted = convertResponse(parsed);
-                  const out = Buffer.from(JSON.stringify(converted), 'utf-8');
-                  const responseHeaders = { ...proxyRes.headers };
-                  delete responseHeaders['transfer-encoding'];
-                  res.writeHead(proxyRes.statusCode ?? 200, {
-                    ...responseHeaders,
-                    'content-length': out.length,
-                  });
-                  res.end(out);
+                  parsed = JSON.parse(raw.toString('utf-8'));
                 } catch {
-                  res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
-                  res.end(Buffer.concat(chunks));
+                  parsed = undefined;
                 }
+
+                // The model-name heuristic in convertRequest can lag behind a new
+                // model family, so the upstream 400 is the source of truth: retry
+                // once with `max_completion_tokens`.
+                if (
+                  !retriedMaxTokens &&
+                  parsed !== undefined &&
+                  convertedRequest?.max_tokens !== undefined &&
+                  isMaxTokensUnsupportedError(parsed)
+                ) {
+                  retriedMaxTokens = true;
+                  convertedRequest = withMaxCompletionTokens(convertedRequest);
+                  const retryBody = Buffer.from(JSON.stringify(convertedRequest), 'utf-8');
+                  headers = buildProxyHeaders(req.headers, retryBody.length);
+                  sendUpstream(retryBody);
+                  return;
+                }
+
+                if (parsed !== undefined) {
+                  try {
+                    const out = Buffer.from(JSON.stringify(convertError(parsed)), 'utf-8');
+                    const responseHeaders = { ...proxyRes.headers };
+                    delete responseHeaders['transfer-encoding'];
+                    res.writeHead(proxyRes.statusCode ?? 200, {
+                      ...responseHeaders,
+                      'content-length': out.length,
+                    });
+                    res.end(out);
+                    return;
+                  } catch {
+                    // Fall through and pass the raw body through unchanged.
+                  }
+                }
+
+                res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
+                res.end(raw);
               });
               proxyRes.on('error', (err) => {
                 if (!res.headersSent) {
@@ -208,71 +284,37 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
                 res.end();
               });
             }
-          } else if (isMessagesEndpoint && isJson) {
-            const chunks: Buffer[] = [];
-            proxyRes.on('data', (chunk) => {
-              chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
-            });
-            proxyRes.on('end', () => {
-              try {
-                const parsed = JSON.parse(Buffer.concat(chunks).toString('utf-8'));
-                const converted = convertError(parsed);
-                const out = Buffer.from(JSON.stringify(converted), 'utf-8');
-                const responseHeaders = { ...proxyRes.headers };
-                delete responseHeaders['transfer-encoding'];
-                res.writeHead(proxyRes.statusCode ?? 200, {
-                  ...responseHeaders,
-                  'content-length': out.length,
-                });
-                res.end(out);
-              } catch {
-                res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
-                res.end(Buffer.concat(chunks));
-              }
-            });
-            proxyRes.on('error', (err) => {
-              if (!res.headersSent) {
-                res.writeHead(502, { 'content-type': 'application/json' });
-              }
-              res.end(
-                JSON.stringify(convertError(err instanceof Error ? err.message : String(err))),
-              );
-            });
-          } else {
-            res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
-            proxyRes.pipe(res);
-            proxyRes.on('error', () => {
-              if (!res.headersSent) {
-                res.writeHead(502);
-              }
-              res.end();
-            });
+          },
+        );
+        activeRequest = proxyReq;
+
+        proxyReq.setTimeout(timeoutMs, () => {
+          proxyReq.destroy(new Error('upstream timeout'));
+        });
+
+        proxyReq.on('error', (err) => {
+          if (!res.headersSent) {
+            res.writeHead(502, { 'content-type': 'application/json' });
+            res.end(
+              JSON.stringify(
+                convertError({ error: { message: err.message, type: 'bad_gateway' } }),
+              ),
+            );
           }
-        },
-      );
+        });
 
-      proxyReq.setTimeout(timeoutMs, () => {
-        proxyReq.destroy(new Error('upstream timeout'));
-      });
-
-      proxyReq.on('error', (err) => {
-        if (!res.headersSent) {
-          res.writeHead(502, { 'content-type': 'application/json' });
-          res.end(
-            JSON.stringify(convertError({ error: { message: err.message, type: 'bad_gateway' } })),
-          );
+        if (payload !== undefined) {
+          proxyReq.end(payload);
+        } else {
+          req.pipe(proxyReq);
         }
-      });
+      };
 
       req.on('error', () => {
-        proxyReq.destroy();
+        activeRequest?.destroy();
       });
 
-      if (body !== undefined) {
-        proxyReq.end(body);
-      } else {
-        req.pipe(proxyReq);
-      }
+      sendUpstream(body);
     } catch (err) {
       if (!res.headersSent) {
         res.writeHead(500, { 'content-type': 'application/json' });

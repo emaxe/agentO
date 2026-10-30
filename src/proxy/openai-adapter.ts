@@ -60,14 +60,54 @@ export function convertRequest(req: AnthropicRequest): OpenAIRequest {
     tool_choice: req.tool_choice ? convertToolChoice(req.tool_choice) : undefined,
   };
 
-  // o-series (o1, o3, o4) and gpt-5.x require max_completion_tokens; older models use max_tokens.
-  if (/^o\d/.test(req.model) || /^gpt-5/.test(req.model)) {
+  if (requiresMaxCompletionTokens(req.model)) {
     result.max_completion_tokens = req.max_tokens;
   } else {
     result.max_tokens = req.max_tokens;
   }
 
   return result;
+}
+
+/**
+ * Whether a model rejects `max_tokens` and requires `max_completion_tokens`.
+ *
+ * Covers the o-series (o1, o3, o4, …) and gpt-5 and newer families
+ * (gpt-5.x, gpt-6, …). Older chat models (gpt-4.x, gpt-3.5) still take
+ * `max_tokens`. The name is compared without a provider prefix, so
+ * `openai/gpt-6.1-terra` resolves the same as `gpt-6.1-terra`.
+ */
+export function requiresMaxCompletionTokens(model: string): boolean {
+  const name = model
+    .slice(model.lastIndexOf('/') + 1)
+    .trim()
+    .toLowerCase();
+  if (/^o\d/.test(name)) return true;
+
+  const gpt = /^gpt-(\d+)/.exec(name);
+  return gpt !== null && Number(gpt[1]) >= 5;
+}
+
+/**
+ * Detects the upstream 400 that flags `max_tokens` as unsupported.
+ *
+ * The model-name heuristic can lag behind new families, so the proxy uses this
+ * to retry once with `max_completion_tokens`.
+ */
+export function isMaxTokensUnsupportedError(payload: unknown): boolean {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const error = (payload as { error?: unknown }).error;
+  if (typeof error !== 'object' || error === null) return false;
+  const message = (error as { message?: unknown }).message;
+  if (typeof message !== 'string') return false;
+  return message.includes('max_tokens') && message.includes('max_completion_tokens');
+}
+
+/** Returns a copy of `req` with `max_tokens` renamed to `max_completion_tokens`. */
+export function withMaxCompletionTokens(req: OpenAIRequest): OpenAIRequest {
+  if (req.max_tokens === undefined || req.max_completion_tokens !== undefined) return req;
+  const { max_tokens: maxTokens, ...rest } = req;
+  return { ...rest, max_completion_tokens: maxTokens };
 }
 
 /** Convert a single Anthropic message into one or more OpenAI messages. */

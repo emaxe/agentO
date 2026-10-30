@@ -5,6 +5,9 @@ import {
   createStreamState,
   convertStreamChunk,
   convertError,
+  requiresMaxCompletionTokens,
+  isMaxTokensUnsupportedError,
+  withMaxCompletionTokens,
 } from './openai-adapter.js';
 
 describe('convertRequest', () => {
@@ -140,6 +143,64 @@ describe('convertRequest', () => {
     const openai = convertRequest(anthropic);
     expect(openai.max_completion_tokens).toBe(100);
     expect(openai.max_tokens).toBeUndefined();
+  });
+
+  it('uses max_completion_tokens for gpt-5 and newer models', () => {
+    for (const model of ['gpt-5', 'gpt-5.1-codex', 'gpt-6', 'gpt-6.1-terra']) {
+      const openai = convertRequest({
+        model,
+        messages: [{ role: 'user', content: 'Hi' }],
+        max_tokens: 100,
+      });
+      expect(openai.max_completion_tokens, model).toBe(100);
+      expect(openai.max_tokens, model).toBeUndefined();
+    }
+  });
+
+  it('keeps max_tokens for legacy gpt-4 models', () => {
+    for (const model of ['gpt-4o', 'gpt-4.1', 'gpt-3.5-turbo']) {
+      const openai = convertRequest({
+        model,
+        messages: [{ role: 'user', content: 'Hi' }],
+        max_tokens: 100,
+      });
+      expect(openai.max_tokens, model).toBe(100);
+      expect(openai.max_completion_tokens, model).toBeUndefined();
+    }
+  });
+
+  it('ignores a provider prefix when detecting the model family', () => {
+    expect(requiresMaxCompletionTokens('openai/gpt-6.1-terra')).toBe(true);
+    expect(requiresMaxCompletionTokens('openai/gpt-4o')).toBe(false);
+  });
+
+  it('recognises the upstream max_tokens rejection', () => {
+    expect(
+      isMaxTokensUnsupportedError({
+        error: {
+          message:
+            "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+          type: 'invalid_request_error',
+        },
+      }),
+    ).toBe(true);
+    expect(isMaxTokensUnsupportedError({ error: { message: 'Invalid model' } })).toBe(false);
+    expect(isMaxTokensUnsupportedError('not an object')).toBe(false);
+  });
+
+  it('swaps max_tokens for max_completion_tokens without mutating the input', () => {
+    const original = {
+      model: 'gpt-4.1',
+      messages: [],
+      max_tokens: 256,
+    };
+    const swapped = withMaxCompletionTokens(original);
+    expect(swapped.max_completion_tokens).toBe(256);
+    expect(swapped.max_tokens).toBeUndefined();
+    expect(original.max_tokens).toBe(256);
+
+    const alreadySwapped = { model: 'gpt-6', messages: [], max_completion_tokens: 10 };
+    expect(withMaxCompletionTokens(alreadySwapped)).toBe(alreadySwapped);
   });
 
   it('handles assistant message with tool_use but no text block', () => {

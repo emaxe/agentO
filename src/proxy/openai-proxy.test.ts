@@ -286,6 +286,94 @@ describe('startOpenAIProxy', () => {
     expect(text).toContain('event: message_stop');
   });
 
+  it('retries once with max_completion_tokens when upstream rejects max_tokens', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    let calls = 0;
+    upstream.on('request', async (req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req)
+        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
+      bodies.push(JSON.parse(Buffer.concat(chunks).toString('utf-8')));
+      calls += 1;
+
+      if (calls === 1) {
+        res.writeHead(400, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            error: {
+              message:
+                "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+              type: 'invalid_request_error',
+              param: 'max_tokens',
+              code: 'unsupported_parameter',
+            },
+          }),
+        );
+        return;
+      }
+
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          id: 'chatcmpl-retry',
+          model: 'gpt-4.1',
+          choices: [{ message: { role: 'assistant', content: 'Hi' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        }),
+      );
+    });
+
+    proxy = await startOpenAIProxy({ upstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4.1',
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 100,
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).toMatchObject({ max_tokens: 100 });
+    expect(bodies[0]).not.toHaveProperty('max_completion_tokens');
+    expect(bodies[1]).toMatchObject({ max_completion_tokens: 100 });
+    expect(bodies[1]).not.toHaveProperty('max_tokens');
+
+    const body = await res.json();
+    expect(body.content).toEqual([{ type: 'text', text: 'Hi' }]);
+  });
+
+  it('does not retry more than once when max_completion_tokens is also rejected', async () => {
+    let calls = 0;
+    upstream.on('request', (_req, res) => {
+      calls += 1;
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          error: {
+            message:
+              "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+            type: 'invalid_request_error',
+          },
+        }),
+      );
+    });
+
+    proxy = await startOpenAIProxy({ upstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'gpt-4.1', messages: [], max_tokens: 1 }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(calls).toBe(2);
+    const body = await res.json();
+    expect(body.type).toBe('error');
+  });
+
   it('rewrites /v1/messages/ with trailing slash', async () => {
     let receivedUrl = '';
     upstream.on('request', (req, res) => {
