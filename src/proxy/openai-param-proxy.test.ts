@@ -242,6 +242,9 @@ describe('proxy routing helpers', () => {
 
   it('proxies any model served by api.openai.com, including unknown families', () => {
     expect(shouldProxyModel('gpt-7-future', 'https://api.openai.com/v1')).toBe(true);
+    // Not classified by the name heuristic (no o-series / gpt-N prefix):
+    // this pins the api.openai.com host branch itself.
+    expect(shouldProxyModel('some-unknown-family', 'https://api.openai.com/v1')).toBe(true);
   });
 
   it('leaves other providers and legacy models direct', () => {
