@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { convertChatRequestToResponses } from './chat-responses-adapter.js';
+import {
+  convertChatRequestToResponses,
+  convertResponsesToChatResponse,
+  responsesSseToChatResponse,
+} from './chat-responses-adapter.js';
 
 const TOOL = {
   type: 'function',
@@ -131,5 +135,102 @@ describe('convertChatRequestToResponses', () => {
       { originalReasoningEffort: 'none' },
     );
     expect(none.reasoning).toBeUndefined();
+  });
+});
+
+describe('convertResponsesToChatResponse', () => {
+  it('maps text output and usage', () => {
+    const out = convertResponsesToChatResponse(
+      {
+        id: 'resp_1',
+        object: 'response',
+        model: 'gpt-6.1-sol',
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'hello' }],
+          },
+        ],
+        usage: { input_tokens: 11, output_tokens: 3, total_tokens: 14 },
+      },
+      'gpt-6.1-sol',
+    );
+    expect(out.object).toBe('chat.completion');
+    expect(out.model).toBe('gpt-6.1-sol');
+    expect((out.choices as any)[0].message).toEqual({ role: 'assistant', content: 'hello' });
+    expect((out.choices as any)[0].finish_reason).toBe('stop');
+    expect(out.usage).toEqual({ prompt_tokens: 11, completion_tokens: 3, total_tokens: 14 });
+  });
+
+  it('maps function calls to tool_calls with call_id as id and null content', () => {
+    const out = convertResponsesToChatResponse(
+      {
+        id: 'resp_2',
+        model: 'gpt-6.1-sol',
+        status: 'completed',
+        output: [
+          {
+            id: 'fc_1',
+            type: 'function_call',
+            call_id: 'call_1',
+            name: 'ping',
+            arguments: '{"x":1}',
+          },
+        ],
+        usage: { input_tokens: 5, output_tokens: 2, total_tokens: 7 },
+      },
+      'gpt-6.1-sol',
+    );
+    const choice = (out.choices as any)[0];
+    expect(choice.message.content).toBeNull();
+    expect(choice.message.tool_calls).toEqual([
+      { id: 'call_1', type: 'function', function: { name: 'ping', arguments: '{"x":1}' } },
+    ]);
+    expect(choice.finish_reason).toBe('tool_calls');
+  });
+
+  it('maps an incomplete max_output_tokens answer to length', () => {
+    const out = convertResponsesToChatResponse(
+      {
+        id: 'resp_3',
+        model: 'gpt-6.1-sol',
+        status: 'incomplete',
+        incomplete_details: { reason: 'max_output_tokens' },
+        output: [],
+      },
+      'gpt-6.1-sol',
+    );
+    expect((out.choices as any)[0].finish_reason).toBe('length');
+  });
+
+  it('collects an SSE stream into one completion', () => {
+    const out = responsesSseToChatResponse(
+      [
+        {
+          type: 'response.output_item.added',
+          output_index: 0,
+          item: { type: 'function_call', id: 'fc_1', call_id: 'call_1', name: 'ping' },
+        },
+        { type: 'response.function_call_arguments.delta', output_index: 0, delta: '{"x":1}' },
+        {
+          type: 'response.completed',
+          response: {
+            id: 'resp_4',
+            model: 'gpt-6.1-sol',
+            usage: { input_tokens: 4, output_tokens: 2, total_tokens: 6 },
+          },
+        },
+      ],
+      'gpt-6.1-sol',
+    );
+    const choice = (out.choices as any)[0];
+    expect(choice.message.tool_calls[0]).toEqual({
+      id: 'call_1',
+      type: 'function',
+      function: { name: 'ping', arguments: '{"x":1}' },
+    });
+    expect(choice.finish_reason).toBe('tool_calls');
   });
 });
