@@ -117,7 +117,8 @@ describe('ProviderList', () => {
     );
     const frame = lastFrame() ?? '';
     expect(frame).not.toContain('fw-super-secret-key-value');
-    expect(frame).toContain('fw-super');
+    expect(frame).not.toContain('fw-super');
+    expect(frame).toContain('••••••••alue');
   });
 
   it('shows capability markers for the selected provider only', () => {
@@ -213,5 +214,24 @@ describe('AgentSelect', () => {
     const frame = lastFrame() ?? '';
     expect(frame).toContain('v1.2.3');
     expect(frame).toContain('(not installed)');
+  });
+
+  it('explains which compatible agents are hidden by the profile', () => {
+    const { lastFrame } = render(
+      <AgentSelect
+        agents={registryAgents}
+        selected={0}
+        installStatuses={{}}
+        checkProgress={{}}
+        statusChecking={false}
+        hiddenAgents={[{ label: 'Qwen CLI', reason: 'does not support anthropic-compatible' }]}
+        onSelect={() => {}}
+        onBack={() => {}}
+      />,
+    );
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('1 agent hidden for this profile');
+    expect(frame).toContain('Qwen CLI');
+    expect(frame).toContain('does not support anthropic-compatible');
   });
 });

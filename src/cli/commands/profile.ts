@@ -29,12 +29,15 @@ export function createProfileCommand(): Command {
   cmd
     .command('list')
     .description('List all profiles')
-    .action(async () => {
+    .option('--json', 'Output JSON')
+    .action(async (opts: { json?: boolean }) => {
       try {
         const profiles = await listProfiles();
         const providers = await listProviders();
         const nameOf = (id: string): string => providers.find((p) => p.id === id)?.name ?? id;
-        if (profiles.length === 0) {
+        if (opts.json) {
+          console.log(JSON.stringify({ profiles }, null, 2));
+        } else if (profiles.length === 0) {
           console.log('No profiles configured.');
         } else {
           profiles.forEach((p) => {
@@ -47,7 +50,8 @@ export function createProfileCommand(): Command {
             });
           });
         }
-        process.exit(0);
+        process.exitCode = 0;
+        return;
       } catch (err) {
         console.error('Error:', err instanceof Error ? err.message : String(err));
         process.exit(1);
@@ -128,7 +132,8 @@ export function createProfileCommand(): Command {
 
         const profile = await addProfile({ name: opts.name, models });
         console.log(`Profile "${profile.name}" added (id: ${profile.id})`);
-        process.exit(0);
+        process.exitCode = 0;
+        return;
       } catch (err) {
         console.error('Error:', err instanceof Error ? err.message : String(err));
         process.exit(1);
@@ -142,7 +147,8 @@ export function createProfileCommand(): Command {
       try {
         await removeProfile(name);
         console.log(`Profile "${name}" removed.`);
-        process.exit(0);
+        process.exitCode = 0;
+        return;
       } catch (err) {
         console.error('Error:', err instanceof Error ? err.message : String(err));
         process.exit(1);

@@ -66,10 +66,10 @@ export function AgentAction({
       });
   };
 
-  useKeyInput((_input, key) => {
+  useKeyInput((input, key) => {
     if (subScreen === 'running') return;
 
-    if (key.escape) {
+    if (key.escape || input === 'q') {
       onBack();
       return;
     }

@@ -46,4 +46,10 @@ describe('StatusLine', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(lastFrame()).toContain('Saved');
   });
+
+  it('keeps an error visible instead of fading it', async () => {
+    const { lastFrame } = render(<StatusLine message="Error: EACCES" hideAfterMs={20} />);
+    await new Promise((r) => setTimeout(r, 120));
+    expect(lastFrame()).toContain('Error: EACCES');
+  });
 });

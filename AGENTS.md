@@ -33,6 +33,10 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── codex.ts           # Адаптер Codex CLI
 │   │   ├── copilot.ts         # Адаптер Copilot
 │   │   ├── goose.ts           # Адаптер Goose
+│   │   ├── pi.ts              # Адаптер PI
+│   │   ├── kilo.ts            # Адаптер Kilo Code
+│   │   ├── kimi.ts            # Адаптер Kimi Code
+│   │   ├── resolve-base-model.ts # Выбор base-модели профиля
 │   │   └── merge-config.ts    # Хелпер conservative merge для адаптеров
 │   ├── agents/
 │   │   └── registry.ts        # Единый registry агентов: adapter, command, args, installer, label
@@ -40,27 +44,35 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── launch.ts          # agento launch
 │   │   ├── provider.ts        # agento provider
 │   │   ├── profile.ts         # agento profile
-│   │   ├── restore.ts         # agento restore
-│   │   └── agent.ts           # agento agent
+│   │   ├── restore.ts         # agento restore (--list, scope/agent inference)
+│   │   ├── agent.ts           # agento agent (status --json, installed version)
+│   │   ├── config.ts          # agento config path
+│   │   └── doctor.ts          # agento doctor (read-only diagnostics)
 │   ├── config/                # Конфигурация AgentO
 │   │   ├── schema.ts          # Zod-схемы и типы
 │   │   ├── store.ts           # Чтение/запись ~/.agento/config.json
+│   │   ├── ui-state.ts        # ~/.agento/ui-state.json: last launch (profile/agent/mode/scope)
+│   │   ├── mask.ts            # Маскирование API-ключей для TUI/CLI
 │   │   ├── validation.ts      # Доменная валидация providers/profiles (008)
 │   │   ├── atomic-write.ts    # Атомарная запись файлов с mode 0o600 (009/010)
 │   │   └── version.ts         # Динамическое чтение версии из package.json
 │   ├── installers/            # Установщики агентов (TUI Install Wizard)
 │   │   ├── base.ts            # Интерфейс AgentInstaller
-│   │   ├── registry.ts        # Реестр установщиков
+│   │   ├── registry.ts        # Тонкий wrapper над src/agents/registry.ts
 │   │   ├── claude-code.ts     # Установщик Claude Code
 │   │   ├── opencode.ts        # Установщик OpenCode
 │   │   ├── qwen.ts            # Установщик Qwen CLI
 │   │   ├── codex.ts           # Установщик Codex CLI
 │   │   ├── copilot.ts         # Установщик Copilot
-│   │   └── goose.ts           # Установщик Goose
+│   │   ├── goose.ts           # Установщик Goose
+│   │   ├── pi.ts              # Установщик PI
+│   │   ├── kilo.ts            # Установщик Kilo Code
+│   │   └── kimi.ts            # Установщик Kimi Code
 │   ├── launcher/              # Запуск агентов
 │   │   ├── child.ts           # Child mode (backup → patch → spawn → restore)
 │   │   ├── independent.ts     # Independent mode (backup → patch → exec)
 │   │   ├── transaction.ts     # Общий transaction layer: backup/write/env/cleanup/proxy
+│   │   ├── preview.ts         # Read-only preview: files/env keys/backup/git-exclude/warnings
 │   │   └── shell-path-resolver.ts  # Резолвинг PATH через login shell
 │   ├── platform/              # Кроссплатформенный слой (единственное место, где живут win32-развилки)
 │   │   ├── spawn.ts           # spawnCommand/spawnCommandSync: cross-spawn + резолв .cmd/.exe; ENOENT вместо exit 1
@@ -68,7 +80,10 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── env.ts             # getEnvCI/setEnvCI: регистронезависимый env, один ключ PATH
 │   │   └── kill-tree.ts       # killTree: taskkill /T /F на win32, child.kill на POSIX
 │   ├── proxy/                 # HTTP-прокси для адаптации запросов
-│   │   └── anthropic-scrubber.ts  # Вырезание неподдерживаемых полей Anthropic API (context_management) при работе Claude Code через сторонние провайдеры
+│   │   ├── anthropic-scrubber.ts  # Вырезание неподдерживаемых полей Anthropic API (context_management) для Claude Code через сторонние провайдеры
+│   │   ├── openai-proxy.ts    # OpenAI Chat Completions → Anthropic Messages (включая SSE)
+│   │   ├── responses-proxy.ts # Anthropic Messages → OpenAI Responses API (включая SSE)
+│   │   └── proxy-utils.ts     # Общие хелперы прокси
 │   ├── profiles/              # Управление профилями
 │   │   └── profile-manager.ts
 │   ├── providers/             # Управление провайдерами
@@ -79,13 +94,15 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── start.ts           # Точка входа в TUI
 │   │   ├── run-loop.ts        # Цикл TUI → spawn агента → cleanup → relaunch
 │   │   ├── use-key-input.ts   # Хук для обработки клавиш (ЙЦУКЕН → QWERTY)
+│   │   ├── use-help.ts        # `?` help: открытие/закрытие и перехват клавиш
 │   │   ├── provider-api.ts    # Сетевой слой формы провайдера (test API / fetch models)
-│   │   ├── components/        # SelectList, TextField, StatusLine (общие компоненты)
+│   │   ├── tier-options.ts    # Допустимые tier-опции профиля (без повторов и skip для multi-model)
+│   │   ├── components/        # SelectList (viewport), TextField, StatusLine, HelpOverlay
 │   │   ├── hooks/
-│   │   │   └── useLaunchWizard.ts # Машина состояний мастера запуска (step/profile/agent/install/action)
+│   │   │   └── useLaunchWizard.ts # Машина состояний мастера запуска (profile/agent/preview/install/action)
 │   │   ├── wizards/
 │   │   │   └── ProfileWizard.tsx  # Мастер добавления профиля
-│   │   └── screens/           # Экраны TUI (MainMenu, LaunchAgent, Providers, Profiles, Agents, Settings, формы)
+│   │   └── screens/           # Экраны TUI (MainMenu, LaunchAgent, LaunchPreview, Providers, Profiles, Agents, Settings, формы)
 ```
 
 ## Кроссплатформенность (macOS / Linux / Windows)
@@ -181,7 +198,8 @@ AgentO — CLI-инструмент для управления конфигур
 
 - `id` — уникальный идентификатор
 - `displayName` — человекочитаемое имя
-- `dev?` — флаг разработки: скрывает агента из UI/CLI по умолчанию
+- `dev?` — legacy-флаг разработки: если выставлен, скрывает агента из UI/CLI. Сейчас ни один адаптер его не выставляет; `--dev` принимается для обратной совместимости и ничего не меняет
+- `envOnly?` — конфиг передаётся только через env-переменные (`writeConfig` — no-op, файлы не создаются и не бэкапятся). Выставлен у `copilot` и `goose`; preview показывает «environment variables only» и не выдумывает файлы
 - `configPaths(cwd?)` → `{ global, project }` — пути к конфигам агента
 - `readConfig(scope, cwd?)` — читает текущий конфиг агента
 - `snapshotConfigFiles?(scope, cwd?)` — опционально: описывает все физические файлы для backup manifest, если один logical scope затрагивает несколько файлов
@@ -194,14 +212,25 @@ AgentO — CLI-инструмент для управления конфигур
 
 | Агент | ID | Команда | Поддерживаемые типы | Формат конфига | Capability-флаги | Особенности |
 |-------|-----|---------|---|---|---|---|
-| Claude Code | `claude-code` | `claude` | `anthropic`, `fireworks`, `openrouter` | JSON (`~/.claude/settings.json`) | Игнорирует | Поддерживает tiers (small/base/smart). Только один провайдер на профиль. Для `openrouter` использует Anthropic Skin: `ANTHROPIC_AUTH_TOKEN` (Bearer) + пустой `ANTHROPIC_API_KEY`, БЕЗ `apiKeyHelper`. При запуске с `openrouter`/`fireworks` автоматически поднимается локальный proxy (`src/proxy/anthropic-scrubber.ts`), который вырезает неподдерживаемые Anthropic-поля (например, `context_management`) из запросов. |
-| OpenCode | `opencode` | `opencode` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | JSON (`~/.config/opencode/config.json` или `./opencode.json`) | Пробрасывает в `models[<name>].modalities` | Префикс модели: `providerKey/model`. Для `openrouter` ключ провайдера всегда `openrouter`. |
-| Qwen CLI | `qwen` | `qwen` | `openai-compatible`, `fireworks`, `openrouter` | JSON (`~/.qwen/settings.json`) | Пробрасывает в `generationConfig.modalities` | **modelProviders ключ всегда `"openai"`** для openai-compatible провайдеров. Группирует модели по baseUrl. |
-| Codex CLI | `codex` | `codex` | `fireworks`, `openrouter` | TOML (`~/.codex/config.toml`) | Игнорирует | `dev: true` (скрыт по умолчанию). `wire_api: responses`. При `project` scope `model_providers`, `default_profile`, `profiles` пишет в global config, а `model` — в project config; backup/restore manifest содержит оба файла. Использует `buildEnv` для инжекта API ключа. |
-| Copilot | `copilot` | `copilot` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | — (env-only) | Игнорирует | Конфиг через env vars, `writeConfig` — no-op |
-| Goose | `goose` | `goose` | `anthropic`, `openai-compatible`, `fireworks`, `openrouter` | — (env-only) | Игнорирует | `GOOSE_PROVIDER`/`GOOSE_MODEL`/`OPENAI_HOST`; `writeConfig` — no-op |
+| Claude Code | `claude-code` | `claude` | `anthropic-compatible`, `fireworks`, `openrouter`, `custom-api`, `openai-compatible`, `responses-compatible` | JSON (`~/.claude/settings.json`) | Игнорирует | Поддерживает tiers (small/base/smart), только один провайдер на профиль. Для `openrouter` — Anthropic Skin: `ANTHROPIC_AUTH_TOKEN` + пустой `ANTHROPIC_API_KEY`, без `apiKeyHelper`. Для `fireworks`/`openrouter` поднимается `anthropic-scrubber`, для `openai-compatible` — `openai-proxy`, для `responses-compatible` — `responses-proxy`. |
+| OpenCode | `opencode` | `opencode` | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | JSON (`~/.config/opencode/config.json` или `./opencode.json`) | Пробрасывает в `models[<name>].modalities` | Префикс модели: `providerKey/model`. Для `openrouter` ключ провайдера всегда `openrouter`. |
+| Qwen CLI | `qwen` | `qwen` | `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | JSON (`~/.qwen/settings.json`) | Пробрасывает в `generationConfig.modalities` | **modelProviders ключ всегда `"openai"`**. Группирует модели по baseUrl. |
+| Codex CLI | `codex` | `codex` | `openai-compatible`, `responses-compatible`, `fireworks`, `openrouter`, `custom-api` | TOML (`$CODEX_HOME/config.toml` или `~/.codex/config.toml`) | Игнорирует | `wire_api: responses`. При `project` scope `model_providers`, `default_profile`, `profiles` пишет в global config, а `model` — в project config; backup/restore manifest содержит оба файла. Использует `buildEnv` для инжекта API ключа. |
+| Copilot | `copilot` | `copilot` | `openai-compatible`, `anthropic-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | — (env-only) | Игнорирует | Конфиг через env vars, `writeConfig` — no-op. |
+| Goose | `goose` | `goose` | `openai-compatible`, `anthropic-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | — (env-only) | Игнорирует | `GOOSE_PROVIDER`/`GOOSE_MODEL`/`OPENAI_HOST`; `writeConfig` — no-op. На Windows конфиг — `%APPDATA%\Block\goose\config\config.yaml`. |
+| PI | `pi` | `pi` | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | JSON (`~/.pi/agent/settings.json` + `models.json`) | Игнорирует | `defaultProvider`/`defaultModel`; кастомный `baseUrl` — в `models.json`. |
+| Kilo Code | `kilo` | `kilo` | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | JSON (`~/.kilocode/settings.json` + `models.json`) | Игнорирует | `defaultProvider`/`defaultModel`; кастомный `baseUrl` — в `models.json`. |
+| Kimi Code | `kimi` | `kimi` | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | TOML (`~/.kimi/config.toml`, legacy `~/.kimi/config.json` читается) | Игнорирует | `default_model`, `providers.<name>` (`type`, `base_url`, `api_key`), `models.<name>`; project и global указывают на один файл. |
 
-### Локальный proxy для Claude Code (Anthropic Scrubber)
+### Локальные proxy для Claude Code
+
+Для не-`anthropic-compatible` провайдеров Claude Code AgentO поднимает локальный HTTP-proxy на случайном порту `127.0.0.1`:
+
+- `fireworks` / `openrouter` — `anthropic-scrubber.ts` (удаляет поля вроде `context_management`);
+- `openai-compatible` — `openai-proxy.ts` (OpenAI Chat Completions → Anthropic Messages, включая SSE);
+- `responses-compatible` — `responses-proxy.ts` (Anthropic Messages → OpenAI Responses API, включая SSE).
+
+#### Anthropic Scrubber
 
 При запуске Claude Code с провайдерами `openrouter` или `fireworks` (то есть через Anthropic-совместимые endpoints, а не нативный Anthropic API), AgentO автоматически поднимает локальный HTTP-proxy (`src/proxy/anthropic-scrubber.ts`) на случайном порту `127.0.0.1`.
 
@@ -256,7 +285,7 @@ Each supported agent has a dedicated installer under `src/installers/` that impl
 ```bash
 # Интерактивный TUI (default)
 agento
-# Показать development agents (e.g. codex):
+# --dev оставлен для совместимости; все агенты показываются всегда
 agento --dev
 
 # Запуск агента напрямую
@@ -265,15 +294,21 @@ agento launch -p <profile> -a <agent> [-m child|independent] [-s global|project]
 # Примеры:
 agento launch -p default -a claude-code
 agento launch -p default -a qwen -m child -s project
-# Запуск development агента:
-agento launch -p default -a codex --dev
+agento launch -p default -a codex
+# Без -p/-a — последний запуск; префиксы допустимы:
+agento launch -p wor -a clau
+# Показать, что будет записано, ничего не меняя:
+agento launch -p default -a claude-code --dry-run
 ```
 
 ### Управление провайдерами
 
 ```bash
-agento provider list
+agento provider list [--json]
 agento provider add -n "Fireworks AI" -t openai-compatible -k "sk-..." -u "http://..." -M "model1,model2"
+agento provider add -n "Acme" -t openai-compatible -k "sk-..." -u "https://api.acme.test/v1" --fetch-models
+agento provider edit <name> -M "model1,model2"
+agento provider test <name>
 agento provider remove <name>
 ```
 
@@ -289,9 +324,13 @@ agento profile remove <name>
 ### Прочее
 
 ```bash
-agento agent status           # Статус конфигов агентов
-agento agent status --dev     # Показать статус включая development agents
+agento agent status [--json]  # Статус конфигов + версия установленных агентов
+agento agent status --dev     # Устарело: все агенты показываются всегда
 agento restore -a <agent> -s <scope>  # Восстановить конфиг любого registry-агента из бэкапа
+agento restore --list         # Активные бэкапы для текущего каталога
+agento restore -a qwen        # scope выводится, если активен один бэкап
+agento config path [--json]   # Пути config/ui-state/backups
+agento doctor [--json]        # Диагностика: версии, конфиг, бэкапы, установленные агенты
 ```
 
 ## Режимы запуска
@@ -303,6 +342,8 @@ agento restore -a <agent> -s <scope>  # Восстановить конфиг л
 3. Запустить агента как child process
 4. После завершения: восстановить оригинальный конфиг или удалить файл, если до launch его не было
 5. SIGTERM/SIGINT: пробрасываются дочернему процессу, затем cleanup
+
+Код выхода child-запуска совпадает с кодом агента. Если агент убит сигналом, возвращается `128 + номер сигнала`; если команда не найдена (`ENOENT`) — `127`, как в independent-режиме. Для агентов с `envOnly` backup/write/git-exclude не выполняются: конфиг передаётся только через env.
 
 Шаги подготовки (backup → write config → env/PATH → cleanup factory) выполняет `src/launcher/transaction.ts`. `prepareChild` — тонкая обертка для TUI, а `launchChild` использует тот же prepared `ExecRequest`, что и TUI.
 
@@ -326,15 +367,20 @@ Independent mode использует тот же `src/launcher/transaction.ts` 
 - **MainMenu**: Выбор раздела (↑↓, Enter, 1-5 jump, Esc/q), снизу — строка-подсказка клавиш
 - **LaunchAgent**: Двухшаговый выбор (профиль → агент → запуск). Внизу обоих шагов футер `Profile / mode (m) / scope (s)` — `m`/`s` переключают child/independent и project/global для этого запуска (дефолты берутся из Settings). `AgentSelect` показывает версию установленного агента (`v1.2.3`). При ошибке запуска вариант `Overwrite and launch` предлагается только для `Active backup already exists`
 - **Providers**: ↑↓ navigate | Enter/a: add | e: edit | d: delete | Esc: back. В режиме edit: `[+ add model]` row → Enter добавляет модель, `i`/`v`/`a` переключают image/video/audio для выделенной модели, `e` редактирует имя, `d` удаляет
-- **Profiles**: В списке ↑↓ navigate | Enter: детали | a: add | d: delete | Esc: back. В деталях профиля: ↑↓ navigate models | a: add model | d: delete model | e: edit | Esc: back. При выборе модели в add/edit wizard рядом с именем отображаются capability-маркеры
-- **Agents**: Просмотр статуса конфигов (global/project, backup наличие); выделенная строка показывает путь к конфигу, `r` — restore через `restoreBackupForAgent` (полный манифест, multi-file безопасен)
+- **Profiles**: В списке ↑↓ navigate | Enter: детали | a: add | d: delete | Esc: back. В деталях профиля: ↑↓ navigate models | a: add model | d: delete model | e: edit | Esc: back. При выборе модели в add/edit wizard рядом с именем отображаются capability-маркеры. «Без tier» доступен только для одномодельного профиля; при добавлении второй модели мастер сначала просит назначить tier существующей
+- **Agents**: Просмотр статуса конфигов (global/project, backup наличие); выделенная строка показывает путь к конфигу, `r` — restore через `restoreBackupForAgent` (полный манифест, multi-file безопасен) с подтверждением `y/Enter`
 - **Settings**: Настройки по умолчанию: `defaultLaunchMode`, `defaultConfigScope`, `mergeAgentConfigs`
 
-Конвенция: **все UI-строки TUI на английском** (ЙЦУКЕН-маппинг прозрачен для пользователя); guard-тест `src/tui/english-ui.test.ts` не допускает кириллицу в rendered-строках `src/tui` (кроме самой карты маппинга). Подтверждения удаления/отмены: `y`/`Y`/Enter — подтвердить, `n`/`N`/Esc — отменить, остальной ввод игнорируется. Статус-сообщения — через общий `StatusLine` (красный для `Error: ...`, авто-скрытие). Кэш статусов `~/.agento/agent-status.json` хранит `{installed, version?}` (старые boolean нормализуются при чтении).
+- **Help**: `?` открывает контекстную панель (`HelpOverlay`) на главном меню, Providers/Profiles/Agents/Settings и шагах profile/agent; при открытой панели все клавиши перехватываются, закрытие — `?`/Esc/Enter. Логика в `use-help.ts`.
+- **Поиск и viewport**: `/` фильтрует Providers, Profiles и Agents; `f` на экране Agents оставляет только modified. `SelectList` и списки моделей/агентов показывают окно и `↑/↓ N more`.
+- **Preview**: `v` на шаге агента открывает `LaunchPreview` (read-only), `Enter` запускает, `Esc` возвращает. Тот же `describeLaunch` используется в `agento launch --dry-run`.
+- **Сортировка агентов**: установленные агенты идут первыми, неизвестные — в середине, неустановленные — в конце; выбранный агент сохраняется по id при обновлении статусов.
+
+Конвенция: **все UI-строки TUI на английском** (ЙЦУКЕН-маппинг прозрачен для пользователя); guard-тест `src/tui/english-ui.test.ts` не допускает кириллицу в rendered-строках `src/tui` (кроме самой карты маппинга). Подтверждения удаления/отмены/восстановления: `y`/`Y`/Enter — подтвердить, `n`/`N`/Esc — отменить, остальной ввод игнорируется. Статус-сообщения — через общий `StatusLine` (красный для `Error: ...`); успех скрывается через 5 секунд, ошибка остаётся до следующего действия. Кэш статусов `~/.agento/agent-status.json` хранит `{installed, version?}` (старые boolean нормализуются при чтении). Last launch хранится в `~/.agento/ui-state.json` (`profileId`, `agentId`, `mode`, `scope`); битый файл игнорируется.
 
 Важно: перед передачей управления child process TUI вызывает `process.stdin.pause()` чтобы сбросить состояние stdin.
 
-Агенты с `dev: true` (например, Codex CLI) скрыты из TUI и CLI по умолчанию. Чтобы показать их, используйте `agento --dev` или `agento launch --dev`.
+Агенты с `dev: true` скрывались бы из TUI и CLI, но сейчас таких нет: все 9 входят в registry. Флаг `agento --dev` и `launch --dev` принимаются для совместимости и ничего не меняют.
 
 ## Тесты
 
@@ -349,6 +395,13 @@ npm run test:watch  # Watch mode
 |------|---------------|
 | `src/adapters/*.test.ts` | Генерацию конфигов для каждого агента |
 | `src/config/store.test.ts` | Чтение/запись `~/.agento/config.json` и бэкапов |
+| `src/config/ui-state.test.ts` | Кеш last launch: round-trip и терпимость к битому JSON |
+| `src/config/mask.test.ts` | Маскирование API-ключей |
+| `src/launcher/preview.test.ts` | Read-only preview: файлы, env-ключи, git-exclude, backup, env-only |
+| `src/tui/components/SelectList.test.tsx` | Viewport и индикаторы скрытых строк |
+| `src/tui/screens/help.test.tsx` | `?` help overlay |
+| `src/cli/commands/provider.test.ts` | CLI provider list --json/edit/test/fetch-models |
+| `src/cli/commands/agent.test.ts` | CLI agent status --json и текст |
 | `src/launcher/child.test.ts` | Child launch flow (backup/restore) |
 | `src/launcher/independent.test.ts` | Independent launch backup flow |
 | `src/launcher/transaction.test.ts` | Общий launch transaction: backup/write/env/cleanup |
@@ -358,7 +411,10 @@ npm run test:watch  # Watch mode
 | `src/cli/commands/restore.codex.test.ts` | Crash-like CLI restore для Codex project multi-file backup |
 | `src/launcher/shell-path-resolver.test.ts` | Резолвинг PATH |
 | `src/profiles/profile-manager.test.ts` | CRUD профилей |
-| `src/providers/provider-manager.test.ts` | CRUD провайдеров |
+| `src/providers/provider-manager.test.ts` | CRUD провайдеров, запрет удаления используемого провайдера |
+| `src/tui/tier-options.test.ts` | Допустимые tier-опции профиля |
+| `src/tui/screens/*.test.tsx` | Экраны TUI: меню, launch wizard, провайдеры, профили, агенты, настройки, подтверждения |
+| `src/tui/components/StatusLine.test.tsx` | Цвет статуса и поведение авто-скрытия |
 
 Тесты работают напрямую с `src/` (не требуют сборки).
 
@@ -425,7 +481,7 @@ npm run format     # Prettier
 - Codex `project` scope — multi-file transaction: backup manifest содержит global `~/.codex/config.toml` и project `<cwd>/.codex/config.toml`; cleanup/CLI restore восстанавливает или удаляет оба файла без process-local state.
 - Child mode гарантирует восстановление при любом исходе (exit, SIGTERM, SIGINT) и удаляет backup после успешного cleanup
 - Independent mode оставляет конфиг изменённым — восстановление через `agento restore`
-- CLI restore использует `src/agents/registry.ts` с `{ dev: true }`, поэтому поддерживает все зарегистрированные агенты (`claude-code`, `opencode`, `qwen`, `codex`, `copilot`, `goose`) без отдельного `--dev` флага и удаляет backup после успешного restore
+- CLI restore использует `src/agents/registry.ts` с `{ dev: true }`, поэтому поддерживает все зарегистрированные агенты (`claude-code`, `opencode`, `qwen`, `codex`, `copilot`, `goose`, `pi`, `kilo`, `kimi`) без отдельного `--dev` флага и удаляет backup после успешного restore
 
 ### Конфиг Scope
 
@@ -474,5 +530,5 @@ grep "const providerKey" dist/src/adapters/qwen.js
 - Все адаптеры должны поддерживать `readConfig` → `buildConfig` → `writeConfig` pipeline
 - При добавлении нового агента нужно: создать адаптер, при необходимости создать installer, добавить одну запись в `src/agents/registry.ts`, расширить `AgentIdSchema` в `src/config/schema.ts` и добавить focused tests. CLI launch/status, TUI launch/status и install wizard должны брать список из registry, без локальных полных списков агентов.
 - Провайдеры типа `anthropic` не поддерживаются Qwen (проверяется в адаптерах)
-- BaseUrl обязателен для openai-compatible провайдеров (кроме Claude Code, который использует официальный API по умолчанию). Для `fireworks` и `openrouter` есть дефолтные URL: `https://api.fireworks.ai/inference/v1` и `https://openrouter.ai/api/v1`
+- BaseUrl обязателен для `responses-compatible` и `custom-api`. У `openai-compatible`, `fireworks`, `openrouter` и `anthropic-compatible` есть дефолтные URL (`https://api.openai.com/v1`, `https://api.fireworks.ai/inference/v1`, `https://openrouter.ai/api/v1`, `https://api.anthropic.com`); `agento provider add` без `-u` для них валиден
 - Тип `openrouter` поддерживается всеми 4 агентами. OpenRouter предоставляет три API-формата (OpenAI Chat Completions, Anthropic Skin, Responses API), что позволяет использовать его с Claude Code (Anthropic Skin), OpenCode/Qwen (OpenAI-compatible) и Codex (Responses API)

@@ -46,6 +46,8 @@ const INITIAL_FORM: FormState = {
 
 /** How many fetched models are visible at once in the selection list. */
 const MODEL_VIEWPORT = 20;
+/** How many saved model rows are visible at once in the editor. */
+const MODEL_EDIT_VIEWPORT = 12;
 
 interface ProviderFormProps {
   provider?: Provider;
@@ -332,6 +334,15 @@ export function ProviderForm({
         return;
       }
 
+      if (key.pageDown) {
+        setModelsListIndex((i) => Math.min(form.models.length, i + MODEL_EDIT_VIEWPORT));
+        return;
+      }
+      if (key.pageUp) {
+        setModelsListIndex((i) => Math.max(0, i - MODEL_EDIT_VIEWPORT));
+        return;
+      }
+
       if (key.upArrow) {
         setModelsListIndex((i) => Math.max(0, i - 1));
         return;
@@ -417,10 +428,6 @@ export function ProviderForm({
     }
 
     if (activeField === 'models' && key.return) {
-      if (isOpenAICompatible(form.type) && apiTestStatus !== 'success') {
-        setStatus('Test the API first (the "API:" field) before editing models');
-        return;
-      }
       setStatus('');
       setSubMode('models');
       setModelsListIndex(0);
@@ -569,31 +576,53 @@ export function ProviderForm({
         </Text>
         <Box flexDirection="column" marginTop={1} paddingLeft={2}>
           {form.models.length === 0 && !modelsAddingNew && <Text dimColor>(no models)</Text>}
-          {form.models.map((model, idx) => (
-            <Box key={idx}>
-              <Text color="cyan">{modelsListIndex === idx && !inEdit ? '▶ ' : '  '}</Text>
-              {modelsEditingIndex === idx ? (
-                <TextInput
-                  value={model.name}
-                  focus
-                  onChange={(v) =>
-                    setForm((f) => ({
-                      ...f,
-                      models: f.models.map((m, j) =>
-                        j === idx ? { ...m, name: sanitizeFieldValue(v) } : m,
-                      ),
-                    }))
-                  }
-                  onSubmit={() => setModelsEditingIndex(null)}
-                />
-              ) : (
-                <Text>
-                  <Text color="gray">{capabilityMarker(model.capabilities)} </Text>
-                  {model.name}
-                </Text>
-              )}
-            </Box>
-          ))}
+          {(() => {
+            const anchor = Math.min(modelsListIndex, Math.max(0, form.models.length - 1));
+            const start = Math.max(
+              0,
+              Math.min(
+                anchor - Math.floor(MODEL_EDIT_VIEWPORT / 2),
+                form.models.length - MODEL_EDIT_VIEWPORT,
+              ),
+            );
+            const end = Math.min(form.models.length, start + MODEL_EDIT_VIEWPORT);
+            return (
+              <>
+                {start > 0 && <Text dimColor> ↑ {start} more</Text>}
+                {form.models.slice(start, end).map((model, rel) => {
+                  const idx = start + rel;
+                  return (
+                    <Box key={idx}>
+                      <Text color="cyan">{modelsListIndex === idx && !inEdit ? '▶ ' : '  '}</Text>
+                      {modelsEditingIndex === idx ? (
+                        <TextInput
+                          value={model.name}
+                          focus
+                          onChange={(v) =>
+                            setForm((f) => ({
+                              ...f,
+                              models: f.models.map((m, j) =>
+                                j === idx ? { ...m, name: sanitizeFieldValue(v) } : m,
+                              ),
+                            }))
+                          }
+                          onSubmit={() => setModelsEditingIndex(null)}
+                        />
+                      ) : (
+                        <Text>
+                          <Text color="gray">{capabilityMarker(model.capabilities)} </Text>
+                          {model.name}
+                        </Text>
+                      )}
+                    </Box>
+                  );
+                })}
+                {end < form.models.length && (
+                  <Text dimColor> ↓ {form.models.length - end} more</Text>
+                )}
+              </>
+            );
+          })()}
           {modelsAddingNew && (
             <Box>
               <Text color="green">+ </Text>

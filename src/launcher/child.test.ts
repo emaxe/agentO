@@ -342,6 +342,52 @@ describe('prepareChild', () => {
 
     consoleError.mockRestore();
   });
+
+  it('returns 127 when the agent command does not exist', async () => {
+    const adapter = makeAdapter(null);
+    const child = makeFakeChildProcess();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawnCommand>);
+
+    const launch = launchChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'missing-agent',
+    });
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
+    const error = new Error('spawn missing-agent ENOENT') as NodeJS.ErrnoException;
+    error.code = 'ENOENT';
+    child.emit('error', error);
+
+    await expect(launch).resolves.toBe(127);
+    expect(mockReadBackup).toHaveBeenCalledTimes(1);
+
+    consoleError.mockRestore();
+  });
+
+  it('reports a signal-killed agent as 128 + signal instead of success', async () => {
+    const adapter = makeAdapter(null);
+    const child = makeFakeChildProcess();
+    mockSpawn.mockReturnValue(child as unknown as ReturnType<typeof spawnCommand>);
+
+    const launch = launchChild({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'global',
+      command: 'claude',
+    });
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
+    child.emit('exit', null, 'SIGKILL');
+
+    await expect(launch).resolves.toBe(137);
+    expect(mockReadBackup).toHaveBeenCalledTimes(1);
+  });
+
   it('forwards a signal to the agent and waits for it to exit before restoring config', async () => {
     const adapter = makeAdapter(null);
     const child = makeFakeChildProcess();
@@ -570,10 +616,10 @@ describe('launchChild signal handling', () => {
         raise(signal);
 
         expect(mockKillTree).toHaveBeenCalledTimes(1);
-      const [killedChild, mode, platform] = mockKillTree.mock.calls[0] ?? [];
-      expect(killedChild).toBe(child);
-      expect(mode).toBe('force');
-      expect(platform).toBe('win32');
+        const [killedChild, mode, platform] = mockKillTree.mock.calls[0] ?? [];
+        expect(killedChild).toBe(child);
+        expect(mode).toBe('force');
+        expect(platform).toBe('win32');
 
         child.emit('exit', 1);
         child.emit('exit', 1);
@@ -616,13 +662,13 @@ describe('launchChild signal handling', () => {
       expect(signals.map((signal) => process.listenerCount(signal))).toEqual(before);
     });
 
-    it('cleans up and returns 1 when the agent cannot be started (ENOENT)', async () => {
+    it('cleans up and returns 127 when the agent cannot be started (ENOENT)', async () => {
       const { child, launch } = await start('win32');
 
       child.emit('error', Object.assign(new Error('spawn claude ENOENT'), { code: 'ENOENT' }));
       child.emit('exit', null);
 
-      await expect(launch).resolves.toBe(1);
+      await expect(launch).resolves.toBe(127);
       expect(mockReadBackup).toHaveBeenCalledTimes(1);
       expect(consoleError).toHaveBeenCalledWith('Failed to launch claude:', 'spawn claude ENOENT');
       expect(mockKillTree).not.toHaveBeenCalled();

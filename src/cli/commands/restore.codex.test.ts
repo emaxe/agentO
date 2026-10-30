@@ -39,7 +39,6 @@ async function runRestore(): Promise<void> {
 }
 
 describe('restore command Codex multi-file backup', () => {
-  let exitSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
   let logSpy: ReturnType<typeof vi.spyOn>;
 
@@ -47,7 +46,7 @@ describe('restore command Codex multi-file backup', () => {
     vi.resetModules();
     homeDir = await mkdtemp(join(tmpdir(), 'agento-restore-home-'));
     projectDir = await mkdtemp(join(tmpdir(), 'agento-restore-project-'));
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(process, 'cwd').mockReturnValue(projectDir);
@@ -89,7 +88,7 @@ describe('restore command Codex multi-file backup', () => {
     expect(await readToml(paths.defaultProfile)).toEqual(originalProfile);
     expect(backupExists('codex', 'project')).toBe(false);
     expect(logSpy).toHaveBeenCalledWith('Restored codex config (project)');
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(process.exitCode).toBe(0);
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
@@ -114,7 +113,7 @@ describe('restore command Codex multi-file backup', () => {
     expect(existsSync(paths.project)).toBe(false);
     expect(existsSync(paths.defaultProfile)).toBe(false);
     expect(backupExists('codex', 'project')).toBe(false);
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(process.exitCode).toBe(0);
     expect(errorSpy).not.toHaveBeenCalled();
   });
 });

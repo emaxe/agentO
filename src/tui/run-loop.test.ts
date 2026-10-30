@@ -96,6 +96,7 @@ describe('runTuiLoop', () => {
     expect(req.cleanup).toHaveBeenCalledTimes(1);
     expect(startTui).toHaveBeenNthCalledWith(2, {
       dev: true,
+      initialScreen: 'launch',
       launchError: {
         agentId: 'kimi',
         profileId: 'prof-1',
@@ -157,6 +158,30 @@ describe('runTuiLoop', () => {
     });
 
     expect(beforeSpawn).toHaveBeenCalledTimes(2);
+  });
+
+  it('prints a post-launch summary with the exit code and restore status', async () => {
+    const notice = vi.fn();
+    await runTuiLoop({
+      startTui: scriptedTui(request()),
+      spawnAgent: vi.fn().mockResolvedValue(3),
+      notice,
+    });
+
+    expect(notice).toHaveBeenCalledWith('Claude Code exited (code 3). Config restored.');
+  });
+
+  it('says the config was left patched in independent mode', async () => {
+    const notice = vi.fn();
+    await runTuiLoop({
+      startTui: scriptedTui(request({ cleanup: undefined })),
+      spawnAgent: vi.fn().mockResolvedValue(0),
+      notice,
+    });
+
+    expect(notice).toHaveBeenCalledWith(
+      'Claude Code exited (code 0). Config left patched (independent mode).',
+    );
   });
 
   it('tolerates a request with no cleanup hook', async () => {

@@ -21,6 +21,12 @@ export function StatusLine({
 
   useEffect(() => {
     if (!message) return;
+    // Errors are the one message the user must be able to finish reading. A
+    // success note ("Deleted") is safe to fade; a failure is not.
+    if (message.startsWith('Error')) {
+      setVisible(true);
+      return;
+    }
     setVisible(true);
     const timer = setTimeout(() => setVisible(false), hideAfterMs);
     return () => clearTimeout(timer);

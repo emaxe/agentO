@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text } from 'ink';
 import { useKeyInput } from '../use-key-input.js';
+import { useHelp } from '../use-help.js';
+import { HelpOverlay } from '../components/HelpOverlay.js';
 import { StatusLine } from '../components/StatusLine.js';
 import { readConfig, writeConfig } from '../../config/store.js';
 
@@ -65,6 +67,7 @@ export function Settings({ onBack }: SettingsProps): React.JSX.Element {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [values, setValues] = useState<SettingValues>(DEFAULT_VALUES);
   const [status, setStatus] = useState('');
+  const help = useHelp();
 
   const load = useCallback(() => {
     readConfig()
@@ -83,6 +86,7 @@ export function Settings({ onBack }: SettingsProps): React.JSX.Element {
   }, [load]);
 
   useKeyInput((input, key) => {
+    if (help.handleKey(input, key)) return;
     if (key.escape || input === 'q') {
       onBack();
       return;
@@ -116,10 +120,14 @@ export function Settings({ onBack }: SettingsProps): React.JSX.Element {
     }
   });
 
+  if (help.open) {
+    return <HelpOverlay topic="settings" />;
+  }
+
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold>Settings</Text>
-      <Text dimColor>↑↓ navigate | Enter/Space: toggle | Esc: back</Text>
+      <Text dimColor>↑↓ navigate | Enter/Space: toggle | ? help | Esc: back</Text>
       <StatusLine message={status} />
       <Box flexDirection="column" marginTop={1}>
         {SETTINGS.map((s, i) => (

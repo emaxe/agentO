@@ -339,6 +339,15 @@ export async function prepareLaunchTransaction(
   const { adapter, profile, providers, scope, cwd } = options;
   const args = options.args ?? [];
 
+  // env-only agents are configured exclusively through the child environment:
+  // there is no config file to back up, patch, restore or git-exclude. Writing a
+  // phantom backup for them used to let stale-backup recovery delete a file the
+  // user created at the agent's conventional config path.
+  if (adapter.envOnly) {
+    const execReq = await buildExecRequest({ ...options, args });
+    return { execReq, cleanup: async () => {}, warnings: [] };
+  }
+
   const recovered = await recoverStaleBackup(
     adapter,
     scope,

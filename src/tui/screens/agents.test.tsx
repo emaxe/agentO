@@ -127,6 +127,9 @@ describe('Agents screen restore', () => {
     await navigateToRow(stdin, lastFrame, 'Codex CLI [project]');
 
     stdin.write('r');
+    await waitForFrame(lastFrame, 'Restore Codex CLI [project]?');
+    await new Promise((r) => setTimeout(r, 100));
+    stdin.write('y');
     const frame = await waitForFrame(lastFrame, 'Restored');
     expect(frame).toContain('Codex');
     // The selected row must show which file it refers to — two "codex" rows

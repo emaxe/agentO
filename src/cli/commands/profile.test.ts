@@ -71,7 +71,7 @@ describe('agento profile add', () => {
 
   it('resolves a provider by name', async () => {
     await runAdd('Acme:gpt-big');
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(process.exitCode).toBe(0);
     expect(await savedModel()).toEqual({ providerId: PROVIDER_ID, model: 'gpt-big' });
   });
 

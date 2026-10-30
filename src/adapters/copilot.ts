@@ -25,6 +25,7 @@ const PROVIDER_TYPE_MAP: Record<ProviderType, string> = {
 
 export class CopilotAdapter implements AgentAdapter<CopilotConfig> {
   readonly id = 'copilot';
+  readonly envOnly = true;
   readonly displayName = 'Copilot CLI';
   readonly supportedProviderTypes = [
     'openai-compatible',

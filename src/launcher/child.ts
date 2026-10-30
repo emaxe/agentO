@@ -1,3 +1,4 @@
+import { constants } from 'node:os';
 import type { AgentAdapter, LaunchScope } from '../adapters/base.js';
 import type { Profile, Provider } from '../config/schema.js';
 import { spawnCommand } from '../platform/spawn.js';
@@ -76,19 +77,23 @@ export async function launchChild(options: ChildLaunchOptions): Promise<number> 
       cleanup().catch(console.error).finally(finalize);
     };
 
-    child.on('exit', (code) => {
+    child.on('exit', (code, signal) => {
       settle(() => {
         if (forwarding.wasSignalled()) {
           process.exit(1);
+          return;
         }
-        resolve(code ?? 0);
+        // A crash caused by a signal must not look like a successful run. Use
+        // the shell convention (128 + signal number) when Node gives no code.
+        resolve(code ?? (signal ? 128 + (constants.signals[signal] ?? 1) : 1));
       });
     });
 
     child.on('error', (err) => {
       settle(() => {
         console.error(`Failed to launch ${execReq.command}:`, err.message);
-        resolve(1);
+        // Match independent mode: a missing command is 127, not a generic 1.
+        resolve((err as NodeJS.ErrnoException).code === 'ENOENT' ? 127 : 1);
       });
     });
   });

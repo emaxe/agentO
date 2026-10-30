@@ -4,11 +4,11 @@ import TextInput from 'ink-text-input';
 import { sanitizeFieldValue } from '../sanitize-field-value.js';
 import { useKeyInput } from '../use-key-input.js';
 import { SelectList } from '../components/SelectList.js';
-import type { Profile, Provider, ProfileModel, ModelTier } from '../../config/schema.js';
+import type { Profile, Provider, ProfileModel } from '../../config/schema.js';
 import { capabilityMarker } from '../../config/schema.js';
 import { validateProfile } from '../../config/validation.js';
+import { defaultTierCursor, tierOptions, usedTiersOf } from '../tier-options.js';
 
-const TIERS: ModelTier[] = ['small', 'base', 'smart'];
 type EditSubStep = 'select-provider' | 'select-model' | 'select-tier';
 
 interface ProfileEditProps {
@@ -36,8 +36,24 @@ export function ProfileEdit({
   const [editFocus, setEditFocus] = useState<'name' | 'models' | 'save'>(
     startAddingModel ? 'models' : 'name',
   );
+  const initialUntieredIndex = startAddingModel
+    ? profile.models.findIndex((model) => !model.tier)
+    : -1;
+  const initialTierOptions =
+    initialUntieredIndex >= 0
+      ? tierOptions(
+          usedTiersOf(profile.models.filter((_, index) => index !== initialUntieredIndex)),
+          false,
+        )
+      : [];
   const [editSubStep, setEditSubStep] = useState<EditSubStep | null>(
-    startAddingModel ? (profile.models.length > 0 ? 'select-model' : 'select-provider') : null,
+    startAddingModel
+      ? initialUntieredIndex >= 0
+        ? 'select-tier'
+        : profile.models.length > 0
+          ? 'select-model'
+          : 'select-provider'
+      : null,
   );
   const [pendingProviderId, setPendingProviderId] = useState<string | null>(
     startAddingModel && profile.models.length > 0 ? profile.models[0]!.providerId : null,
@@ -46,9 +62,16 @@ export function ProfileEdit({
   const [modelCursor, setModelCursor] = useState(0);
   const [customModel, setCustomModel] = useState('');
   const [pendingModel, setPendingModel] = useState('');
-  const [tierCursor, setTierCursor] = useState(1);
+  const [tierCursor, setTierCursor] = useState(
+    initialTierOptions.length > 0 ? defaultTierCursor(initialTierOptions) : 1,
+  );
+  const [tierTargetIndex, setTierTargetIndex] = useState<number | null>(
+    initialUntieredIndex >= 0 ? initialUntieredIndex : null,
+  );
   const [status, setStatus] = useState('');
   const [confirmEmptyModels, setConfirmEmptyModels] = useState(false);
+  const canAddModel = editModels.length < 3;
+  const firstUntieredModel = editModels.findIndex((model) => !model.tier);
 
   const doSave = useCallback(() => {
     const trimmedName = editName.trim();
@@ -99,6 +122,11 @@ export function ProfileEdit({
           return;
         }
         if (editSubStep === 'select-tier') {
+          if (tierTargetIndex !== null) {
+            setTierTargetIndex(null);
+            setEditSubStep(null);
+            return;
+          }
           setEditSubStep('select-model');
           return;
         }
@@ -155,15 +183,23 @@ export function ProfileEdit({
           if (!chosen) return;
           setStatus('');
           setPendingModel(chosen);
-          const usedTiers = new Set(editModels.map((m) => m.tier).filter(Boolean));
-          const defaultIdx = TIERS.findIndex((t) => !usedTiers.has(t));
-          setTierCursor(defaultIdx === -1 ? 1 : defaultIdx);
+          const usedTiers = usedTiersOf(editModels);
+          setTierCursor(defaultTierCursor(tierOptions(usedTiers, editModels.length === 0)));
           setEditSubStep('select-tier');
         }
         return;
       }
       if (editSubStep === 'select-tier') {
-        const optionsCount = 4;
+        const targetModel = tierTargetIndex !== null ? editModels[tierTargetIndex] : undefined;
+        const otherModels =
+          tierTargetIndex !== null
+            ? editModels.filter((_, index) => index !== tierTargetIndex)
+            : editModels;
+        const options = tierOptions(
+          usedTiersOf(otherModels),
+          targetModel ? false : editModels.length === 0,
+        );
+        const optionsCount = options.length;
         if (key.upArrow) {
           setTierCursor((i) => Math.max(0, i - 1));
           return;
@@ -173,15 +209,42 @@ export function ProfileEdit({
           return;
         }
         if (key.return) {
+          const option = options[tierCursor];
+          if (!option) {
+            setEditSubStep(targetModel ? null : 'select-model');
+            return;
+          }
+          if (targetModel && tierTargetIndex !== null) {
+            if (!option.tier) {
+              setStatus('Choose a tier for this model.');
+              return;
+            }
+            setEditModels((prev) =>
+              prev.map((model, index) =>
+                index === tierTargetIndex ? { ...model, tier: option.tier } : model,
+              ),
+            );
+            setTierTargetIndex(null);
+            setStatus('');
+            // Continue with the "add model" action that triggered this.
+            setPendingProviderId(targetModel.providerId);
+            setModelCursor(0);
+            setCustomModel('');
+            setEditSubStep('select-model');
+            return;
+          }
           const provider = providers.find((p) => p.id === pendingProviderId);
           if (!provider || !pendingModel) {
             setEditSubStep('select-provider');
             return;
           }
-          const tier = tierCursor < 3 ? TIERS[tierCursor] : undefined;
           setEditModels((prev) => [
             ...prev,
-            { providerId: provider.id, model: pendingModel, tier },
+            {
+              providerId: provider.id,
+              model: pendingModel,
+              ...(option.tier ? { tier: option.tier } : {}),
+            },
           ]);
           setPendingModel('');
           setEditSubStep(null);
@@ -225,7 +288,15 @@ export function ProfileEdit({
     }
 
     if (editFocus === 'models') {
-      const total = editModels.length + 1;
+      const total = canAddModel ? editModels.length + 1 : editModels.length;
+      if (key.pageDown) {
+        setEditModelCursor((i) => Math.min(total - 1, i + 12));
+        return;
+      }
+      if (key.pageUp) {
+        setEditModelCursor((i) => Math.max(0, i - 12));
+        return;
+      }
       if (key.upArrow && !key.shift) {
         setEditModelCursor((i) => Math.max(0, i - 1));
       } else if (key.downArrow && !key.shift) {
@@ -260,6 +331,29 @@ export function ProfileEdit({
         setEditModelCursor((i) => Math.max(0, i - 1));
         setStatus('');
       } else if (key.return && editModelCursor === editModels.length) {
+        if (!canAddModel) {
+          setStatus('Maximum 3 models (one per tier)');
+          return;
+        }
+        if (firstUntieredModel >= 0) {
+          // "No tier" is only valid for a single-model profile. Assign a tier to
+          // the existing model before adding a second one, or the save can never
+          // pass validateProfile.
+          setTierTargetIndex(firstUntieredModel);
+          setTierCursor(
+            defaultTierCursor(
+              tierOptions(
+                usedTiersOf(editModels.filter((_, index) => index !== firstUntieredModel)),
+                false,
+              ),
+            ),
+          );
+          setStatus(
+            `Assign a tier to "${editModels[firstUntieredModel]!.model}" before adding another model.`,
+          );
+          setEditSubStep('select-tier');
+          return;
+        }
         if (editModels.length > 0) {
           // Skip provider selection if profile already has models
           setPendingProviderId(editModels[0]!.providerId);
@@ -377,31 +471,42 @@ export function ProfileEdit({
 
         {editSubStep === 'select-tier' &&
           (() => {
-            const provider = providers.find((p) => p.id === pendingProviderId);
-            const usedTiers = new Set(editModels.map((m) => m.tier).filter(Boolean));
+            const targetModel = tierTargetIndex !== null ? editModels[tierTargetIndex] : undefined;
+            const provider = providers.find(
+              (p) => p.id === (targetModel?.providerId ?? pendingProviderId),
+            );
+            const otherModels =
+              tierTargetIndex !== null
+                ? editModels.filter((_, index) => index !== tierTargetIndex)
+                : editModels;
+            const usedTiers = usedTiersOf(otherModels);
+            const options = tierOptions(usedTiers, targetModel ? false : editModels.length === 0);
+            const needsBase = !usedTiers.has('base') && otherModels.length > 0;
             return (
               <Box flexDirection="column" marginTop={1}>
                 <Text dimColor>↑↓: navigate | Enter: confirm</Text>
                 <Box marginTop={1}>
                   <Text>
-                    Model: <Text color="cyan">{pendingModel}</Text> ({provider?.name ?? '?'})
+                    Model: <Text color="cyan">{targetModel?.model ?? pendingModel}</Text> (
+                    {provider?.name ?? '?'})
                   </Text>
                 </Box>
+                {targetModel && (
+                  <Text color="yellow">
+                    Already in this profile — assign a tier before adding another model.
+                  </Text>
+                )}
                 <Box flexDirection="column" marginTop={1}>
-                  {TIERS.map((t, i) => (
-                    <Text
-                      key={t}
-                      color={i === tierCursor ? 'green' : usedTiers.has(t) ? 'yellow' : undefined}
-                    >
+                  {options.map((option, i) => (
+                    <Text key={option.label} color={i === tierCursor ? 'green' : undefined}>
                       {i === tierCursor ? '▶ ' : '  '}
-                      {t}
-                      {usedTiers.has(t) ? ' (already used)' : ''}
+                      {option.label}
                     </Text>
                   ))}
-                  <Text color={tierCursor === 3 ? 'green' : undefined} dimColor={tierCursor !== 3}>
-                    {tierCursor === 3 ? '▶ ' : '  '}skip (no tier)
-                  </Text>
                 </Box>
+                {needsBase && (
+                  <Text color="yellow">A multi-model profile must include one base tier.</Text>
+                )}
               </Box>
             );
           })()}
@@ -434,24 +539,50 @@ export function ProfileEdit({
             : ''}
           :
         </Text>
-        {editModels.map((m, i) => {
-          const p = providers.find((pr) => pr.id === m.providerId);
-          const focused = editFocus === 'models' && i === editModelCursor;
-          return (
-            <Text key={i} color={focused ? 'green' : undefined}>
-              {focused ? '▶ ' : '  '}
-              {m.model}
-              {m.tier ? ` [${m.tier}]` : ''} ({p?.name ?? m.providerId.slice(0, 8) + '...'})
-            </Text>
+        {(() => {
+          const viewport = 12;
+          const anchor = Math.min(editModelCursor, Math.max(0, editModels.length - 1));
+          const start = Math.max(
+            0,
+            Math.min(anchor - Math.floor(viewport / 2), editModels.length - viewport),
           );
-        })}
-        <Text
-          color="cyan"
-          dimColor={!(editFocus === 'models' && editModelCursor === editModels.length)}
-        >
-          {editFocus === 'models' && editModelCursor === editModels.length ? '▶ ' : '  '}[+ add
-          model]
-        </Text>
+          const end = Math.min(editModels.length, start + viewport);
+          return (
+            <>
+              {start > 0 && <Text dimColor> ↑ {start} more</Text>}
+              {editModels.slice(start, end).map((m, rel) => {
+                const i = start + rel;
+                const p = providers.find((pr) => pr.id === m.providerId);
+                const focused = editFocus === 'models' && i === editModelCursor;
+                return (
+                  <Text key={i} color={focused ? 'green' : undefined}>
+                    {focused ? '▶ ' : '  '}
+                    {m.model}
+                    {m.tier ? ` [${m.tier}]` : ''} (provider:{' '}
+                    {p?.name ?? m.providerId.slice(0, 8) + '...'})
+                  </Text>
+                );
+              })}
+              {end < editModels.length && <Text dimColor> ↓ {editModels.length - end} more</Text>}
+            </>
+          );
+        })()}
+        {firstUntieredModel >= 0 && editModels.length === 1 && (
+          <Text dimColor>
+            Single-model profile (no tier). Adding another model will ask for a tier.
+          </Text>
+        )}
+        {canAddModel ? (
+          <Text
+            color="cyan"
+            dimColor={!(editFocus === 'models' && editModelCursor === editModels.length)}
+          >
+            {editFocus === 'models' && editModelCursor === editModels.length ? '▶ ' : '  '}[+ add
+            model]
+          </Text>
+        ) : (
+          <Text dimColor>Maximum 3 models (one per tier).</Text>
+        )}
       </Box>
       <Box marginTop={1}>
         <Text color="cyan" bold={editFocus === 'save'}>

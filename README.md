@@ -17,7 +17,7 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 | [OpenCode](https://github.com/opencode-ai/opencode) | `opencode` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Full function calling support via Vercel AI SDK |
 | [Qwen CLI](https://github.com/QwenLM/qwen) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | OpenAI-compatible API structure |
 | [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `openai-compatible`, `responses-compatible`, `fireworks`, `openrouter`, `custom-api` | `wire_api: responses`. Profile stored in separate `default.config.toml`. |
-| [Kimi Code](https://www.kimi.com/code) | `kimi` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Config delivered via `~/.kimi-cli/.env` (`DEFAULT_PROVIDER`, `DEFAULT_MODEL`, `BASE_URL`). |
+| [Kimi Code](https://www.kimi.com/code) | `kimi` | TOML | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Writes `~/.kimi/config.toml` (`default_model`, `providers`, `models`); reads the legacy `~/.kimi/config.json` too. |
 | [Kilo Code](https://github.com/Kilo-Org/kilo-code) | `kilo` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Reads `defaultProvider`/`defaultModel` from `~/.kilocode/settings.json`. Custom `baseUrl` from `~/.kilocode/models.json`. |
 | [PI](https://github.com/withpi/pi) | `pi` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | Reads `defaultProvider`/`defaultModel` from `~/.pi/agent/settings.json`. Custom `baseUrl` from `~/.pi/agent/models.json`. |
 | [Copilot](https://github.com/github/gh-copilot) | `copilot` | env vars only | `openai-compatible`, `anthropic-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Config delivered entirely via env vars — no settings file patched. |
@@ -173,7 +173,7 @@ agento provider add \
   -u "https://api.together.xyz/v1" \
   -M "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"
 
-# OpenRouter (universal gateway — works with all 4 agents)
+# OpenRouter (universal gateway — works with every supported agent)
 agento provider add \
   -n "OpenRouter" \
   -t openrouter \
@@ -216,6 +216,7 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 
 ```
 ┌───────── AgentO v0.10.0 ──────────┐
+│ Providers: 1 · Profiles: 1        │
 │                                   │
 │   ▶  Launch Agent                 │
 │   2  Providers                    │
@@ -223,29 +224,44 @@ Running `agento` without arguments launches an interactive Terminal User Interfa
 │   4  Agents                       │
 │   5  Settings                     │
 │                                   │
+│ Last: work → Claude Code          │
+│       (child, project)            │
+│                                   │
 │   ↑↓ navigate | Enter open        │
 │   1-5 jump | q/Esc quit           │
 └───────────────────────────────────┘
 ```
 
 **Navigation:** **↑↓** to move, **Enter** to select, **1-5** to jump, **Esc / q** to quit.
+On a first run with no profiles the menu shows which step comes next
+(`Providers` → `Profiles` → `Launch Agent`). After a launch it shows the last
+profile and agent, and the launch wizard starts with that selection again.
+
+### Help
+
+Press **`?`** on the main menu or any list screen (Providers, Profiles, Agents,
+Settings, and the profile/agent steps of the launch wizard) to open a help panel.
+It lists the screen's keys and explains `child` vs `independent`, `global` vs
+`project`, `mergeAgentConfigs`, and what an active backup means. Close it with
+**`?`**, **Esc** or **Enter**.
 
 ### Screens Overview
 
 | Screen | What You Can Do | Key Shortcuts |
 |--------|----------------|---------------|
-| **Launch Agent** | Select profile → select agent (with install hints) → launch; opens Install Wizard for uninstalled agents; install statuses (with detected versions) cached on disk. A footer shows the effective profile/mode/scope; installed agents show `u` update, `d` delete | **Enter** select, **Esc** back, **u** update, **d** delete, **m** mode, **s** scope |
-| **Providers** | View, add, edit, delete API providers; toggle model capabilities | **Enter** details / add model, **a** add provider, **e** edit, **d** delete, **i/v/a** toggle capability, **Esc** back |
-| **Profiles** | View, add, delete profiles. In profile details: add/remove/edit models | **Enter** details, **a** add, **d** delete, **Esc** back |
-| **Agents** | Check config status (global/project), backup availability; selected row shows the config path and offers restore | **r** restore (if modified), **↑↓** navigate, **Esc** back |
-| **Settings** | Change default launch mode, default config scope, and whether to merge (keep unknown keys from) agent configs; selected setting shows an inline description of the current value | **↑↓** navigate, **Enter/Space** toggle, **Esc** save & back |
+| **Launch Agent** | Select profile → select agent (with install hints) → launch; installed agents are listed first. `v` opens a read-only preview (files, env names, backup, warnings) before launching. Opens Install Wizard for uninstalled agents; install statuses (with detected versions) cached on disk. The last profile/agent/mode/scope is preselected. A footer shows the effective profile/mode/scope; installed agents show `u` update, `d` delete. Agents that cannot run the selected profile are listed with the reason | **Enter** select, **v** preview, **Esc** back, **u** update, **d** delete, **m** mode, **s** scope, **?** help |
+| **Providers** | View, add, edit, delete API providers; toggle model capabilities; `t` tests the API, `c` duplicates a provider, `/` filters by name/type/model. Keys are shown masked (`••••••••1234`). Deleting a provider that a profile uses is refused | **Enter/e** edit, **a** add, **d** delete, **t** test, **c** duplicate, **/** search, **i/v/a** toggle capability, **Esc** back, **?** help |
+| **Profiles** | View, add, delete profiles; `/` filters by name, model or provider. In profile details: add/remove/edit models. Tier choices already used by the profile are hidden, and “no tier” is offered only for a single-model profile; adding another model to an untiered profile first asks for a tier | **Enter** details, **a** add, **d** delete, **/** search, **Esc** back, **?** help |
+| **Agents** | Check config status (global/project), backup availability; selected row shows the config path. `/` filters by name/scope/path, `f` shows only modified configs. Restoring asks for confirmation first | **r** restore (then **y/Enter**), **f** modified only, **/** search, **↑↓** navigate, **Esc** back, **?** help |
+| **Settings** | Change default launch mode, default config scope, and whether to merge (keep unknown keys from) agent configs; selected setting shows an inline description of the current value | **↑↓** navigate, **Enter/Space** toggle, **Esc** save & back, **?** help |
 
 ### Launch Agent Workflow
 
-1. **Select Profile** — Choose from your saved profiles
-2. **Select Agent** — AgentO checks install status of all agents (spinner while checking). Uninstalled agents show a `(not installed)` hint; installed agents show their detected version (`v1.2.3`) and, when selected, `(u update, d delete)`. Statuses (installed + version) are cached to `~/.agento/agent-status.json` so already-known-installed agents are skipped on the next launch.
+1. **Select Profile** — Choose from your saved profiles. With no profiles yet, the screen offers `[p] Add provider` or `[a] Create profile` instead of a dead end; the same is true when `Profiles` has no providers to choose from.
+2. **Select Agent** — AgentO checks install status of all agents (spinner while checking). Uninstalled agents show a `(not installed)` hint; installed agents show their detected version (`v1.2.3`) and, when selected, `(u update, d delete)`. Agents that cannot run the selected profile are hidden, and a line under the list names them with the reason. Statuses (installed + version) are cached to `~/.agento/agent-status.json` so already-known-installed agents are skipped on the next launch.
 
    A footer under both steps shows the effective `Profile / mode / scope`; press **m** to toggle child/independent or **s** to toggle project/global for this launch without leaving the wizard.
+   - Press **v** for a read-only **preview**: agent/profile, mode/scope, files that would be created or updated, env variable names (never values), backup state, git-exclude patterns and warnings. **Enter** launches from the preview, **Esc** returns to the agent list.
    - If the selected agent **is installed** → press **Enter** to launch, **u** to update, or **d** to delete
    - If the selected agent **is not installed** → opens the **Install Wizard**
    - If the command is not found at launch time (ENOENT) → TUI relaunches with the error shown and the agent marked as not installed
@@ -267,7 +283,7 @@ Profile: default
 └─ [ Launch ]
 ```
 
-In **child mode**, you'll be returned to AgentO when the agent exits, and the original config is automatically restored.
+In **child mode**, you'll be returned to AgentO when the agent exits, and the original config is automatically restored. The wizard reopens on the profile/agent you just used so a second launch is one Enter away.
 
 In **independent mode**, AgentO exits immediately and leaves the patched config in place.
 
@@ -277,17 +293,21 @@ Manage your API providers without memorizing CLI flags:
 
 - **View** all providers with their type, models, capability markers, and base URL
 - **Add** a new provider with guided prompts (name, type, API key, models, base URL)
-- **Edit** existing provider details — including per-model capability flags (`i`/`v`/`a` toggles)
-- **Delete** providers you no longer need
+- **Edit** existing provider details — including per-model capability flags (`i`/`v`/`a` toggles). Models can be edited manually without running the API test; “Test API” and “Fetch models” are optional helpers
+- **Test** a provider from the list with `t`; the result (models count or error) is shown under the selected row
+- **Duplicate** a provider with `c` — useful for a second key or base URL; the copy gets the next free name
+- **Filter** with `/` typed by provider name, type, base URL or model name
+- **Delete** providers you no longer need. A provider still referenced by a profile cannot be deleted: the screen lists the profiles that block it
 
-In edit view, models render as `▶ [i--] model-name`. Press `i` / `v` / `a` while a model row is highlighted to toggle image / video / audio capabilities. Use the `[+ add model]` row (Enter) to append models, `d` to delete, `e` to rename.
+In edit view, models render as `▶ [i--] model-name`. Press `i` / `v` / `a` while a model row is highlighted to toggle image / video / audio capabilities. Use the `[+ add model]` row (Enter) to append models, `d` to delete, `e` to rename. API keys are masked in the list; the form still shows the value being edited.
 
 ### Profiles Screen
 
 Organize your model configurations:
 
 - **View** all profiles with their models and tiers
-- **Add** profiles with single or multi-tier model configurations
+- **Add** profiles with single or multi-tier model configurations. Tiers already used by the profile are hidden; a multi-model profile must include one `base` tier. Adding a second model to a single untiered model asks for its tier first
+- **Filter** the list with `/` typed by profile name, model or provider name
 - **In profile details:** add/remove/edit individual model assignments
 
 ### Agents Screen
@@ -297,6 +317,8 @@ Monitor the status of your agent configurations:
 - See if each agent has a **global** or **project** config
 - Check if **backups** exist (indicating AgentO has previously patched the config)
 - View config file paths for each agent
+- Press **/** to filter by agent name, scope or config path; **f** toggles “modified only”
+- Press **r** to restore a modified config. AgentO asks for confirmation (`y/Enter: restore`, `n/Esc: cancel`) because restore replaces the current file and clears the backup
 
 ### Settings Screen
 
@@ -324,20 +346,23 @@ Use **TUI** for exploration and interactive workflows. Use **CLI** for scripting
 
 ## Provider & Agent Compatibility Matrix
 
-| Provider Type | claude-code | opencode | qwen | codex | copilot | goose |
-|---|---|---|---|---|---|---|
-| **anthropic** | ✅ Full support | ✅ (via SDK) | ❌ Not supported | ❌ Not supported | ✅ (env vars) | ✅ (env vars) |
-| **openai-compatible** | ✅ (via OpenAI proxy) | ✅ Full support | ✅ Full support | ✅ (Responses API) | ✅ (env vars) | ✅ (env vars) |
-| **fireworks** | ✅ (via scrubber proxy) | ✅ (OpenAI API) | ✅ (OpenAI API) | ✅ (Responses API) | ✅ (env vars, OpenAI type) | ✅ (env vars, openai provider) |
-| **openrouter** | ✅ (Anthropic Skin) | ✅ (OpenAI API) | ✅ (OpenAI API) | ✅ (Responses API) | ✅ (env vars, OpenAI type) | ✅ (env vars, openrouter provider) |
-| **responses-compatible** | ✅ (via Responses Proxy) | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Provider Type | claude-code | opencode | qwen | codex | copilot | goose | pi | kilo | kimi |
+|---|---|---|---|---|---|---|---|---|---|
+| `openai-compatible` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `anthropic-compatible` | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `fireworks` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `openrouter` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `responses-compatible` | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ |
+| `custom-api` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **Key Constraints:**
 - `claude-code` works with all 6 provider types; non-`anthropic-compatible` providers use a local proxy for protocol translation
+- `qwen` and `codex` cannot use `anthropic-compatible`; `qwen` and `pi` cannot use `responses-compatible`
+- `custom-api` works only when `customApiModes` enables at least one wire protocol (openai, anthropic or responses)
 - For `openrouter` Claude Code uses `ANTHROPIC_AUTH_TOKEN` (Bearer) — not `apiKeyHelper`
 - Provider API keys are never written into a generated config file; they are passed to the agent through the environment
 - `copilot` and `goose` deliver all config via env vars — no settings file is ever patched or restored
-- `fireworks` and `openrouter` are the most flexible — work with all 6 agents
+- `fireworks` and `openrouter` are the most flexible — work with every supported agent
 
 ## CLI Reference
 
@@ -347,21 +372,34 @@ Launches the interactive TUI by default.
 
 ```bash
 agento          # Launch interactive TUI
-agento --dev    # Show development agents (e.g. codex) in TUI
+agento --dev    # Deprecated: all agents are shown; kept for compatibility
 ```
+
+On the first run the menu shows how many providers and profiles exist and points
+at the next step (`Providers` → `Profiles` → `Launch Agent`). After a launch it
+remembers the last profile, agent, mode and scope, and the launch wizard opens
+with those preselected.
 
 ### `agento launch` — Launch Agent
 
 ```bash
-agento launch -p <profile> -a <agent> [options]
+agento launch [-p <profile>] [-a <agent>] [options]
 
 Options:
-  -p, --profile <name>   Profile name to use (required)
-  -a, --agent <id>       Agent to launch: claude-code, opencode, qwen, codex (required)
-  -m, --mode <mode>      Launch mode: child or independent (default: from settings)
-  -s, --scope <scope>    Config scope: global or project (default: from settings)
-  -d, --dev              Show development agents (e.g. codex)
+  -p, --profile <name>   Profile name or id (default: last launch)
+  -a, --agent <id>       Agent id or label (default: last launch):
+                         claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi
+  -m, --mode <mode>      Launch mode: child or independent (default: last launch, then settings)
+  -s, --scope <scope>    Config scope: global or project (default: last launch, then settings)
+  -d, --dev              Deprecated: all agents are shown; kept for compatibility
+  --dry-run              Print what would be patched without writing anything
 ```
+
+If `-p`/`-a` are omitted, the last launch is used; if there is none, run
+`agento` for the interactive picker. Profile and agent references are
+case-insensitive, and a unique prefix is accepted (`-p wor -a clau`).
+`--dry-run` lists files, env variable names, backup state and warnings, and
+never writes.
 
 **Launch Modes:**
 
@@ -376,14 +414,18 @@ Options:
 ### `agento provider` — Manage Providers
 
 ```bash
-agento provider list                          # List all providers
+agento provider list [--json]                 # List providers (keys masked)
 agento provider add [options]                 # Add a new provider
   -n, --name <name>         Provider display name (required)
-  -t, --type <type>         Provider type: anthropic, openai-compatible, fireworks, or openrouter (required)
+  -t, --type <type>         Provider type: openai-compatible, anthropic-compatible, fireworks, openrouter, responses-compatible, custom-api (required)
   -k, --api-key <key>       API key (required)
-  -u, --base-url <url>      Base URL (required for openai-compatible, optional for others)
-  -M, --models <models>     Comma-separated list of model names (required)
-agento provider remove <name>                 # Remove a provider
+  -u, --base-url <url>      Base URL (required for responses-compatible/custom-api, optional for other types)
+  -c, --custom-api-modes <json>  JSON flags {openai,anthropic,responses} (required for custom-api)
+  -M, --models <models>     Comma-separated model names
+  --fetch-models            Fetch models from the provider /models endpoint instead of -M
+agento provider edit <name> [options]         # Edit name/type/key/baseUrl/models (same flags, all optional)
+agento provider test <name> [--json]          # Test the /models endpoint
+agento provider remove <name>                 # Remove a provider (refused while a profile uses it)
 ```
 
 **Base URL Defaults:**
@@ -395,7 +437,7 @@ agento provider remove <name>                 # Remove a provider
 ### `agento profile` — Manage Profiles
 
 ```bash
-agento profile list                           # List all profiles
+agento profile list [--json]                   # List all profiles
 agento profile add [options]                  # Add a new profile
   -n, --name <name>         Profile name (required)
   -m, --models <models>     Comma-separated list of provider:modelName[:tier] (required)
@@ -408,18 +450,32 @@ agento profile remove <name>                  # Remove a profile
 ### `agento agent` — Agent Status
 
 ```bash
-agento agent status                           # Show config status for all agents
-agento agent status --dev                     # Include development agents (e.g. codex)
+agento agent status [--json]                  # Status + installed version for all agents
+agento agent status --dev                     # Deprecated: all agents are shown
 ```
 
 ### `agento restore` — Restore Config
 
 ```bash
-agento restore -a <agent> -s <scope>          # Restore agent config from backup
+agento restore [-a <agent>] [-s <scope>]       # Restore agent config from backup
+agento restore --list                         # List active backups for the current directory
 
 Options:
-  -a, --agent <id>         Agent ID (required)
-  -s, --scope <scope>      Config scope: global or project (required)
+  -a, --agent <id>         Agent id or label (inferred when exactly one backup is active)
+  -s, --scope <scope>      Config scope: global or project (inferred from active backups)
+  -l, --list               List active backups without restoring
+```
+
+### `agento config` — Configuration Paths
+
+```bash
+agento config path [--json]                   # Print config, UI-state and backup paths
+```
+
+### `agento doctor` — Diagnostics
+
+```bash
+agento doctor [--json]                        # Versions, config health, active backups, installed agents
 ```
 
 ## Configuration
@@ -481,6 +537,13 @@ AgentO stores its configuration in `~/.agento/config.json`:
 ```
 
 > Configs created with AgentO < 0.2.0 use bare `string[]` for `models`. They are migrated automatically on read; capabilities default to `{ image: true, video: false, audio: false }` and can be adjusted in the TUI.
+
+### UI state
+
+The last launched profile/agent/mode/scope is cached in `~/.agento/ui-state.json`.
+It is optional: deleting it only loses the preselection. A malformed file is
+ignored, never fatal. `agento config path` prints this path, the config path and
+the backups directory.
 
 ## How It Works
 
@@ -561,6 +624,13 @@ src/
 **Solution:** Always provide `-u` for Qwen with non-standard providers, or use `fireworks` type which auto-defaults.
 
 ## Troubleshooting
+
+### Start here: `agento doctor`
+
+```bash
+agento doctor          # versions, config health, active backups, installed agents
+agento config path     # where config.json, ui-state.json and backups live
+```
 
 ### Changes in `src/` not applied
 

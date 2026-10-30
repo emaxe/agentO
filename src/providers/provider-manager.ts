@@ -56,12 +56,27 @@ export async function updateProvider(
 
 /**
  * Removes a provider by id or name.
- * @throws Error if no matching provider is found.
+ * @throws Error if no matching provider is found, or if a profile still references it.
  */
 export async function removeProvider(idOrName: string): Promise<void> {
   const config = await readConfig();
   const index = config.providers.findIndex((p) => p.id === idOrName || p.name === idOrName);
   if (index === -1) throw new Error(`Provider not found: ${idOrName}`);
+
+  const provider = config.providers[index]!;
+  // A profile pointing at a deleted provider is a broken profile: validation
+  // only runs when the profile is written, so the failure would otherwise
+  // surface much later, at launch time. Refuse the delete and name the profiles.
+  const usedBy = config.profiles.filter((profile) =>
+    profile.models.some((model) => model.providerId === provider.id),
+  );
+  if (usedBy.length > 0) {
+    throw new Error(
+      `Provider "${provider.name}" is used by profile(s): ${usedBy.map((p) => p.name).join(', ')}. ` +
+        'Remove or update those profiles first.',
+    );
+  }
+
   const newConfig = { ...config, providers: config.providers.filter((_, i) => i !== index) };
   await writeConfig(newConfig);
 }

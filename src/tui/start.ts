@@ -10,6 +10,7 @@ import { render } from 'ink';
 import { App } from './App.js';
 import type { ExecRequest } from '../launcher/independent.js';
 import type { AgentInstallStatus } from '../config/store.js';
+import type { Screen } from './App.js';
 
 /** Cache of agent install statuses shared across TUI relaunches within a single process. */
 const agentStatusCache: Record<string, AgentInstallStatus> = {};
@@ -17,6 +18,8 @@ const agentStatusCache: Record<string, AgentInstallStatus> = {};
 export interface StartTuiOptions {
   dev?: boolean;
   launchError?: { agentId: string; profileId?: string; error?: string };
+  /** Screen to open first — after an agent exits, return to the launch wizard. */
+  initialScreen?: Screen;
 }
 
 /**
@@ -29,6 +32,7 @@ export async function startTui(options: StartTuiOptions = {}): Promise<ExecReque
   const { waitUntilExit } = render(
     React.createElement(App, {
       dev: options.dev,
+      initialScreen: options.initialScreen,
       launchError: options.launchError,
       agentStatusCache,
       onExec: (req: ExecRequest) => {

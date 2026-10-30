@@ -1,4 +1,5 @@
 import type { ExecRequest } from '../launcher/independent.js';
+import { getAgent } from '../agents/registry.js';
 import type { StartTuiOptions } from './start.js';
 
 /** Spawns the agent and resolves once it exits. Rejects if it could not start. */
@@ -20,6 +21,8 @@ export interface RunTuiLoopDeps {
   shouldStop?: () => boolean;
   /** Where launch warnings are printed — outside Ink's render loop. */
   warn?: (message: string) => void;
+  /** Where the post-launch summary is printed — also outside Ink. */
+  notice?: (message: string) => void;
 }
 
 /** True for an ENOENT from spawn — the agent binary is not on PATH. */
@@ -41,6 +44,7 @@ export async function runTuiLoop(
     beforeSpawn,
     shouldStop,
     warn = (message) => console.warn(message),
+    notice = (message) => console.log(message),
   }: RunTuiLoopDeps,
   options: StartTuiOptions = {},
 ): Promise<void> {
@@ -55,8 +59,9 @@ export async function runTuiLoop(
     }
 
     let missingCommand = false;
+    let exitCode: number | null = null;
     try {
-      await spawnAgent(execReq.command, execReq.args, execReq.env);
+      exitCode = await spawnAgent(execReq.command, execReq.args, execReq.env);
     } catch (err) {
       // Anything other than a missing binary is unexpected; let it propagate,
       // but only after the `finally` below has run.
@@ -70,12 +75,21 @@ export async function runTuiLoop(
       await execReq.cleanup?.();
     }
 
+    const label = execReq.agentId
+      ? (getAgent(execReq.agentId, { dev: true })?.label ?? execReq.command)
+      : execReq.command;
+    const outcome = exitCode === null ? 'exited (signal)' : `exited (code ${exitCode})`;
+    notice(
+      `${label} ${outcome}. ${execReq.cleanup ? 'Config restored.' : 'Config left patched (independent mode).'}`,
+    );
+
     // agento was told to terminate (SIGTERM, window closed): the config is restored, so leave.
     if (shouldStop?.()) break;
 
     if (missingCommand) {
       execReq = await startTui({
         ...options,
+        initialScreen: 'launch',
         launchError: {
           agentId: execReq.agentId ?? execReq.command,
           profileId: execReq.profileId,
@@ -86,6 +100,6 @@ export async function runTuiLoop(
     }
 
     if (!execReq.relaunch) break;
-    execReq = await startTui(options);
+    execReq = await startTui({ ...options, initialScreen: 'launch' });
   }
 }

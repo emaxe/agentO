@@ -74,10 +74,10 @@ export function AgentInstall({ agentId, onBack, onDone }: AgentInstallProps): Re
       });
   };
 
-  useKeyInput((_input, key) => {
+  useKeyInput((input, key) => {
     if (subScreen === 'auto-checking' || subScreen === 'installing') return;
 
-    if (key.escape) {
+    if (key.escape || input === 'q') {
       if (subScreen === 'choice') {
         onBack();
       } else {

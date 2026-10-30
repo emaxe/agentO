@@ -66,6 +66,27 @@ describe('provider manager', () => {
     expect(await listProviders()).toHaveLength(0);
   });
 
+  it('refuses to remove a provider that a profile still uses', async () => {
+    const { addProvider, listProviders, removeProvider } = await getManager();
+    const { addProfile } = await import('../profiles/profile-manager.js');
+    const provider = await addProvider({
+      name: 'InUse',
+      type: 'openai-compatible',
+      apiKey: 'k',
+      baseUrl: 'https://api.example.com/v1',
+      models: [{ name: 'm1', capabilities: { image: true, video: false, audio: false } }],
+    });
+    await addProfile({
+      name: 'uses-in-use',
+      models: [{ providerId: provider.id, model: 'm1' }],
+    });
+
+    await expect(removeProvider(provider.id)).rejects.toThrow(
+      'Provider "InUse" is used by profile(s): uses-in-use',
+    );
+    expect(await listProviders()).toHaveLength(1);
+  });
+
   it('remove non-existent throws', async () => {
     const { removeProvider } = await getManager();
     await expect(removeProvider('nonexistent')).rejects.toThrow('Provider not found');

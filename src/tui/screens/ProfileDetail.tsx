@@ -20,13 +20,22 @@ export function ProfileDetail({
   selectedModel,
   status,
 }: ProfileDetailProps): React.JSX.Element {
+  const viewport = 12;
+  const start = Math.max(
+    0,
+    Math.min(selectedModel - Math.floor(viewport / 2), profile.models.length - viewport),
+  );
+  const end = Math.min(profile.models.length, start + viewport);
+
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold>{profile.name}</Text>
-      <Text dimColor>↑↓ navigate | a: add | d: delete | e: edit | Esc back</Text>
+      <Text dimColor>↑↓ navigate | a: add | d: delete | e: edit | ? help | Esc back</Text>
       <StatusLine message={status ?? ''} />
       <Box flexDirection="column" marginTop={1}>
-        {profile.models.map((m, i) => {
+        {start > 0 && <Text dimColor> ↑ {start} more</Text>}
+        {profile.models.slice(start, end).map((m, rel) => {
+          const i = start + rel;
           const p = providers.find((pr) => pr.id === m.providerId);
           return (
             <Text key={i} color={i === selectedModel ? 'green' : undefined}>
@@ -37,6 +46,7 @@ export function ProfileDetail({
             </Text>
           );
         })}
+        {end < profile.models.length && <Text dimColor> ↓ {profile.models.length - end} more</Text>}
       </Box>
     </Box>
   );

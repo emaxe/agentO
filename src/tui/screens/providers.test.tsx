@@ -75,6 +75,21 @@ describe('Providers delete confirmation', () => {
     await rm(homeDir, { recursive: true, force: true });
   });
 
+  it('filters the provider list with /', async () => {
+    await setupProvider('Zeta');
+    const { Providers } = await import('./Providers.js');
+    const { stdin, lastFrame } = render(<Providers onBack={() => {}} />);
+    await poll(lastFrame, (f) => f.includes('Acme') && f.includes('Zeta'), 'providers loaded');
+    await settle();
+
+    stdin.write('/');
+    await settle();
+    stdin.write('zeta');
+    const frame = await poll(lastFrame, (f) => f.includes('Search: zeta'), 'search active');
+    expect(frame).toContain('Zeta');
+    expect(frame).not.toContain('Acme');
+  });
+
   it('deletes on lowercase y', async () => {
     const { stdin } = await openConfirm();
     stdin.write('y');
@@ -155,6 +170,31 @@ describe('Profiles delete confirmation', () => {
   afterEach(async () => {
     vi.restoreAllMocks();
     await rm(homeDir, { recursive: true, force: true });
+  });
+
+  it('filters the profile list with /', async () => {
+    const { addProfile } = await import('../../profiles/profile-manager.js');
+    const providers = await (await import('../../providers/provider-manager.js')).listProviders();
+    await addProfile({
+      name: 'other',
+      models: [{ providerId: providers[0]!.id, model: 'm1' }],
+    });
+
+    const { Profiles } = await import('./Profiles.js');
+    const { stdin, lastFrame } = render(<Profiles onBack={() => {}} />);
+    await poll(lastFrame, (f) => f.includes('defaults') && f.includes('other'), 'profiles loaded');
+    await settle();
+
+    stdin.write('/');
+    await settle();
+    stdin.write('other');
+    const frame = await poll(
+      lastFrame,
+      (f) => f.includes('Search: other'),
+      'profile search active',
+    );
+    expect(frame).toContain('other');
+    expect(frame).not.toContain('defaults');
   });
 
   it('deletes the profile on Enter', async () => {

@@ -36,6 +36,7 @@ function toGooseOpenAIHost(url: string): string {
 
 export class GooseAdapter implements AgentAdapter<GooseConfig> {
   readonly id = 'goose';
+  readonly envOnly = true;
   readonly displayName = 'Goose';
   readonly supportedProviderTypes = [
     'openai-compatible',

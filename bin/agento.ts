@@ -13,6 +13,8 @@ import { createProviderCommand } from '../src/cli/commands/provider.js';
 import { createProfileCommand } from '../src/cli/commands/profile.js';
 import { createRestoreCommand } from '../src/cli/commands/restore.js';
 import { createAgentCommand } from '../src/cli/commands/agent.js';
+import { createConfigCommand } from '../src/cli/commands/config.js';
+import { createDoctorCommand } from '../src/cli/commands/doctor.js';
 import { forwardSignals } from '../src/launcher/signal-forwarding.js';
 import { spawnCommand } from '../src/platform/spawn.js';
 
@@ -23,7 +25,7 @@ program
   .name('agento')
   .description('Manage AI agent configurations with profiles and providers')
   .version(pkg.version)
-  .option('-d, --dev', 'Show development agents (e.g. codex)');
+  .option('-d, --dev', 'Deprecated: accepted for compatibility; all agents are shown');
 
 // Register CLI subcommands
 program.addCommand(createLaunchCommand());
@@ -31,6 +33,8 @@ program.addCommand(createProviderCommand());
 program.addCommand(createProfileCommand());
 program.addCommand(createRestoreCommand());
 program.addCommand(createAgentCommand());
+program.addCommand(createConfigCommand());
+program.addCommand(createDoctorCommand());
 
 /** Set once a signal made agento terminate the agent; the TUI loop must not reopen after that. */
 let terminatedBySignal = false;

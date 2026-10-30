@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     readConfig: vi.fn(),
+    readUiState: vi.fn(),
     launchChild: vi.fn(),
     launchIndependent: vi.fn(),
     spawnSync: vi.fn(),
@@ -42,6 +43,10 @@ const mocks = vi.hoisted(() => {
 // ---------------------------------------------------------------------------
 vi.mock('../../config/store.js', () => ({
   readConfig: mocks.readConfig,
+}));
+
+vi.mock('../../config/ui-state.js', () => ({
+  readUiState: mocks.readUiState,
 }));
 
 vi.mock('../../launcher/child.js', () => ({
@@ -118,6 +123,7 @@ describe('launch command — mode/scope validation', () => {
 
     // Default readConfig return value
     mocks.readConfig.mockResolvedValue(structuredClone(baseConfig));
+    mocks.readUiState.mockResolvedValue({});
 
     // Default agent registry mocks
     mocks.listAgents.mockReturnValue([
@@ -161,6 +167,32 @@ describe('launch command — mode/scope validation', () => {
     );
     expect(mocks.launchChild).not.toHaveBeenCalled();
     expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('falls back to the last launch when -p/-a are omitted', async () => {
+    mocks.readUiState.mockResolvedValue({
+      lastLaunch: {
+        profileId: '00000000-0000-0000-0000-000000000002',
+        agentId: 'qwen',
+        mode: 'child',
+        scope: 'global',
+      },
+    });
+
+    await runLaunch([]);
+
+    expect(mocks.launchChild).toHaveBeenCalledOnce();
+    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(errorSpy.mock.calls.map((call) => String(call[0])).join(' ')).toContain(
+      'using the last launch',
+    );
+  });
+
+  it('resolves a unique profile/agent prefix case-insensitively', async () => {
+    await runLaunch(['-p', 'DEF', '-a', 'QW']);
+
+    expect(mocks.launchChild).toHaveBeenCalledOnce();
+    expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
   // -------------------------------------------------------------------------
@@ -213,9 +245,7 @@ describe('launch command — mode/scope validation', () => {
 
     await runLaunch(['-p', 'default', '-a', 'qwen', '--mode', 'independent']);
 
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Error: failed to start "qwen": spawn qwen ENOENT',
-    );
+    expect(errorSpy).toHaveBeenCalledWith('Error: failed to start "qwen": spawn qwen ENOENT');
     expect(exitSpy).toHaveBeenCalledWith(127);
   });
 

@@ -25,6 +25,12 @@ export interface AgentAdapter<TConfig extends AgentConfig = AgentConfig> {
   /** Флаг разработки: скрыт из UI/CLI по умолчанию */
   readonly dev?: boolean;
 
+  /**
+   * Конфиг передаётся только через env-переменные: `writeConfig` — no-op,
+   * файлы агента не создаются и не бэкапятся.
+   */
+  readonly envOnly?: boolean;
+
   /** Поддерживаемые типы провайдеров */
   readonly supportedProviderTypes: readonly ProviderType[];
 

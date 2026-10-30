@@ -22,8 +22,9 @@ async function poll(
   lastFrame: () => string | undefined,
   predicate: (frame: string) => boolean,
   what: string,
+  timeoutMs = 2000,
 ): Promise<string> {
-  const deadline = Date.now() + 2000;
+  const deadline = Date.now() + timeoutMs;
   for (;;) {
     const frame = lastFrame() ?? '';
     if (predicate(frame)) return frame;
@@ -33,6 +34,14 @@ async function poll(
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 100));
+
+/** Pretend every agent is installed so tests never spawn version checks. */
+async function installedCache() {
+  const { listAgents } = await import('../../agents/registry.js');
+  return Object.fromEntries(
+    listAgents({ dev: true }).map((agent) => [agent.id, { installed: true }]),
+  );
+}
 
 describe('Launch wizard mode/scope footer', () => {
   beforeEach(async () => {
@@ -73,7 +82,9 @@ describe('Launch wizard mode/scope footer', () => {
 
   it('shows the effective mode and scope with the selected profile', async () => {
     const { LaunchAgent } = await import('./LaunchAgent.js');
-    const { lastFrame } = render(<LaunchAgent onBack={() => {}} />);
+    const { lastFrame } = render(
+      <LaunchAgent onBack={() => {}} agentStatusCache={await installedCache()} />,
+    );
     const frame = await poll(
       lastFrame,
       (f) => f.includes('work') && f.includes('mode: child') && f.includes('scope: project'),
@@ -84,7 +95,9 @@ describe('Launch wizard mode/scope footer', () => {
 
   it('toggles launch mode with m and scope with s', async () => {
     const { LaunchAgent } = await import('./LaunchAgent.js');
-    const { stdin, lastFrame } = render(<LaunchAgent onBack={() => {}} />);
+    const { stdin, lastFrame } = render(
+      <LaunchAgent onBack={() => {}} agentStatusCache={await installedCache()} />,
+    );
     await poll(lastFrame, (f) => f.includes('mode: child'), 'footer visible');
     await settle();
 
@@ -95,4 +108,83 @@ describe('Launch wizard mode/scope footer', () => {
     stdin.write('s');
     await poll(lastFrame, (f) => f.includes('scope: global'), 'scope toggled');
   });
+
+  it('preselects the profile, mode and scope from the last launch', async () => {
+    const { readConfig, writeConfig } = await import('../../config/store.js');
+    const { writeLastLaunch } = await import('../../config/ui-state.js');
+    const config = await readConfig();
+    config.profiles.push({
+      id: '00000000-0000-0000-0000-000000000003',
+      name: 'personal',
+      models: config.profiles[0]!.models,
+    });
+    await writeConfig(config);
+    await writeLastLaunch({
+      profileId: '00000000-0000-0000-0000-000000000003',
+      agentId: 'claude-code',
+      mode: 'independent',
+      scope: 'global',
+    });
+
+    const { LaunchAgent } = await import('./LaunchAgent.js');
+    const { lastFrame } = render(<LaunchAgent onBack={() => {}} />);
+    const frame = await poll(
+      lastFrame,
+      (f) =>
+        f.includes('Profile: personal') &&
+        f.includes('mode: independent') &&
+        f.includes('scope: global'),
+      'last launch preselected',
+    );
+    expect(frame).toContain('personal');
+  });
+
+  it('preselects the last launched agent when entering the agent step', async () => {
+    const { readConfig } = await import('../../config/store.js');
+    const { writeLastLaunch } = await import('../../config/ui-state.js');
+    const config = await readConfig();
+    await writeLastLaunch({
+      profileId: config.profiles[0]!.id,
+      agentId: 'codex',
+      mode: 'child',
+      scope: 'project',
+    });
+
+    const { LaunchAgent } = await import('./LaunchAgent.js');
+    const { stdin, lastFrame } = render(
+      <LaunchAgent onBack={() => {}} agentStatusCache={await installedCache()} />,
+    );
+    await poll(lastFrame, (f) => f.includes('Profile: work'), 'profile step');
+    await settle();
+    stdin.write('\r');
+
+    await poll(lastFrame, (f) => f.includes('▶ Codex CLI'), 'last agent highlighted');
+  });
+
+  it('opens a read-only launch preview with v and returns with Escape', async () => {
+    const { LaunchAgent } = await import('./LaunchAgent.js');
+    const { stdin, lastFrame } = render(
+      <LaunchAgent onBack={() => {}} agentStatusCache={await installedCache()} />,
+    );
+    await poll(lastFrame, (f) => f.includes('Profile: work'), 'profile step');
+    await settle();
+    stdin.write('\r');
+    await settle();
+    await poll(lastFrame, (f) => f.includes('v preview'), 'agent step status check done');
+    await settle();
+
+    stdin.write('v');
+    const preview = await poll(
+      lastFrame,
+      (f) => f.includes('Launch Preview') && f.includes('Profile:  work'),
+      'preview screen',
+    );
+    expect(preview).toContain('Mode:     child');
+    expect(preview).toContain('Files:');
+    expect(preview).toContain('.claude');
+
+    await settle();
+    stdin.write('\u001B');
+    await poll(lastFrame, (f) => f.includes('Select Agent'), 'back to agent step');
+  }, 15_000);
 });

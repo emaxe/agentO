@@ -4,11 +4,11 @@ import TextInput from 'ink-text-input';
 import { sanitizeFieldValue } from '../sanitize-field-value.js';
 import { useKeyInput } from '../use-key-input.js';
 import { SelectList } from '../components/SelectList.js';
-import type { Provider, Profile, ProfileModel, ModelTier } from '../../config/schema.js';
+import type { Provider, Profile, ProfileModel } from '../../config/schema.js';
 import { capabilityMarker } from '../../config/schema.js';
 import { validateProfile } from '../../config/validation.js';
+import { defaultTierCursor, tierOptions, usedTiersOf } from '../tier-options.js';
 
-const TIERS: ModelTier[] = ['small', 'base', 'smart'];
 type WizardStep = 'name' | 'select-provider' | 'select-model' | 'select-tier' | 'review';
 
 interface ProfileWizardProps {
@@ -32,9 +32,12 @@ export function ProfileWizard({
   const [pendingProviderId, setPendingProviderId] = useState<string | null>(null);
   const [pendingModel, setPendingModel] = useState('');
   const [tierCursor, setTierCursor] = useState(1);
+  const [tierTargetIndex, setTierTargetIndex] = useState<number | null>(null);
   const [customModel, setCustomModel] = useState('');
   const [reviewCursor, setReviewCursor] = useState(0);
   const [status, setStatus] = useState('');
+  const canAddModel = formModels.length < 3;
+  const firstUntieredModel = formModels.findIndex((model) => !model.tier);
 
   const validateAndSubmit = useCallback(() => {
     try {
@@ -134,17 +137,30 @@ export function ProfileWizard({
         if (!chosen) return;
         setStatus('');
         setPendingModel(chosen);
-        const usedTiers = new Set(formModels.map((m) => m.tier).filter(Boolean));
-        const defaultIdx = TIERS.findIndex((t) => !usedTiers.has(t));
-        setTierCursor(defaultIdx === -1 ? 1 : defaultIdx);
+        const usedTiers = usedTiersOf(formModels);
+        setTierCursor(defaultTierCursor(tierOptions(usedTiers, formModels.length === 0)));
         setStep('select-tier');
       }
       return;
     }
 
     if (step === 'select-tier') {
-      const optionsCount = 4;
+      const targetModel = tierTargetIndex !== null ? formModels[tierTargetIndex] : undefined;
+      const otherModels =
+        tierTargetIndex !== null
+          ? formModels.filter((_, index) => index !== tierTargetIndex)
+          : formModels;
+      const options = tierOptions(
+        usedTiersOf(otherModels),
+        targetModel ? false : formModels.length === 0,
+      );
+      const optionsCount = options.length;
       if (key.escape) {
+        if (targetModel) {
+          setTierTargetIndex(null);
+          setStep('review');
+          return;
+        }
         setStep('select-model');
         return;
       }
@@ -157,13 +173,43 @@ export function ProfileWizard({
         return;
       }
       if (key.return) {
+        const option = options[tierCursor];
+        if (!option) {
+          setStep(targetModel ? 'review' : 'select-model');
+          return;
+        }
+        if (targetModel && tierTargetIndex !== null) {
+          if (!option.tier) {
+            setStatus('Choose a tier for this model.');
+            return;
+          }
+          setFormModels((arr) =>
+            arr.map((model, index) =>
+              index === tierTargetIndex ? { ...model, tier: option.tier } : model,
+            ),
+          );
+          setTierTargetIndex(null);
+          setStatus('');
+          // Continue with the "add another model" action that triggered this.
+          setPendingProviderId(targetModel.providerId);
+          setModelCursor(0);
+          setCustomModel('');
+          setStep('select-model');
+          return;
+        }
         const provider = providers.find((p) => p.id === pendingProviderId);
         if (!provider || !pendingModel) {
           setStep('select-provider');
           return;
         }
-        const tier = tierCursor < 3 ? TIERS[tierCursor] : undefined;
-        setFormModels((arr) => [...arr, { providerId: provider.id, model: pendingModel, tier }]);
+        setFormModels((arr) => [
+          ...arr,
+          {
+            providerId: provider.id,
+            model: pendingModel,
+            ...(option.tier ? { tier: option.tier } : {}),
+          },
+        ]);
         setPendingModel('');
         setStep('review');
       }
@@ -176,7 +222,7 @@ export function ProfileWizard({
         return;
       }
       if (key.upArrow) {
-        setReviewCursor(0);
+        setReviewCursor(canAddModel ? 0 : 1);
         return;
       }
       if (key.downArrow) {
@@ -184,7 +230,20 @@ export function ProfileWizard({
         return;
       }
       if (key.return) {
-        if (reviewCursor === 0) {
+        if (canAddModel && reviewCursor === 0) {
+          if (firstUntieredModel >= 0) {
+            // A no-tier model is only valid as a single-model profile. Ask for
+            // its tier before the profile becomes multi-model, otherwise every
+            // save would fail validation with no way to assign it later.
+            setTierTargetIndex(firstUntieredModel);
+            const used = usedTiersOf(formModels.filter((_, index) => index !== firstUntieredModel));
+            setTierCursor(defaultTierCursor(tierOptions(used, false)));
+            setStatus(
+              `Assign a tier to "${formModels[firstUntieredModel]!.model}" before adding another model.`,
+            );
+            setStep('select-tier');
+            return;
+          }
           if (formModels.length > 0) {
             // Skip provider selection if provider is already locked
             setPendingProviderId(formModels[0]!.providerId);
@@ -312,8 +371,15 @@ export function ProfileWizard({
   }
 
   if (step === 'select-tier') {
-    const provider = providers.find((p) => p.id === pendingProviderId);
-    const usedTiers = new Set(formModels.map((m) => m.tier).filter(Boolean));
+    const targetModel = tierTargetIndex !== null ? formModels[tierTargetIndex] : undefined;
+    const provider = providers.find((p) => p.id === (targetModel?.providerId ?? pendingProviderId));
+    const otherModels =
+      tierTargetIndex !== null
+        ? formModels.filter((_, index) => index !== tierTargetIndex)
+        : formModels;
+    const usedTiers = usedTiersOf(otherModels);
+    const options = tierOptions(usedTiers, targetModel ? false : formModels.length === 0);
+    const needsBase = !usedTiers.has('base') && otherModels.length > 0;
     return (
       <Box flexDirection="column" padding={1}>
         <Text bold>Add Profile</Text>
@@ -321,25 +387,29 @@ export function ProfileWizard({
           <Text dimColor>↑↓: navigate | Enter: confirm | Esc: back</Text>
           <Box marginTop={1}>
             <Text>
-              Model: <Text color="cyan">{pendingModel}</Text> ({provider?.name ?? '?'})
+              Model: <Text color="cyan">{targetModel?.model ?? pendingModel}</Text> (
+              {provider?.name ?? '?'})
             </Text>
           </Box>
+          {targetModel && (
+            <Text color="yellow">
+              Already in this profile — assign a tier before adding another model.
+            </Text>
+          )}
           <Box flexDirection="column" marginTop={1}>
             <Text>Assign tier:</Text>
-            {TIERS.map((t, i) => (
-              <Text
-                key={t}
-                color={i === tierCursor ? 'green' : usedTiers.has(t) ? 'yellow' : undefined}
-              >
+            {options.map((option, i) => (
+              <Text key={option.label} color={i === tierCursor ? 'green' : undefined}>
                 {i === tierCursor ? '▶ ' : '  '}
-                {t}
-                {usedTiers.has(t) ? ' (already used — will be replaced visually)' : ''}
+                {option.label}
               </Text>
             ))}
-            <Text color={tierCursor === 3 ? 'green' : undefined} dimColor={tierCursor !== 3}>
-              {tierCursor === 3 ? '▶ ' : '  '}skip (no tier — only valid for single-model profiles)
-            </Text>
           </Box>
+          {needsBase && (
+            <Box marginTop={1}>
+              <Text color="yellow">A multi-model profile must include one base tier.</Text>
+            </Box>
+          )}
           <Box marginTop={1}>
             <Text dimColor>
               Tip: small=ANTHROPIC_SMALL_FAST/HAIKU, base=ANTHROPIC_MODEL/SONNET, smart=OPUS.
@@ -372,14 +442,22 @@ export function ProfileWizard({
               </Text>
             );
           })}
+          {firstUntieredModel >= 0 && formModels.length === 1 && (
+            <Text dimColor>
+              Single-model profile (no tier). Adding another model will ask for a tier.
+            </Text>
+          )}
         </Box>
         <Box flexDirection="column" marginTop={1}>
-          <Text color={reviewCursor === 0 ? 'green' : undefined}>
-            {reviewCursor === 0 ? '▶ ' : '  '}[+ Add another model]
+          {canAddModel && (
+            <Text color={reviewCursor === 0 ? 'green' : undefined}>
+              {reviewCursor === 0 ? '▶ ' : '  '}[+ Add another model]
+            </Text>
+          )}
+          <Text color={!canAddModel || reviewCursor === 1 ? 'green' : undefined}>
+            {!canAddModel || reviewCursor === 1 ? '▶ ' : '  '}[✓ Save profile]
           </Text>
-          <Text color={reviewCursor === 1 ? 'green' : undefined}>
-            {reviewCursor === 1 ? '▶ ' : '  '}[✓ Save profile]
-          </Text>
+          {!canAddModel && <Text dimColor>Maximum 3 models (one per tier).</Text>}
         </Box>
       </Box>
       {status && <Text color="yellow">{status}</Text>}

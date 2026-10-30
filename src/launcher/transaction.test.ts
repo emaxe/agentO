@@ -36,6 +36,11 @@ vi.mock('../proxy/responses-proxy.js', () => ({
   startResponsesProxy: vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:19999', stop: vi.fn() }),
 }));
 
+vi.mock('../config/git-exclude.js', () => ({
+  addToGitExclude: vi.fn().mockResolvedValue({ added: [] }),
+}));
+
+import { addToGitExclude } from '../config/git-exclude.js';
 import { deleteBackup, readBackup, writeBackup } from '../config/store.js';
 import { startOpenAIProxy } from '../proxy/openai-proxy.js';
 import { startAnthropicScrubberProxy } from '../proxy/anthropic-scrubber.js';
@@ -45,6 +50,7 @@ import { buildLaunchEnv, prepareLaunchTransaction } from './transaction.js';
 const mockWriteBackup = vi.mocked(writeBackup);
 const mockReadBackup = vi.mocked(readBackup);
 const mockDeleteBackup = vi.mocked(deleteBackup);
+const mockAddToGitExclude = vi.mocked(addToGitExclude);
 const mockUnlink = vi.mocked(unlink);
 const mockStartOpenAIProxy = vi.mocked(startOpenAIProxy);
 const mockStartAnthropicScrubberProxy = vi.mocked(startAnthropicScrubberProxy);
@@ -164,6 +170,33 @@ describe('prepareLaunchTransaction', () => {
 
     expect(adapter.buildConfig).not.toHaveBeenCalled();
     expect(adapter.writeConfig).not.toHaveBeenCalled();
+  });
+
+  it('never backs up, writes or git-excludes config for env-only adapters', async () => {
+    const adapter = makeAdapter({ model: 'user-owned' });
+    adapter.envOnly = true;
+
+    const { execReq, cleanup, warnings } = await prepareLaunchTransaction({
+      adapter,
+      profile: testProfile,
+      providers: [testProvider],
+      scope: 'project',
+      command: 'copilot',
+      cwd: '/project',
+    });
+
+    expect(mockWriteBackup).not.toHaveBeenCalled();
+    expect(adapter.buildConfig).not.toHaveBeenCalled();
+    expect(adapter.writeConfig).not.toHaveBeenCalled();
+    expect(mockAddToGitExclude).not.toHaveBeenCalled();
+    expect(warnings).toEqual([]);
+    // The environment still carries the adapter's variables — that is the config.
+    expect(execReq.env.ADAPTER_KEY).toBe('adapter-value');
+
+    await cleanup();
+    expect(mockReadBackup).not.toHaveBeenCalled();
+    expect(mockDeleteBackup).not.toHaveBeenCalled();
+    expect(mockUnlink).not.toHaveBeenCalled();
   });
 
   it('returns an ExecRequest with resolved PATH, adapter env, command, args, agentId, and profileId', async () => {

@@ -40,4 +40,34 @@ describe('MainMenu', () => {
     await settle();
     expect(onSelect).toHaveBeenCalledWith('agents');
   });
+
+  it('shows the first-run path when there are no profiles', () => {
+    const { lastFrame } = render(
+      <MainMenu onSelect={() => {}} onExit={() => {}} state={{ providers: 0, profiles: 0 }} />,
+    );
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('Providers: 0 · Profiles: 0');
+    expect(frame).toContain('No profiles yet');
+    expect(frame).toContain('Start with Providers (2)');
+  });
+
+  it('shows the last launch when one is recorded', () => {
+    const { lastFrame } = render(
+      <MainMenu
+        onSelect={() => {}}
+        onExit={() => {}}
+        state={{
+          providers: 1,
+          profiles: 1,
+          lastLaunch: {
+            profileName: 'work',
+            agentLabel: 'Claude Code',
+            mode: 'child',
+            scope: 'global',
+          },
+        }}
+      />,
+    );
+    expect(lastFrame()).toContain('Last: work → Claude Code (child, global)');
+  });
 });

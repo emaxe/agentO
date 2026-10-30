@@ -66,6 +66,7 @@ vi.mock('../../config/store.js', () => ({
   backupExists: mocks.backupExists,
   readBackup: mocks.readBackup,
   deleteBackup: mocks.deleteBackup,
+  getBackupPath: vi.fn((agentId: string, scope: string) => `/backups/${agentId}/${scope}.bak.json`),
 }));
 
 vi.mock('node:fs/promises', () => ({
@@ -138,7 +139,7 @@ describe('restore command', () => {
     );
     expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'global', '/test/cwd');
     expect(logSpy).toHaveBeenCalledWith('Restored qwen config (global)');
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(process.exitCode).toBe(0);
   });
 
   it('restores a dev agent without a restore-specific dev flag', async () => {
@@ -150,7 +151,45 @@ describe('restore command', () => {
       '/test/cwd',
     );
     expect(mocks.deleteBackup).toHaveBeenCalledWith('codex', 'project', '/test/cwd');
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it('lists active backups for the current directory', async () => {
+    mocks.backupExists.mockImplementation(
+      (agentId: string, scope: string) => agentId === 'qwen' && scope === 'global',
+    );
+
+    await runRestore(['--list']);
+
+    expect(process.exitCode).toBe(0);
+    expect(logSpy.mock.calls.map((call) => String(call[0])).join('\n')).toContain(
+      'Qwen CLI (qwen) [global]',
+    );
+  });
+
+  it('infers the only active scope when -s is omitted', async () => {
+    mocks.backupExists.mockImplementation(
+      (agentId: string, scope: string) => agentId === 'qwen' && scope === 'global',
+    );
+
+    await runRestore(['-a', 'qwen']);
+
+    expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'global', '/test/cwd');
+    expect(process.exitCode).toBe(0);
+  });
+
+  it('infers the only active agent when -a and -s are omitted', async () => {
+    mocks.backupExists.mockImplementation(
+      (agentId: string, scope: string) => agentId === 'qwen' && scope === 'global',
+    );
+
+    await runRestore([]);
+
+    expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'global', '/test/cwd');
+    expect(errorSpy.mock.calls.map((call) => String(call[0])).join(' ')).toContain(
+      'only active backup',
+    );
+    expect(process.exitCode).toBe(0);
   });
 
   it('prints the registry ordered agent list for an unknown agent', async () => {
@@ -227,7 +266,7 @@ describe('restore command', () => {
     expect(mocks.unlink).toHaveBeenCalledWith('/project/.qwen/settings.json');
     expect(adapter('qwen').writeConfig).not.toHaveBeenCalled();
     expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'project', '/test/cwd');
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(process.exitCode).toBe(0);
   });
 
   it('restores legacy-normalized backup through writeConfig and deletes backup', async () => {
@@ -255,6 +294,6 @@ describe('restore command', () => {
       '/test/cwd',
     );
     expect(mocks.deleteBackup).toHaveBeenCalledWith('qwen', 'global', '/test/cwd');
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(process.exitCode).toBe(0);
   });
 });

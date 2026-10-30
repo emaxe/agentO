@@ -2,11 +2,12 @@
  * CLI command: `agento agent`
  *
  * Subcommand: status — shows whether each agent config is original or modified
- * (i.e. a backup exists).
+ * (i.e. a backup exists), plus the detected installed version.
  */
 import { Command } from 'commander';
 import { backupExists } from '../../config/store.js';
-import { listAdapters } from '../../agents/registry.js';
+import { getAgentInstaller, listAgents } from '../../agents/registry.js';
+import type { LaunchScope } from '../../config/schema.js';
 
 function resolveDevOption(command: Command, optionValue?: boolean): boolean {
   if (optionValue) return true;
@@ -20,30 +21,93 @@ function resolveDevOption(command: Command, optionValue?: boolean): boolean {
   return false;
 }
 
+interface ScopeStatus {
+  configPath: string;
+  backup: boolean;
+}
+
+interface AgentStatusEntry {
+  id: string;
+  label: string;
+  command: string;
+  installed: boolean;
+  version?: string;
+  scopes: Record<LaunchScope, ScopeStatus>;
+}
+
+async function collectStatus(dev: boolean): Promise<AgentStatusEntry[]> {
+  const cwd = process.cwd();
+  return Promise.all(
+    listAgents({ dev }).map(async (agent) => {
+      const installer = getAgentInstaller(agent.id, { dev: true });
+      let installed = false;
+      let version: string | undefined;
+      if (installer) {
+        try {
+          const result = await installer.checkInstalled();
+          installed = result.installed;
+          version = result.version;
+        } catch {
+          installed = false;
+        }
+      }
+
+      const paths = agent.adapter.configPaths(cwd);
+      const scopes = {
+        global: {
+          configPath: paths.global,
+          backup: backupExists(agent.id, 'global', cwd),
+        },
+        project: {
+          configPath: paths.project,
+          backup: backupExists(agent.id, 'project', cwd),
+        },
+      } satisfies Record<LaunchScope, ScopeStatus>;
+
+      return {
+        id: agent.id,
+        label: agent.label,
+        command: agent.command,
+        installed,
+        ...(version ? { version } : {}),
+        scopes,
+      };
+    }),
+  );
+}
+
 /** Builds the `agent` CLI command. */
 export function createAgentCommand(): Command {
   const cmd = new Command('agent').description('Agent config status');
 
   cmd
     .command('status')
-    .description('Show status of agent configs')
-    .option('-d, --dev', 'Show development agents (e.g. codex)')
-    .action(async (opts: { dev?: boolean }, command: Command) => {
+    .description('Show status of agent configs and installed agents')
+    .option('-d, --dev', 'Deprecated: accepted for compatibility; all agents are shown')
+    .option('--json', 'Output JSON')
+    .action(async (opts: { dev?: boolean; json?: boolean }, command: Command) => {
       const dev = resolveDevOption(command, opts.dev);
       try {
-        const adapters = listAdapters({ dev });
-        for (const adapter of adapters) {
-          const scopes: Array<'global' | 'project'> = ['global', 'project'];
-          for (const scope of scopes) {
-            const paths = adapter.configPaths(process.cwd());
-            const configPath = paths[scope];
-            const hasBackup = backupExists(adapter.id, scope, process.cwd());
-            const status = hasBackup ? 'modified (backup exists)' : 'original';
-            console.log(`  ${adapter.displayName} [${scope}]: ${status}`);
-            console.log(`    config: ${configPath}`);
+        const entries = await collectStatus(dev);
+        if (opts.json) {
+          console.log(JSON.stringify({ agents: entries }, null, 2));
+        } else {
+          for (const entry of entries) {
+            const version = entry.installed
+              ? entry.version
+                ? ` v${entry.version}`
+                : ' (installed)'
+              : ' (not installed)';
+            console.log(`  ${entry.label} (${entry.id})${version}`);
+            for (const scope of ['global', 'project'] as const) {
+              const status = entry.scopes[scope];
+              const state = status.backup ? 'modified (backup exists)' : 'original';
+              console.log(`    ${scope}: ${state} — ${status.configPath}`);
+            }
           }
         }
-        process.exit(0);
+        process.exitCode = 0;
+        return;
       } catch (err) {
         console.error('Error:', err instanceof Error ? err.message : String(err));
         process.exit(1);
