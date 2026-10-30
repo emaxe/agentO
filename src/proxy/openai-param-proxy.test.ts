@@ -8,6 +8,13 @@ import {
   type ProxyServer,
 } from './openai-param-proxy.js';
 
+type JsonBody = {
+  object?: string;
+  error?: { message?: string };
+  choices?: Array<{ message: { content?: unknown; tool_calls?: unknown[] } }>;
+  usage?: { prompt_tokens?: number };
+};
+
 const MAX_TOKENS_UNSUPPORTED_MESSAGE =
   "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.";
 
@@ -569,15 +576,18 @@ describe('chat completions to responses bridge', () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as JsonBody;
     expect(body.object).toBe('chat.completion');
-    expect(body.choices[0].message.content).toBe('hi');
-    expect(body.usage.prompt_tokens).toBe(3);
+    expect(body.choices?.[0].message.content).toBe('hi');
+    expect(body.usage?.prompt_tokens).toBe(3);
 
     expect(bridgeBodies).toHaveLength(1);
     const bridgeBody = bridgeBodies[0];
     expect(bridgeBody.instructions).toBeUndefined();
-    expect((bridgeBody.tools as any)[0]).toMatchObject({ type: 'function', name: 'ping' });
+    expect((bridgeBody.tools as Array<Record<string, unknown>>)[0]).toMatchObject({
+      type: 'function',
+      name: 'ping',
+    });
     expect(bridgeBody.reasoning).toBeUndefined();
     expect(bridgeBody.temperature).toBeUndefined();
   });
@@ -632,7 +642,7 @@ describe('chat completions to responses bridge', () => {
     });
 
     expect(res.status).toBe(400);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as JsonBody;
     expect(body.error.message).toBe(NONE_ERROR.error.message);
     expect(calls).toBe(1);
   });
@@ -663,7 +673,7 @@ describe('chat completions to responses bridge', () => {
     });
 
     expect(res.status).toBe(400);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as JsonBody;
     expect(body.error.message).toBe(NONE_ERROR.error.message);
     expect(urls.filter((url) => url === '/v1/chat/completions')).toHaveLength(2);
     expect(urls.filter((url) => url === '/v1/responses')).toHaveLength(1);
@@ -751,7 +761,7 @@ describe('chat completions to responses bridge', () => {
     });
 
     expect(res.status).toBe(502);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as JsonBody;
     expect(body.error.message).toBe('model exploded');
   });
 
@@ -776,7 +786,7 @@ describe('chat completions to responses bridge', () => {
     });
 
     expect(res.status).toBe(500);
-    const body = (await res.json()) as any;
+    const body = (await res.json()) as JsonBody;
     expect(body.error.message).toBe('bridge down');
   });
 

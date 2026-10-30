@@ -15,7 +15,7 @@ export interface ChatResponsesOptions {
 }
 
 /** Chat Completions request shape with unknown extra fields allowed (they are dropped). */
-type ChatRequest = OpenAIRequest & { [key: string]: unknown };
+export type ChatRequest = OpenAIRequest & { [key: string]: unknown };
 
 /** Join the text of a message content value, whether it is a string or parts. */
 function collectText(content: unknown): string {

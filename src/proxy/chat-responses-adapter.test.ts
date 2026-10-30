@@ -8,6 +8,20 @@ import {
   chatCompletionToStreamChunks,
 } from './chat-responses-adapter.js';
 
+type ChatChoice = {
+  message: {
+    role: string;
+    content: unknown;
+    tool_calls?: Array<Record<string, unknown>>;
+  };
+  finish_reason: string;
+};
+
+/** First choice of a converted completion, typed for assertions. */
+function firstChoice(out: Record<string, unknown>): ChatChoice {
+  return (out.choices as ChatChoice[])[0];
+}
+
 const TOOL = {
   type: 'function',
   function: { name: 'ping', description: 'ping', parameters: { type: 'object', properties: {} } },
@@ -162,8 +176,8 @@ describe('convertResponsesToChatResponse', () => {
     );
     expect(out.object).toBe('chat.completion');
     expect(out.model).toBe('gpt-6.1-sol');
-    expect((out.choices as any)[0].message).toEqual({ role: 'assistant', content: 'hello' });
-    expect((out.choices as any)[0].finish_reason).toBe('stop');
+    expect(firstChoice(out).message).toEqual({ role: 'assistant', content: 'hello' });
+    expect(firstChoice(out).finish_reason).toBe('stop');
     expect(out.usage).toEqual({ prompt_tokens: 11, completion_tokens: 3, total_tokens: 14 });
   });
 
@@ -186,7 +200,7 @@ describe('convertResponsesToChatResponse', () => {
       },
       'gpt-6.1-sol',
     );
-    const choice = (out.choices as any)[0];
+    const choice = firstChoice(out);
     expect(choice.message.content).toBeNull();
     expect(choice.message.tool_calls).toEqual([
       { id: 'call_1', type: 'function', function: { name: 'ping', arguments: '{"x":1}' } },
@@ -205,7 +219,7 @@ describe('convertResponsesToChatResponse', () => {
       },
       'gpt-6.1-sol',
     );
-    expect((out.choices as any)[0].finish_reason).toBe('length');
+    expect(firstChoice(out).finish_reason).toBe('length');
   });
 
   it('collects an SSE stream into one completion', () => {
@@ -228,8 +242,8 @@ describe('convertResponsesToChatResponse', () => {
       ],
       'gpt-6.1-sol',
     );
-    const choice = (out.choices as any)[0];
-    expect(choice.message.tool_calls[0]).toEqual({
+    const choice = firstChoice(out);
+    expect(choice.message.tool_calls?.[0]).toEqual({
       id: 'call_1',
       type: 'function',
       function: { name: 'ping', arguments: '{"x":1}' },

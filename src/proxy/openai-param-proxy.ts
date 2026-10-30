@@ -9,7 +9,6 @@ import {
   requiresMaxCompletionTokens,
   withMaxCompletionTokens,
   withReasoningDisabledForTools,
-  type OpenAIRequest,
 } from './openai-adapter.js';
 import {
   chatCompletionToStreamChunks,
