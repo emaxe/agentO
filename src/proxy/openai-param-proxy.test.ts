@@ -790,6 +790,116 @@ describe('chat completions to responses bridge', () => {
     expect(body.error.message).toBe('bridge down');
   });
 
+  it('surfaces a failed event in a buffered bridge stream as an error', async () => {
+    const failedSse = [
+      'event: response.created',
+      'data: {"type":"response.created"}',
+      '',
+      'event: response.failed',
+      'data: {"type":"response.failed","response":{"error":{"message":"boom"}}}',
+      '',
+    ].join('\n');
+    bridgeUpstream.on('request', async (req, res) => {
+      if (req.url === '/v1/responses') {
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.end(failedSse);
+        return;
+      }
+      sendJson(res, 400, NONE_ERROR);
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl: bridgeUpstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [TOOL],
+      }),
+    });
+
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as JsonBody;
+    expect(body.error?.message).toBe('boom');
+  });
+
+  it('writes a parseable error frame when the bridge stream dies', async () => {
+    bridgeUpstream.on('request', (req, res) => {
+      if (req.url === '/v1/responses') {
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.write('data: {"type":"response.created"}\n\n');
+        setTimeout(() => res.destroy(), 10);
+        return;
+      }
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(NONE_ERROR));
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl: bridgeUpstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [TOOL],
+        stream: true,
+      }),
+    });
+    const text = await res.text();
+
+    const frames = text.split('\n\n').filter((block) => block.startsWith('data: '));
+    const errorFrame = frames.find((block) => block.includes('"error"'));
+    expect(errorFrame).toBeDefined();
+    expect(JSON.parse((errorFrame as string).slice(6))).toMatchObject({
+      error: { message: 'responses bridge stream failed', type: 'api_error' },
+    });
+    expect(text.endsWith('data: [DONE]\n\n')).toBe(true);
+  });
+
+  it('tears down a buffered bridge stream when the client aborts', async () => {
+    const bridgeClosed = new Promise<boolean>((resolve) => {
+      bridgeUpstream.on('request', (req, res) => {
+        if (req.url === '/v1/responses') {
+          res.writeHead(200, { 'content-type': 'text/event-stream' });
+          res.write('data: {"type":"response.created"}\n\n');
+          res.on('close', () => resolve(!res.writableEnded));
+          return;
+        }
+        res.writeHead(400, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(NONE_ERROR));
+      });
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl: bridgeUpstreamUrl });
+    const clientReq = http.request(`${proxy.url}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+    });
+    clientReq.end(
+      JSON.stringify({
+        model: 'gpt-6.1-sol',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [TOOL],
+      }),
+    );
+    // A non-streaming client gets no headers while the bridge stream is still
+    // open, so abort the socket directly instead of waiting for a response.
+    clientReq.on('error', () => {
+      // Expected side effect of the intentional destroy.
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    clientReq.destroy();
+
+    const sawPrematureClose = await withTimeout(
+      bridgeClosed,
+      2000,
+      'buffered bridge upstream response was not closed after client abort',
+    );
+    expect(sawPrematureClose).toBe(true);
+  });
+
   it('tears down the bridge stream when the client aborts', async () => {
     const bridgeClosed = new Promise<boolean>((resolve) => {
       bridgeUpstream.on('request', (req, res) => {

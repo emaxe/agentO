@@ -17,6 +17,7 @@ import {
   convertResponsesToChatResponse,
   createChatStreamState,
   type ChatRequest,
+  responsesSseError,
   responsesSseToChatResponse,
 } from './chat-responses-adapter.js';
 import { getOutboundAgent, stopServer } from './proxy-utils.js';
@@ -268,7 +269,19 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
           res.end(out);
         };
         const replyFailed = (message: string): void => {
-          replyJson(502, { error: { message, type: 'api_error' } });
+          if (res.writableEnded) return;
+          const payload = { error: { message, type: 'api_error' } };
+          if (res.headersSent) {
+            // Streaming already started: an SSE client can only read `data:`
+            // frames, so keep the failure parseable and close the stream.
+            if (wantsStream) {
+              res.write(`data: ${JSON.stringify(payload)}\n\n`);
+              res.write('data: [DONE]\n\n');
+            }
+            res.end();
+            return;
+          }
+          replyJson(502, payload);
         };
 
         const bridgeReq = upstreamModule.request(
@@ -332,15 +345,18 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
                 delete streamHeaders['content-length'];
                 delete streamHeaders['transfer-encoding'];
                 res.writeHead(200, { ...streamHeaders, 'content-type': 'text/event-stream' });
-                res.on('close', () => {
-                  if (!res.writableEnded && !bridgeRes.destroyed) bridgeRes.destroy();
-                });
               }
+              // A client abort must stop the paid upstream call, whether the
+              // bridge answer is relayed live or collected first.
+              res.on('close', () => {
+                if (!res.writableEnded && !bridgeRes.destroyed) bridgeRes.destroy();
+              });
               const emit = (event: Record<string, unknown>): void => {
                 if (!wantsStream) {
                   events.push(event);
                   return;
                 }
+                if (res.writableEnded || res.destroyed) return;
                 for (const chunk of convertResponsesEventToChatChunks(event, chunkState)) {
                   res.write(`data: ${JSON.stringify(chunk)}\n\n`);
                 }
@@ -358,8 +374,15 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
                   for (const event of parseSseBlock(buffer)) emit(event);
                 }
                 if (wantsStream) {
-                  res.write('data: [DONE]\n\n');
+                  if (!res.writableEnded && !res.destroyed) {
+                    res.write('data: [DONE]\n\n');
+                  }
                   res.end();
+                  return;
+                }
+                const failure = responsesSseError(events);
+                if (failure !== undefined) {
+                  replyFailed(failure);
                   return;
                 }
                 replyJson(200, responsesSseToChatResponse(events, model));

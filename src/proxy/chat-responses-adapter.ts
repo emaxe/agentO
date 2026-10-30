@@ -280,6 +280,21 @@ export function responsesSseToChatResponse(
     }
   }
 
+  // A terminal-only stream carries the answer in `response.completed`; use it
+  // when no deltas arrived so the completion is never silently empty.
+  if (!text) text = collectOutputText(completed?.output);
+  if (calls.size === 0 && Array.isArray(completed?.output)) {
+    completed.output.forEach((item, position) => {
+      if (!isRecord(item) || item.type !== 'function_call') return;
+      calls.set(position, {
+        id: String(item.id ?? ''),
+        callId: String(item.call_id ?? item.id ?? ''),
+        name: String(item.name ?? ''),
+        arguments: typeof item.arguments === 'string' ? item.arguments : '{}',
+      });
+    });
+  }
+
   const output: Array<Record<string, unknown>> = [];
   if (text)
     output.push({ type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] });
@@ -313,6 +328,8 @@ export interface ChatStreamState {
   model: string;
   /** Whether the opening `{delta:{role:'assistant'}}` chunk has been sent. */
   roleSent: boolean;
+  /** Whether any non-empty text delta has been streamed. */
+  textSent: boolean;
   /** Maps a Responses `output_index` of a function call to its Chat `tool_calls` index. */
   toolCallIndexByOutputIndex: Map<number, number>;
   nextToolCallIndex: number;
@@ -326,6 +343,7 @@ export function createChatStreamState(id: string, model: string, created: number
     created,
     model,
     roleSent: false,
+    textSent: false,
     toolCallIndexByOutputIndex: new Map(),
     nextToolCallIndex: 0,
     finishReason: null,
@@ -347,13 +365,50 @@ function streamChunk(
   };
 }
 
-/** Build the streamed error frame for a failed Responses event. */
-function errorFrame(event: Record<string, unknown>): Record<string, unknown> {
+/** Whether an event reports a failed response. */
+function isFailureEvent(event: Record<string, unknown>): boolean {
+  const type = String(event.type ?? '');
+  return type === 'response.failed' || type === 'response.error' || isRecord(event.error);
+}
+
+/** Human-readable message of a failed Responses event. */
+function failureMessage(event: Record<string, unknown>): string {
   const response = isRecord(event.response) ? event.response : {};
   const fromResponse = isRecord(response.error) ? response.error : undefined;
   const fromEvent = isRecord(event.error) ? event.error : undefined;
-  const message = fromResponse?.message ?? fromEvent?.message ?? 'responses bridge: request failed';
-  return { error: { message: String(message), type: 'api_error' } };
+  return String(fromResponse?.message ?? fromEvent?.message ?? 'responses bridge: request failed');
+}
+
+/** Build the streamed error frame for a failed Responses event. */
+function errorFrame(event: Record<string, unknown>): Record<string, unknown> {
+  return { error: { message: failureMessage(event), type: 'api_error' } };
+}
+
+/**
+ * Message of the first failure in a collected Responses SSE stream, or
+ * `undefined` when every event was non-fatal. Pure function.
+ */
+export function responsesSseError(events: Array<Record<string, unknown>>): string | undefined {
+  for (const event of events) {
+    if (isRecord(event) && isFailureEvent(event)) return failureMessage(event);
+  }
+  return undefined;
+}
+
+/** Text of the `output_text` parts of a Responses `output` array. */
+function collectOutputText(output: unknown): string {
+  if (!Array.isArray(output)) return '';
+  let text = '';
+  for (const item of output) {
+    if (!isRecord(item) || item.type !== 'message') continue;
+    const parts = Array.isArray(item.content) ? item.content : [];
+    for (const part of parts) {
+      if (isRecord(part) && part.type === 'output_text' && typeof part.text === 'string') {
+        text += part.text;
+      }
+    }
+  }
+  return text;
 }
 
 /**
@@ -367,7 +422,7 @@ export function convertResponsesEventToChatChunks(
 ): Array<Record<string, unknown>> {
   const type = String(event.type ?? '');
 
-  if (type === 'response.failed' || type === 'response.error' || isRecord(event.error)) {
+  if (isFailureEvent(event)) {
     return [errorFrame(event)];
   }
 
@@ -378,7 +433,9 @@ export function convertResponsesEventToChatChunks(
   }
 
   if (type === 'response.output_text.delta') {
-    chunks.push(streamChunk(state, { content: String(event.delta ?? '') }));
+    const content = String(event.delta ?? '');
+    if (content) state.textSent = true;
+    chunks.push(streamChunk(state, { content }));
     return chunks;
   }
 
@@ -426,6 +483,39 @@ export function convertResponsesEventToChatChunks(
   if (type === 'response.completed' || type === 'response.incomplete') {
     const response = isRecord(event.response) ? event.response : {};
     const output = Array.isArray(response.output) ? response.output : [];
+
+    // Gateways that ignore streamed deltas answer only in the terminal event.
+    // Emit whatever the deltas did not already cover, so a terminal-only answer
+    // is not lost and never duplicated.
+    if (!state.textSent) {
+      const terminalText = collectOutputText(output);
+      if (terminalText) {
+        chunks.push(streamChunk(state, { content: terminalText }));
+        state.textSent = true;
+      }
+    }
+    output.forEach((item, position) => {
+      if (!isRecord(item) || item.type !== 'function_call') return;
+      if (state.toolCallIndexByOutputIndex.has(position)) return;
+      const index = state.nextToolCallIndex++;
+      state.toolCallIndexByOutputIndex.set(position, index);
+      chunks.push(
+        streamChunk(state, {
+          tool_calls: [
+            {
+              index,
+              id: String(item.call_id ?? item.id ?? ''),
+              type: 'function',
+              function: {
+                name: String(item.name ?? ''),
+                arguments: typeof item.arguments === 'string' ? item.arguments : '{}',
+              },
+            },
+          ],
+        }),
+      );
+    });
+
     const hasToolCalls = output.some((item) => isRecord(item) && item.type === 'function_call');
     const incomplete = isRecord(response.incomplete_details) ? response.incomplete_details : {};
     const reason = typeof incomplete.reason === 'string' ? incomplete.reason : undefined;

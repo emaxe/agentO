@@ -6,6 +6,7 @@ import {
   createChatStreamState,
   convertResponsesEventToChatChunks,
   chatCompletionToStreamChunks,
+  responsesSseError,
 } from './chat-responses-adapter.js';
 
 type ChatChoice = {
@@ -366,5 +367,99 @@ describe('chatCompletionToStreamChunks', () => {
       choices: [{ finish_reason: 'tool_calls' }],
       usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
     });
+  });
+});
+
+describe('bridge failure and terminal-only answers', () => {
+  it('reports a failed event from a collected stream', () => {
+    expect(
+      responsesSseError([
+        { type: 'response.created' },
+        { type: 'response.failed', response: { error: { message: 'boom' } } },
+      ]),
+    ).toBe('boom');
+    expect(responsesSseError([{ type: 'response.created' }])).toBeUndefined();
+  });
+
+  it('keeps text and tool calls that only appear in the terminal event', () => {
+    const events = [
+      { type: 'response.output_item.added', output_index: 0, item: { type: 'message' } },
+      {
+        type: 'response.completed',
+        response: {
+          id: 'resp_1',
+          model: 'gpt-6.1-sol',
+          output: [
+            { type: 'message', content: [{ type: 'output_text', text: 'final-only' }] },
+            { type: 'function_call', call_id: 'call_9', name: 'ping', arguments: '{"x":2}' },
+          ],
+          usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+        },
+      },
+    ];
+    const out = responsesSseToChatResponse(events, 'gpt-6.1-sol');
+    const choice = firstChoice(out);
+    expect(choice.message.content).toBe('final-only');
+    expect(choice.message.tool_calls?.[0]).toEqual({
+      id: 'call_9',
+      type: 'function',
+      function: { name: 'ping', arguments: '{"x":2}' },
+    });
+    expect(choice.finish_reason).toBe('tool_calls');
+  });
+
+  it('streams a terminal-only answer once and does not duplicate delta tool calls', () => {
+    const state = createChatStreamState('chatcmpl-1', 'gpt-6.1-sol', 1700000000);
+    const terminalOnly = convertResponsesEventToChatChunks(
+      {
+        type: 'response.completed',
+        response: {
+          output: [
+            { type: 'message', content: [{ type: 'output_text', text: 'final-only' }] },
+            { type: 'function_call', call_id: 'call_9', name: 'ping', arguments: '{"x":2}' },
+          ],
+        },
+      },
+      state,
+    );
+    expect(terminalOnly[1]).toMatchObject({ choices: [{ delta: { content: 'final-only' } }] });
+    expect(terminalOnly[2]).toMatchObject({
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              { index: 0, id: 'call_9', type: 'function', function: { name: 'ping', arguments: '{"x":2}' } },
+            ],
+          },
+        },
+      ],
+    });
+    expect(terminalOnly.filter((chunk) => JSON.stringify(chunk).includes('call_9'))).toHaveLength(1);
+
+    const deltaState = createChatStreamState('chatcmpl-2', 'gpt-6.1-sol', 1700000000);
+    const withDeltas = [
+      {
+        type: 'response.output_item.added',
+        output_index: 0,
+        item: { type: 'function_call', id: 'fc_1', call_id: 'call_1', name: 'ping' },
+      },
+      { type: 'response.function_call_arguments.delta', output_index: 0, delta: '{"x":1}' },
+      {
+        type: 'response.completed',
+        response: {
+          output: [{ type: 'function_call', call_id: 'call_1', name: 'ping', arguments: '{"x":1}' }],
+        },
+      },
+    ].flatMap((event) => convertResponsesEventToChatChunks(event, deltaState));
+    expect(withDeltas.filter((chunk) => JSON.stringify(chunk).includes('"call_1"'))).toHaveLength(1);
+  });
+
+  it('leaves content null for a reasoning-only answer', () => {
+    const out = convertResponsesToChatResponse(
+      { id: 'resp_1', model: 'gpt-6.1-sol', status: 'completed', output: [] },
+      'gpt-6.1-sol',
+    );
+    expect(firstChoice(out).message.content).toBeNull();
+    expect(firstChoice(out).finish_reason).toBe('stop');
   });
 });
