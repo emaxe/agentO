@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- OpenAI gpt-6 and newer models reject function tools while reasoning is on (`/v1/chat/completions`). Both OpenAI proxies (Claude Code and Qwen) now send `reasoning_effort: "none"` whenever a gpt-6+ request carries `tools`, and retry once on the corresponding 400 for unrecognized families. gpt-5.x keeps reasoning with tools.
 - Claude Code through an `openai-compatible` provider now sends `max_completion_tokens` for every model family that requires it (o-series, gpt-5 and newer, including gpt-6), and the OpenAI proxy retries once with the swapped parameter when an unknown model rejects `max_tokens`.
 
 ## [0.11.0] - 2026-10-30

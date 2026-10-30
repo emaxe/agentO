@@ -228,7 +228,7 @@ AgentO — CLI-инструмент для управления конфигур
 Для не-`anthropic-compatible` провайдеров Claude Code AgentO поднимает локальный HTTP-proxy на случайном порту `127.0.0.1`:
 
 - `fireworks` / `openrouter` — `anthropic-scrubber.ts` (удаляет поля вроде `context_management`);
-- `openai-compatible` — `openai-proxy.ts` (OpenAI Chat Completions → Anthropic Messages, включая SSE);
+- `openai-compatible` — `openai-proxy.ts` (OpenAI Chat Completions → Anthropic Messages, включая SSE); для gpt-6+ с function tools выставляет `reasoning_effort: "none"`, потому что Chat Completions не поддерживает tools вместе с reasoning, и повторяет запрос по соответствующей 400-й;
 - `responses-compatible` — `responses-proxy.ts` (Anthropic Messages → OpenAI Responses API, включая SSE).
 
 Тот же механизм локальных proxy используется и для Qwen CLI: модели, требующие `max_completion_tokens`, на время запуска идут через прозрачный OpenAI-to-OpenAI pass-through `openai-param-proxy.ts` — см. подраздел «Qwen parameter proxy» ниже.
@@ -267,6 +267,7 @@ Qwen-native модели, DeepSeek, Ollama и сторонние OpenAI-совм
 - после записи конфига qualifying-записи группируются по `baseUrl`, поднимается один proxy на каждый distinct upstream (обычно один); если proxy не стартовал — launch падает до запуска агента, тихого fallback нет;
 - в записанном конфиге переписывается только `baseUrl` qualifying-записей: `http://127.0.0.1:<port>` + исходный path upstream (путь и query пересылаются в upstream verbatim, `/v1` не нормализуется); `envKey` — имя env-переменной с реальным API-ключом — а также `id`, `name` и `generationConfig` не меняются, proxy пересылает `Authorization`-заголовок Qwen как есть;
 - в теле JSON-запроса для qualifying-модели `max_tokens` заменяется на `max_completion_tokens`; всё остальное (GET, не-JSON тела, ответы, SSE, сжатые тела) проходит без изменений;
+- для gpt-6+ при наличии `tools` выставляется `reasoning_effort: "none"`: Chat Completions не поддерживает function tools вместе с reasoning (gpt-5.x ещё поддерживает), иначе upstream отвечает `400 Function tools with reasoning_effort are not supported`. На этой 400-й есть такой же одноразовый retry с `reasoning_effort: "none"` — страховка для незнакомых семейств;
 - если upstream ответил `400`, чей текст называет оба параметра (`isMaxTokensUnsupportedError` — страховая сеть для моделей, которые эвристика не узнала), тело один раз переотправляется с `max_completion_tokens`; второй `400` возвращается агенту без изменений;
 - cleanup launch-транзакции останавливает все поднятые proxy; патченный конфиг пишется без merge, поэтому restore после запуска возвращает оригинальный конфиг целиком.
 

@@ -24,6 +24,7 @@ export interface OpenAIRequest {
   }>;
   max_tokens?: number;
   max_completion_tokens?: number;
+  reasoning_effort?: string;
   temperature?: number;
   top_p?: number;
   stop?: string | string[];
@@ -66,7 +67,22 @@ export function convertRequest(req: AnthropicRequest): OpenAIRequest {
     result.max_tokens = req.max_tokens;
   }
 
-  return result;
+  const withReasoning = withReasoningDisabledForTools(result);
+  return withReasoning;
+}
+
+/** Model name without a provider prefix, trimmed and lower-cased. */
+function normalizeModelName(model: string): string {
+  return model
+    .slice(model.lastIndexOf('/') + 1)
+    .trim()
+    .toLowerCase();
+}
+
+/** Major version of a `gpt-N…` model name, or `undefined` for other names. */
+export function gptMajorVersion(model: string): number | undefined {
+  const match = /^gpt-(\d+)/.exec(normalizeModelName(model));
+  return match ? Number(match[1]) : undefined;
 }
 
 /**
@@ -78,14 +94,51 @@ export function convertRequest(req: AnthropicRequest): OpenAIRequest {
  * `openai/gpt-6.1-terra` resolves the same as `gpt-6.1-terra`.
  */
 export function requiresMaxCompletionTokens(model: string): boolean {
-  const name = model
-    .slice(model.lastIndexOf('/') + 1)
-    .trim()
-    .toLowerCase();
+  const name = normalizeModelName(model);
   if (/^o\d/.test(name)) return true;
 
-  const gpt = /^gpt-(\d+)/.exec(name);
-  return gpt !== null && Number(gpt[1]) >= 5;
+  const major = gptMajorVersion(model);
+  return major !== undefined && major >= 5;
+}
+
+/**
+ * Whether `reasoning_effort` must be `none` for function tools to work.
+ *
+ * gpt-6 and newer reject function tools together with reasoning on
+ * `/v1/chat/completions`: every request carrying `tools` must also disable
+ * reasoning. gpt-5.x still accepts both.
+ */
+export function requiresReasoningDisabledForTools(model: string): boolean {
+  const major = gptMajorVersion(model);
+  return major !== undefined && major >= 6;
+}
+
+/**
+ * Detects the upstream 400 that rejects function tools while reasoning is on.
+ *
+ * The model-name heuristic can lag behind new families, so the proxies use
+ * this to retry once with `reasoning_effort: 'none'`.
+ */
+export function isToolsReasoningUnsupportedError(payload: unknown): boolean {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const error = (payload as { error?: unknown }).error;
+  if (typeof error !== 'object' || error === null) return false;
+  const message = (error as { message?: unknown }).message;
+  if (typeof message !== 'string') return false;
+  const lower = message.toLowerCase();
+  return lower.includes('function tools') && lower.includes('reasoning_effort');
+}
+
+/**
+ * Returns a copy of `req` with `reasoning_effort: 'none'` when the model needs
+ * it for function tools. Requests without tools, other model families and
+ * already-disabled reasoning are returned unchanged.
+ */
+export function withReasoningDisabledForTools(req: OpenAIRequest): OpenAIRequest {
+  if (!requiresReasoningDisabledForTools(req.model)) return req;
+  if (!Array.isArray(req.tools) || req.tools.length === 0) return req;
+  if (req.reasoning_effort === 'none') return req;
+  return { ...req, reasoning_effort: 'none' };
 }
 
 /**

@@ -2,9 +2,12 @@ import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';
 import {
+  gptMajorVersion,
   isMaxTokensUnsupportedError,
+  isToolsReasoningUnsupportedError,
   requiresMaxCompletionTokens,
   withMaxCompletionTokens,
+  withReasoningDisabledForTools,
   type OpenAIRequest,
 } from './openai-adapter.js';
 import { getOutboundAgent, stopServer } from './proxy-utils.js';
@@ -49,15 +52,10 @@ export function shouldProxyModel(model: string, baseUrl: string): boolean {
   }
   if (requiresMaxCompletionTokens(model)) return true;
   if (host !== 'api.openai.com') return false;
-  // Same name normalization as requiresMaxCompletionTokens: a known legacy
-  // family (gpt-N, N < 5) accepts `max_tokens` and stays direct; anything
-  // the heuristic does not recognize goes through the proxy.
-  const name = model
-    .slice(model.lastIndexOf('/') + 1)
-    .trim()
-    .toLowerCase();
-  const gpt = /^gpt-(\d+)/.exec(name);
-  return gpt === null || Number(gpt[1]) >= 5;
+  // A known legacy family (gpt-N, N < 5) accepts `max_tokens` and stays
+  // direct; anything the heuristic does not recognize goes through the proxy.
+  const major = gptMajorVersion(model);
+  return major === undefined || major >= 5;
 }
 
 /**
@@ -156,11 +154,12 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
           try {
             const parsed = JSON.parse(raw.toString('utf-8')) as OpenAIRequest;
             parsedRequest = parsed;
+            let rewritten = parsed;
             if (requiresMaxCompletionTokens(String(parsed.model))) {
-              body = Buffer.from(JSON.stringify(withMaxCompletionTokens(parsed)), 'utf-8');
-            } else {
-              body = raw;
+              rewritten = withMaxCompletionTokens(rewritten);
             }
+            rewritten = withReasoningDisabledForTools(rewritten);
+            body = rewritten === parsed ? raw : Buffer.from(JSON.stringify(rewritten), 'utf-8');
           } catch {
             // Parse failure: forward the raw bytes unchanged.
             body = raw;
@@ -179,6 +178,7 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
       }
 
       let retriedMaxTokens = false;
+      let retriedToolsReasoning = false;
       let activeRequest: http.ClientRequest | undefined;
 
       const sendUpstream = (payload: Buffer | undefined): void => {
@@ -213,12 +213,25 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
                   isMaxTokensUnsupportedError(parsedBody)
                 ) {
                   retriedMaxTokens = true;
-                  const retryBody = Buffer.from(
-                    JSON.stringify(withMaxCompletionTokens(parsedRequest)),
-                    'utf-8',
-                  );
+                  parsedRequest = withMaxCompletionTokens(parsedRequest);
+                  const retryBody = Buffer.from(JSON.stringify(parsedRequest), 'utf-8');
                   // Rebuild content-length from the new body; all other
                   // forwarded headers stay as-is.
+                  headers['content-length'] = retryBody.length;
+                  sendUpstream(retryBody);
+                  return;
+                }
+
+                if (
+                  !retriedToolsReasoning &&
+                  parsedBody !== undefined &&
+                  parsedRequest !== undefined &&
+                  parsedRequest.reasoning_effort !== 'none' &&
+                  isToolsReasoningUnsupportedError(parsedBody)
+                ) {
+                  retriedToolsReasoning = true;
+                  parsedRequest = { ...parsedRequest, reasoning_effort: 'none' };
+                  const retryBody = Buffer.from(JSON.stringify(parsedRequest), 'utf-8');
                   headers['content-length'] = retryBody.length;
                   sendUpstream(retryBody);
                   return;

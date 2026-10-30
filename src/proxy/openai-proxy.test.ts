@@ -137,6 +137,58 @@ describe('startOpenAIProxy', () => {
     expect(body.error.message).toBe('Invalid model');
   });
 
+  it('retries once with reasoning_effort none when tools are rejected', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    let calls = 0;
+    upstream.on('request', async (req, res) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req)
+        chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
+      bodies.push(JSON.parse(Buffer.concat(chunks).toString('utf-8')));
+      calls += 1;
+
+      if (calls === 1) {
+        res.writeHead(400, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            error: {
+              message:
+                "Function tools with reasoning_effort are not supported for some-model in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
+            },
+          }),
+        );
+        return;
+      }
+
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          id: 'chatcmpl-tools',
+          model: 'vendor-x',
+          choices: [{ message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        }),
+      );
+    });
+
+    proxy = await startOpenAIProxy({ upstreamUrl });
+    const res = await fetch(`${proxy.url}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'vendor-x',
+        messages: [{ role: 'user', content: 'time?' }],
+        max_tokens: 100,
+        tools: [{ name: 'get_time', description: 'time', input_schema: { type: 'object' } }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0].reasoning_effort).toBeUndefined();
+    expect(bodies[1].reasoning_effort).toBe('none');
+  });
+
   it('removes anthropic-version and maps x-api-key to Authorization', async () => {
     let receivedHeaders: http.IncomingHttpHeaders = {};
     upstream.on('request', (req, res) => {

@@ -7,7 +7,10 @@ import {
   convertError,
   requiresMaxCompletionTokens,
   isMaxTokensUnsupportedError,
+  isToolsReasoningUnsupportedError,
   withMaxCompletionTokens,
+  withReasoningDisabledForTools,
+  gptMajorVersion,
 } from './openai-adapter.js';
 
 describe('convertRequest', () => {
@@ -201,6 +204,60 @@ describe('convertRequest', () => {
 
     const alreadySwapped = { model: 'gpt-6', messages: [], max_completion_tokens: 10 };
     expect(withMaxCompletionTokens(alreadySwapped)).toBe(alreadySwapped);
+  });
+
+  it('disables reasoning for function tools on gpt-6 and newer', () => {
+    const openai = convertRequest({
+      model: 'gpt-6.1-terra',
+      messages: [{ role: 'user', content: 'Hi' }],
+      max_tokens: 100,
+      tools: [{ name: 'get_time', description: 'time', input_schema: { type: 'object' } }],
+    });
+    expect(openai.reasoning_effort).toBe('none');
+  });
+
+  it('leaves reasoning_effort unset for gpt-6 without tools', () => {
+    const openai = convertRequest({
+      model: 'gpt-6.1-terra',
+      messages: [{ role: 'user', content: 'Hi' }],
+      max_tokens: 100,
+    });
+    expect(openai.reasoning_effort).toBeUndefined();
+  });
+
+  it('keeps reasoning available with tools on gpt-5.x', () => {
+    const openai = convertRequest({
+      model: 'gpt-5.1',
+      messages: [{ role: 'user', content: 'Hi' }],
+      max_tokens: 100,
+      tools: [{ name: 'get_time', description: 'time', input_schema: { type: 'object' } }],
+    });
+    expect(openai.reasoning_effort).toBeUndefined();
+  });
+
+  it('detects the function-tools reasoning rejection', () => {
+    expect(
+      isToolsReasoningUnsupportedError({
+        error: {
+          message:
+            "Function tools with reasoning_effort are not supported for gpt-6.1-terra in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'.",
+        },
+      }),
+    ).toBe(true);
+    expect(isToolsReasoningUnsupportedError({ error: { message: 'Invalid model' } })).toBe(false);
+  });
+
+  it('reports gpt major versions and disables reasoning only for gpt-6+ tools', () => {
+    expect(gptMajorVersion('openai/gpt-6.1-terra')).toBe(6);
+    expect(gptMajorVersion('deepseek-v4')).toBeUndefined();
+    const withTools = { model: 'gpt-6-luna', messages: [], tools: [{ type: 'function' }] };
+    expect(withReasoningDisabledForTools(withTools).reasoning_effort).toBe('none');
+    expect(
+      withReasoningDisabledForTools({ ...withTools, model: 'gpt-5.1' }).reasoning_effort,
+    ).toBeUndefined();
+    expect(
+      withReasoningDisabledForTools({ model: 'gpt-6', messages: [] }).reasoning_effort,
+    ).toBeUndefined();
   });
 
   it('handles assistant message with tool_use but no text block', () => {

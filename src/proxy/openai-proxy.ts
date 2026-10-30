@@ -8,6 +8,7 @@ import {
   createStreamState,
   convertStreamChunk,
   isMaxTokensUnsupportedError,
+  isToolsReasoningUnsupportedError,
   withMaxCompletionTokens,
   type OpenAIRequest,
 } from './openai-adapter.js';
@@ -110,6 +111,7 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
 
       let headers = buildProxyHeaders(req.headers, body?.length);
       let retriedMaxTokens = false;
+      let retriedToolsReasoning = false;
       let activeRequest: http.ClientRequest | undefined;
 
       const sendUpstream = (payload: Buffer | undefined): void => {
@@ -241,6 +243,21 @@ export async function startOpenAIProxy(options: OpenAIProxyOptions): Promise<Pro
                 ) {
                   retriedMaxTokens = true;
                   convertedRequest = withMaxCompletionTokens(convertedRequest);
+                  const retryBody = Buffer.from(JSON.stringify(convertedRequest), 'utf-8');
+                  headers = buildProxyHeaders(req.headers, retryBody.length);
+                  sendUpstream(retryBody);
+                  return;
+                }
+
+                if (
+                  !retriedToolsReasoning &&
+                  parsed !== undefined &&
+                  convertedRequest !== undefined &&
+                  convertedRequest.reasoning_effort !== 'none' &&
+                  isToolsReasoningUnsupportedError(parsed)
+                ) {
+                  retriedToolsReasoning = true;
+                  convertedRequest = { ...convertedRequest, reasoning_effort: 'none' };
                   const retryBody = Buffer.from(JSON.stringify(convertedRequest), 'utf-8');
                   headers = buildProxyHeaders(req.headers, retryBody.length);
                   sendUpstream(retryBody);
