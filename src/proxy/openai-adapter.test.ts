@@ -8,6 +8,7 @@ import {
   requiresMaxCompletionTokens,
   isMaxTokensUnsupportedError,
   isToolsReasoningUnsupportedError,
+  isReasoningEffortValueUnsupportedError,
   withMaxCompletionTokens,
   withReasoningDisabledForTools,
   gptMajorVersion,
@@ -861,5 +862,29 @@ describe('convertError', () => {
       type: 'error',
       error: { type: 'api_error', message: 'Plain message' },
     });
+  });
+});
+
+describe('isReasoningEffortValueUnsupportedError', () => {
+  it('matches the reasoning-only model rejection of none', () => {
+    expect(
+      isReasoningEffortValueUnsupportedError({
+        error: {
+          message:
+            "Unsupported value: 'reasoning_effort' does not support 'none' with this model. Supported values are: 'low', 'medium', 'high', and 'xhigh'.",
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it('ignores unrelated 400s', () => {
+    expect(isReasoningEffortValueUnsupportedError({ error: { message: 'bad request' } })).toBe(
+      false,
+    );
+    expect(
+      isReasoningEffortValueUnsupportedError({
+        error: { message: "Unsupported parameter: 'temperature' is not supported" },
+      }),
+    ).toBe(false);
   });
 });

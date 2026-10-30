@@ -130,6 +130,23 @@ export function isToolsReasoningUnsupportedError(payload: unknown): boolean {
 }
 
 /**
+ * Detects the upstream 400 that rejects the value `none` for
+ * `reasoning_effort`, which reasoning-only models (gpt-6.1-sol, gpt-6-astra)
+ * answer with "does not support 'none'". Their Chat Completions endpoint
+ * cannot serve function tools at all, so the proxies use this to replay the
+ * request through the Responses API.
+ */
+export function isReasoningEffortValueUnsupportedError(payload: unknown): boolean {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const error = (payload as { error?: unknown }).error;
+  if (typeof error !== 'object' || error === null) return false;
+  const message = (error as { message?: unknown }).message;
+  if (typeof message !== 'string') return false;
+  const lower = message.toLowerCase();
+  return lower.includes('reasoning_effort') && lower.includes('does not support');
+}
+
+/**
  * Returns a copy of `req` with `reasoning_effort: 'none'` when the model needs
  * it for function tools. Requests without tools, other model families and
  * already-disabled reasoning are returned unchanged.
