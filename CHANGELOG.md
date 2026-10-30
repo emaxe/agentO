@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Qwen CLI: gpt-6+ reasoning-only models (`gpt-6.1-sol`, `gpt-6-astra`) now work with function tools — the parameter proxy replays the request through `/v1/responses` and translates the streamed answer back to Chat Completions.
+
 ## [0.12.0] - 2026-10-30
 
 ### Added
