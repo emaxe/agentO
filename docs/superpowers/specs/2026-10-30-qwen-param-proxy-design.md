@@ -51,7 +51,9 @@ parameter name.
 1. `requiresMaxCompletionTokens(model)` matches (o-series, gpt-5+, gpt-6+, prefix
    such as `openai/…` ignored), or
 2. the resolved `baseUrl` host is `api.openai.com` — this covers new OpenAI families
-   that the name heuristic does not know yet.
+   that the name heuristic does not know yet. It is a coverage net, not a blanket:
+   a name the heuristic already classifies as legacy (`gpt-N`, N < 5) stays direct
+   because it accepts `max_tokens`.
 
 Everything else is left untouched.
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Qwen CLI: models that reject `max_tokens` (OpenAI o-series, gpt-5 and newer including gpt-6, plus unrecognized names on `api.openai.com`) launch through a local pass-through proxy that swaps `max_tokens` for `max_completion_tokens`; the written config points their `baseUrl` at the loopback proxy and launch cleanup stops it.
+
 ### Fixed
 
 - Claude Code through an `openai-compatible` provider now sends `max_completion_tokens` for every model family that requires it (o-series, gpt-5 and newer, including gpt-6), and the OpenAI proxy retries once with the swapped parameter when an unknown model rejects `max_tokens`.

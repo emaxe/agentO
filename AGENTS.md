@@ -215,7 +215,7 @@ AgentO — CLI-инструмент для управления конфигур
 |-------|-----|---------|---|---|---|---|
 | Claude Code | `claude-code` | `claude` | `anthropic-compatible`, `fireworks`, `openrouter`, `custom-api`, `openai-compatible`, `responses-compatible` | JSON (`~/.claude/settings.json`) | Игнорирует | Поддерживает tiers (small/base/smart), только один провайдер на профиль. Для `openrouter` — Anthropic Skin: `ANTHROPIC_AUTH_TOKEN` + пустой `ANTHROPIC_API_KEY`, без `apiKeyHelper`. Для `fireworks`/`openrouter` поднимается `anthropic-scrubber`, для `openai-compatible` — `openai-proxy`, для `responses-compatible` — `responses-proxy`. |
 | OpenCode | `opencode` | `opencode` | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | JSON (`~/.config/opencode/config.json` или `./opencode.json`) | Пробрасывает в `models[<name>].modalities` | Префикс модели: `providerKey/model`. Для `openrouter` ключ провайдера всегда `openrouter`. |
-| Qwen CLI | `qwen` | `qwen` | `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | JSON (`~/.qwen/settings.json`) | Пробрасывает в `generationConfig.modalities` | **modelProviders ключ всегда `"openai"`**. Группирует модели по baseUrl. |
+| Qwen CLI | `qwen` | `qwen` | `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | JSON (`~/.qwen/settings.json`) | Пробрасывает в `generationConfig.modalities` | **modelProviders ключ всегда `"openai"`**. Группирует модели по baseUrl. Модели, требующие `max_completion_tokens` (o-series, gpt-5+/gpt-6+, а также неизвестные имена на `api.openai.com`; legacy `gpt-4.x` остаётся прямым), на время запуска идут через `src/proxy/openai-param-proxy.ts`: `baseUrl` в `modelProviders` указывает на loopback-proxy, `envKey` остаётся от реального URL, cleanup останавливает proxy. |
 | Codex CLI | `codex` | `codex` | `openai-compatible`, `responses-compatible`, `fireworks`, `openrouter`, `custom-api` | TOML (`$CODEX_HOME/config.toml` или `~/.codex/config.toml`) | Игнорирует | `wire_api: responses`. При `project` scope `model_providers`, `default_profile`, `profiles` пишет в global config, а `model` — в project config; backup/restore manifest содержит оба файла. Использует `buildEnv` для инжекта API ключа. |
 | Copilot | `copilot` | `copilot` | `openai-compatible`, `anthropic-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | — (env-only) | Игнорирует | Конфиг через env vars, `writeConfig` — no-op. |
 | Goose | `goose` | `goose` | `openai-compatible`, `anthropic-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | — (env-only) | Игнорирует | `GOOSE_PROVIDER`/`GOOSE_MODEL`/`OPENAI_HOST`; `writeConfig` — no-op. На Windows конфиг — `%APPDATA%\Block\goose\config\config.yaml`. |
@@ -223,7 +223,7 @@ AgentO — CLI-инструмент для управления конфигур
 | Kilo Code | `kilo` | `kilo` | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | JSON (`~/.kilocode/settings.json` + `models.json`) | Игнорирует | `defaultProvider`/`defaultModel`; кастомный `baseUrl` — в `models.json`. |
 | Kimi Code | `kimi` | `kimi` | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | TOML (`~/.kimi/config.toml`, legacy `~/.kimi/config.json` читается) | Игнорирует | `default_model`, `providers.<name>` (`type`, `base_url`, `api_key`), `models.<name>`; project и global указывают на один файл. |
 
-### Локальные proxy для Claude Code
+### Локальные proxy
 
 Для не-`anthropic-compatible` провайдеров Claude Code AgentO поднимает локальный HTTP-proxy на случайном порту `127.0.0.1`:
 
@@ -249,6 +249,24 @@ AgentO — CLI-инструмент для управления конфигур
 ```typescript
 ['context_management']
 ```
+
+#### Qwen parameter proxy
+
+При запуске Qwen CLI модели, которые отклоняют `max_tokens` и требуют `max_completion_tokens`, на время запуска идут через прозрачный OpenAI-to-OpenAI proxy (`src/proxy/openai-param-proxy.ts`) на случайном порту `127.0.0.1`. Qwen CLI сам собирает Chat Completions-запросы и хардкодит `max_tokens`, поэтому AgentO меняет параметр на лету — без протокольной трансляции.
+
+**Routing (`shouldProxyModel`):** запись `modelProviders[*]` проходит через proxy, если
+
+- имя модели требует `max_completion_tokens`: o-series (`o1`, `o3`, `o4`, …), `gpt-5+` и `gpt-6+`; префиксы вроде `openai/…` игнорируются;
+- либо резолвленный `baseUrl` указывает на `api.openai.com` — страховка для новых семейств OpenAI, которых ещё нет в эвристике имён. Это coverage net, а не blanket: имена, которые эвристика уже классифицирует как legacy (`gpt-N`, N < 5, например `gpt-4.x`), принимают `max_tokens` и остаются прямыми.
+
+Qwen-native модели, DeepSeek, Ollama и сторонние OpenAI-совместимые шлюзы через proxy не идут — их `baseUrl` остаётся прямым.
+
+**Как работает:**
+- после записи конфига qualifying-записи группируются по `baseUrl`, поднимается один proxy на каждый distinct upstream (обычно один); если proxy не стартовал — launch падает до запуска агента, тихого fallback нет;
+- в записанном конфиге переписывается только `baseUrl` qualifying-записей: `http://127.0.0.1:<port>` + исходный path upstream (путь и query пересылаются в upstream verbatim, `/v1` не нормализуется); `envKey` — имя env-переменной с реальным API-ключом — а также `id`, `name` и `generationConfig` не меняются, proxy пересылает `Authorization`-заголовок Qwen как есть;
+- в теле JSON-запроса для qualifying-модели `max_tokens` заменяется на `max_completion_tokens`; всё остальное (GET, не-JSON тела, ответы, SSE, сжатые тела) проходит без изменений;
+- если upstream ответил `400`, чей текст называет оба параметра (`isMaxTokensUnsupportedError` — страховая сеть для моделей, которые эвристика не узнала), тело один раз переотправляется с `max_completion_tokens`; второй `400` возвращается агенту без изменений;
+- cleanup launch-транзакции останавливает все поднятые proxy; патченный конфиг пишется без merge, поэтому restore после запуска возвращает оригинальный конфиг целиком.
 
 ### Важная деталь: Qwen Adapter
 
