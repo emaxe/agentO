@@ -305,3 +305,186 @@ export function responsesSseToChatResponse(
     fallbackModel,
   );
 }
+
+/** Mutable state accumulated while streaming Responses events as Chat chunks. */
+export interface ChatStreamState {
+  id: string;
+  created: number;
+  model: string;
+  /** Whether the opening `{delta:{role:'assistant'}}` chunk has been sent. */
+  roleSent: boolean;
+  /** Maps a Responses `output_index` of a function call to its Chat `tool_calls` index. */
+  toolCallIndexByOutputIndex: Map<number, number>;
+  nextToolCallIndex: number;
+  finishReason: string | null;
+}
+
+/** Create a fresh {@link ChatStreamState} for one streaming session. */
+export function createChatStreamState(id: string, model: string, created: number): ChatStreamState {
+  return {
+    id,
+    created,
+    model,
+    roleSent: false,
+    toolCallIndexByOutputIndex: new Map(),
+    nextToolCallIndex: 0,
+    finishReason: null,
+  };
+}
+
+/** Build one `chat.completion.chunk` object. */
+function streamChunk(
+  state: ChatStreamState,
+  delta: Record<string, unknown>,
+  finishReason: string | null = null,
+): Record<string, unknown> {
+  return {
+    id: state.id,
+    object: 'chat.completion.chunk',
+    created: state.created,
+    model: state.model,
+    choices: [{ index: 0, delta, finish_reason: finishReason }],
+  };
+}
+
+/** Build the streamed error frame for a failed Responses event. */
+function errorFrame(event: Record<string, unknown>): Record<string, unknown> {
+  const response = isRecord(event.response) ? event.response : {};
+  const fromResponse = isRecord(response.error) ? response.error : undefined;
+  const fromEvent = isRecord(event.error) ? event.error : undefined;
+  const message = fromResponse?.message ?? fromEvent?.message ?? 'responses bridge: request failed';
+  return { error: { message: String(message), type: 'api_error' } };
+}
+
+/**
+ * Convert one Responses SSE event into zero or more `chat.completion.chunk`
+ * objects. Mutates `state` to track the opening role chunk and tool-call
+ * indexes. Failed events produce a single `{error:{…}}` frame instead.
+ */
+export function convertResponsesEventToChatChunks(
+  event: Record<string, unknown>,
+  state: ChatStreamState,
+): Array<Record<string, unknown>> {
+  const type = String(event.type ?? '');
+
+  if (type === 'response.failed' || type === 'response.error' || isRecord(event.error)) {
+    return [errorFrame(event)];
+  }
+
+  const chunks: Array<Record<string, unknown>> = [];
+  if (!state.roleSent) {
+    state.roleSent = true;
+    chunks.push(streamChunk(state, { role: 'assistant' }));
+  }
+
+  if (type === 'response.output_text.delta') {
+    chunks.push(streamChunk(state, { content: String(event.delta ?? '') }));
+    return chunks;
+  }
+
+  if (type === 'response.output_item.added') {
+    const item = isRecord(event.item) ? event.item : {};
+    if (item.type === 'function_call') {
+      const outputIndex = typeof event.output_index === 'number' ? event.output_index : 0;
+      const index = state.nextToolCallIndex++;
+      state.toolCallIndexByOutputIndex.set(outputIndex, index);
+      chunks.push(
+        streamChunk(state, {
+          tool_calls: [
+            {
+              index,
+              id: String(item.call_id ?? item.id ?? ''),
+              type: 'function',
+              function: { name: String(item.name ?? ''), arguments: '' },
+            },
+          ],
+        }),
+      );
+    }
+    return chunks;
+  }
+
+  if (type === 'response.function_call_arguments.delta') {
+    const outputIndex = typeof event.output_index === 'number' ? event.output_index : 0;
+    let index = state.toolCallIndexByOutputIndex.get(outputIndex);
+    if (index === undefined) {
+      index = state.nextToolCallIndex++;
+      state.toolCallIndexByOutputIndex.set(outputIndex, index);
+      chunks.push(
+        streamChunk(state, {
+          tool_calls: [{ index, id: '', type: 'function', function: { name: '', arguments: '' } }],
+        }),
+      );
+    }
+    const args = String(event.delta ?? '');
+    if (args) {
+      chunks.push(streamChunk(state, { tool_calls: [{ index, function: { arguments: args } }] }));
+    }
+    return chunks;
+  }
+
+  if (type === 'response.completed' || type === 'response.incomplete') {
+    const response = isRecord(event.response) ? event.response : {};
+    const output = Array.isArray(response.output) ? response.output : [];
+    const hasToolCalls = output.some((item) => isRecord(item) && item.type === 'function_call');
+    const incomplete = isRecord(response.incomplete_details) ? response.incomplete_details : {};
+    const reason = typeof incomplete.reason === 'string' ? incomplete.reason : undefined;
+    const finishReason = mapFinishReason(hasToolCalls, reason);
+    state.finishReason = finishReason;
+    const finish = streamChunk(state, {}, finishReason);
+    finish.usage = convertUsage(response.usage);
+    chunks.push(finish);
+    return chunks;
+  }
+
+  return chunks;
+}
+
+/**
+ * Split a complete `chat.completion` into the chunk sequence a streaming client
+ * expects. Used when a streaming request is answered with a JSON body by a
+ * gateway that ignores `stream`. Pure function.
+ */
+export function chatCompletionToStreamChunks(
+  completion: Record<string, unknown>,
+): Array<Record<string, unknown>> {
+  const state = createChatStreamState(
+    String(completion.id ?? 'chatcmpl-bridge'),
+    String(completion.model ?? ''),
+    typeof completion.created === 'number' ? completion.created : Math.floor(Date.now() / 1000),
+  );
+  const choices = Array.isArray(completion.choices) ? completion.choices : [];
+  const choice = isRecord(choices[0]) ? choices[0] : {};
+  const message = isRecord(choice.message) ? choice.message : {};
+
+  const chunks: Array<Record<string, unknown>> = [streamChunk(state, { role: 'assistant' })];
+
+  if (typeof message.content === 'string' && message.content !== '') {
+    chunks.push(streamChunk(state, { content: message.content }));
+  }
+
+  const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+  toolCalls.forEach((call, index) => {
+    if (!isRecord(call)) return;
+    const fn = isRecord(call.function) ? call.function : {};
+    chunks.push(
+      streamChunk(state, {
+        tool_calls: [
+          {
+            index,
+            id: String(call.id ?? ''),
+            type: 'function',
+            function: { name: String(fn.name ?? ''), arguments: String(fn.arguments ?? '{}') },
+          },
+        ],
+      }),
+    );
+  });
+
+  const finishReason = String(choice.finish_reason ?? 'stop');
+  const finish = streamChunk(state, {}, finishReason);
+  if (isRecord(completion.usage)) finish.usage = completion.usage;
+  chunks.push(finish);
+
+  return chunks;
+}

@@ -3,6 +3,9 @@ import {
   convertChatRequestToResponses,
   convertResponsesToChatResponse,
   responsesSseToChatResponse,
+  createChatStreamState,
+  convertResponsesEventToChatChunks,
+  chatCompletionToStreamChunks,
 } from './chat-responses-adapter.js';
 
 const TOOL = {
@@ -232,5 +235,122 @@ describe('convertResponsesToChatResponse', () => {
       function: { name: 'ping', arguments: '{"x":1}' },
     });
     expect(choice.finish_reason).toBe('tool_calls');
+  });
+});
+
+describe('convertResponsesEventToChatChunks', () => {
+  const collect = (events: Array<Record<string, unknown>>) => {
+    const state = createChatStreamState('resp_1', 'gpt-6.1-sol', 1700000000);
+    return events.flatMap((event) => convertResponsesEventToChatChunks(event, state));
+  };
+
+  it('emits role, text and finish chunks with usage', () => {
+    const chunks = collect([
+      { type: 'response.created' },
+      { type: 'response.output_text.delta', output_index: 0, delta: 'he' },
+      { type: 'response.output_text.delta', output_index: 0, delta: 'llo' },
+      {
+        type: 'response.completed',
+        response: {
+          model: 'gpt-6.1-sol',
+          usage: { input_tokens: 7, output_tokens: 2, total_tokens: 9 },
+        },
+      },
+    ]);
+    expect(chunks[0]).toMatchObject({
+      object: 'chat.completion.chunk',
+      choices: [{ index: 0, delta: { role: 'assistant' } }],
+    });
+    expect(chunks[1]).toMatchObject({ choices: [{ delta: { content: 'he' } }] });
+    expect(chunks[2]).toMatchObject({ choices: [{ delta: { content: 'llo' } }] });
+    expect(chunks.at(-1)).toMatchObject({
+      choices: [{ delta: {}, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 7, completion_tokens: 2, total_tokens: 9 },
+    });
+  });
+
+  it('emits tool call start and argument deltas', () => {
+    const chunks = collect([
+      {
+        type: 'response.output_item.added',
+        output_index: 0,
+        item: { type: 'function_call', id: 'fc_1', call_id: 'call_1', name: 'ping' },
+      },
+      { type: 'response.function_call_arguments.delta', output_index: 0, delta: '{"x":1}' },
+      {
+        type: 'response.completed',
+        response: { model: 'gpt-6.1-sol', usage: {}, output: [{ type: 'function_call' }] },
+      },
+    ]);
+    expect(chunks[1]).toMatchObject({
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_1',
+                type: 'function',
+                function: { name: 'ping', arguments: '' },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    expect(chunks[2]).toMatchObject({
+      choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"x":1}' } }] } }],
+    });
+    expect(chunks.at(-1)).toMatchObject({ choices: [{ finish_reason: 'tool_calls' }] });
+  });
+
+  it('surfaces a failed response as an error frame', () => {
+    const chunks = collect([{ type: 'response.failed', response: { error: { message: 'boom' } } }]);
+    expect(chunks).toEqual([{ error: { message: 'boom', type: 'api_error' } }]);
+  });
+});
+
+describe('chatCompletionToStreamChunks', () => {
+  it('splits a completion into role, content, tool call and finish chunks', () => {
+    const chunks = chatCompletionToStreamChunks({
+      id: 'chatcmpl-1',
+      created: 1700000000,
+      model: 'gpt-6.1-sol',
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: null,
+            tool_calls: [
+              { id: 'call_1', type: 'function', function: { name: 'ping', arguments: '{}' } },
+            ],
+          },
+          finish_reason: 'tool_calls',
+        },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
+    });
+    expect(chunks[0]).toMatchObject({ choices: [{ delta: { role: 'assistant' } }] });
+    expect(chunks[1]).toMatchObject({
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_1',
+                type: 'function',
+                function: { name: 'ping', arguments: '{}' },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    expect(chunks.at(-1)).toMatchObject({
+      choices: [{ finish_reason: 'tool_calls' }],
+      usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
+    });
   });
 });
