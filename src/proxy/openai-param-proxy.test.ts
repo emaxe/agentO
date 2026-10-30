@@ -10,6 +10,21 @@ import {
 const MAX_TOKENS_UNSUPPORTED_MESSAGE =
   "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.";
 
+/** Waits for `promise` but fails after `ms` with `message` to keep tests bounded. */
+async function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 describe('startOpenAIParamProxy', () => {
   let proxy: ProxyServer | undefined;
   let upstream: http.Server;
@@ -231,6 +246,91 @@ describe('startOpenAIParamProxy', () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: { message: MAX_TOKENS_UNSUPPORTED_MESSAGE } });
     expect(calls).toBe(2);
+  });
+
+  it('does not retry a matching 400 when the request body has no max_tokens', async () => {
+    let calls = 0;
+    upstream.on('request', async (req, res) => {
+      calls += 1;
+      const drained: Buffer[] = [];
+      for await (const chunk of req)
+        drained.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf-8') : chunk);
+      void drained;
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: { message: MAX_TOKENS_UNSUPPORTED_MESSAGE } }));
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl });
+    const res = await fetch(`${proxy.url}/api/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      // Without max_tokens the retry would resend an identical, equally
+      // doomed body: the gate must not fire at all.
+      body: JSON.stringify({
+        model: 'vendor-alpha-latest',
+        messages: [{ role: 'user', content: 'Hello' }],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: { message: MAX_TOKENS_UNSUPPORTED_MESSAGE } });
+    expect(calls).toBe(1);
+  });
+
+  it('closes the upstream response when the client aborts mid-stream', async () => {
+    // Upstream leaves the SSE stream hanging; it must observe a premature
+    // close (its response socket torn down by the proxy) once the client
+    // aborts, instead of running the paid request to completion.
+    const upstreamClosed = new Promise<boolean>((resolve) => {
+      upstream.on('request', (_req, res) => {
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.write('data: {"id":"c"}\n\n');
+        // Leave hanging so the client can abort mid-stream.
+        res.on('close', () => resolve(!res.writableEnded));
+      });
+    });
+
+    proxy = await startOpenAIParamProxy({ upstreamUrl });
+    const clientReq = http.request(`${proxy.url}/api/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+    });
+    clientReq.end(
+      JSON.stringify({
+        model: 'gpt-6.1-terra',
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 100,
+        stream: true,
+      }),
+    );
+
+    // Abort once the first chunk has crossed the proxy pipe: by then the
+    // proxy's close guard is armed (registered synchronously with `pipe`).
+    let aborted = false;
+    const clientAborted = new Promise<void>((resolve, reject) => {
+      clientReq.on('response', (clientRes) => {
+        clientRes.on('data', () => {
+          if (aborted) return;
+          aborted = true;
+          clientRes.destroy();
+          clientReq.destroy();
+          resolve();
+        });
+      });
+      clientReq.on('error', (err) => {
+        // Errors after the intentional destroy are expected side effects;
+        // anything before means the client never started streaming.
+        if (!aborted) reject(err);
+      });
+    });
+    await withTimeout(clientAborted, 2000, 'client never received mid-stream data');
+
+    const sawPrematureClose = await withTimeout(
+      upstreamClosed,
+      2000,
+      'upstream response was not closed after client abort',
+    );
+    expect(sawPrematureClose).toBe(true);
   });
 });
 

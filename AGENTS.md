@@ -231,6 +231,8 @@ AgentO — CLI-инструмент для управления конфигур
 - `openai-compatible` — `openai-proxy.ts` (OpenAI Chat Completions → Anthropic Messages, включая SSE);
 - `responses-compatible` — `responses-proxy.ts` (Anthropic Messages → OpenAI Responses API, включая SSE).
 
+Тот же механизм локальных proxy используется и для Qwen CLI: модели, требующие `max_completion_tokens`, на время запуска идут через прозрачный OpenAI-to-OpenAI pass-through `openai-param-proxy.ts` — см. подраздел «Qwen parameter proxy» ниже.
+
 #### Anthropic Scrubber
 
 При запуске Claude Code с провайдерами `openrouter` или `fireworks` (то есть через Anthropic-совместимые endpoints, а не нативный Anthropic API), AgentO автоматически поднимает локальный HTTP-proxy (`src/proxy/anthropic-scrubber.ts`) на случайном порту `127.0.0.1`.
@@ -256,7 +258,7 @@ AgentO — CLI-инструмент для управления конфигур
 
 **Routing (`shouldProxyModel`):** запись `modelProviders[*]` проходит через proxy, если
 
-- имя модели требует `max_completion_tokens`: o-series (`o1`, `o3`, `o4`, …), `gpt-5+` и `gpt-6+`; префиксы вроде `openai/…` игнорируются;
+- имя модели требует `max_completion_tokens`: o-series (`o1`, `o3`, `o4`, …), `gpt-5+` и `gpt-6+`; префикс провайдера (например `openai/…`) отбрасывается перед сравнением имени модели;
 - либо резолвленный `baseUrl` указывает на `api.openai.com` — страховка для новых семейств OpenAI, которых ещё нет в эвристике имён. Это coverage net, а не blanket: имена, которые эвристика уже классифицирует как legacy (`gpt-N`, N < 5, например `gpt-4.x`), принимают `max_tokens` и остаются прямыми.
 
 Qwen-native модели, DeepSeek, Ollama и сторонние OpenAI-совместимые шлюзы через proxy не идут — их `baseUrl` остаётся прямым.

@@ -209,6 +209,7 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
                   payload !== undefined &&
                   parsedBody !== undefined &&
                   parsedRequest !== undefined &&
+                  parsedRequest.max_tokens !== undefined &&
                   isMaxTokensUnsupportedError(parsedBody)
                 ) {
                   retriedMaxTokens = true;
@@ -240,6 +241,17 @@ export async function startOpenAIParamProxy(options: ParamProxyOptions): Promise
             // (including SSE and compressed bodies) pass through verbatim.
             res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
             proxyRes.pipe(res);
+            // If the client aborts mid-stream, the request body was already
+            // consumed for JSON POSTs and `req` already emitted its `close`
+            // at message completion, so it will not re-emit; `res` instead
+            // emits `close` with the response unfinished. Destroy the
+            // upstream response so a mid-stream abort (Ctrl-C) does not let
+            // the paid upstream request run to completion. `writableEnded`
+            // keeps normally completed responses from tearing down the
+            // upstream connection.
+            res.on('close', () => {
+              if (!res.writableEnded && !proxyRes.destroyed) proxyRes.destroy();
+            });
             proxyRes.on('error', () => {
               if (!res.headersSent) {
                 res.writeHead(502, { 'content-type': 'application/json' });
