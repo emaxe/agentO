@@ -41,6 +41,14 @@ vi.mock('../proxy/responses-proxy.js', () => ({
   startResponsesProxy: vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:19999', stop: vi.fn() }),
 }));
 
+// Only the server-starting function is mocked; the pure routing helpers
+// (`collectProxyUpstreams`, `shouldProxyModel`) must stay real so tests
+// exercise the actual model/baseUrl qualification rule.
+vi.mock('../proxy/openai-param-proxy.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../proxy/openai-param-proxy.js')>()),
+  startOpenAIParamProxy: vi.fn().mockResolvedValue({ url: 'http://127.0.0.1:7777', stop: vi.fn() }),
+}));
+
 vi.mock('../config/git-exclude.js', () => ({
   addToGitExclude: vi.fn().mockResolvedValue({ added: [] }),
 }));
@@ -50,6 +58,7 @@ import { deleteBackup, readBackup, writeBackup } from '../config/store.js';
 import { startOpenAIProxy } from '../proxy/openai-proxy.js';
 import { startAnthropicScrubberProxy } from '../proxy/anthropic-scrubber.js';
 import { startResponsesProxy } from '../proxy/responses-proxy.js';
+import { startOpenAIParamProxy } from '../proxy/openai-param-proxy.js';
 import { buildLaunchEnv, prepareLaunchTransaction } from './transaction.js';
 
 const mockWriteBackup = vi.mocked(writeBackup);
@@ -60,6 +69,7 @@ const mockUnlink = vi.mocked(unlink);
 const mockStartOpenAIProxy = vi.mocked(startOpenAIProxy);
 const mockStartAnthropicScrubberProxy = vi.mocked(startAnthropicScrubberProxy);
 const mockStartResponsesProxy = vi.mocked(startResponsesProxy);
+const mockStartOpenAIParamProxy = vi.mocked(startOpenAIParamProxy);
 
 const testProvider: Provider = {
   id: 'p1',
@@ -91,6 +101,63 @@ function makeAdapter(currentConfig: Record<string, unknown> | null = null): Agen
   };
 }
 
+const qwenUpstreamProvider: Provider = {
+  id: 'p-qwen',
+  name: 'Qwen Upstream',
+  type: 'openai-compatible',
+  apiKey: 'sk-qwen',
+  baseUrl: 'https://api.openai.com/v1',
+  models: [{ name: 'gpt-6.1-terra', capabilities: { image: true, video: false, audio: false } }],
+};
+
+const qwenUpstreamProfile: Profile = {
+  id: 'prof-qwen',
+  name: 'Qwen Profile',
+  models: [{ providerId: qwenUpstreamProvider.id, model: 'gpt-6.1-terra' }],
+};
+
+/** A Qwen-shaped modelProviders entry, mirroring QwenAdapter.buildConfig. */
+function qwenEntry(model: string, baseUrl: string) {
+  const envKey = `QWEN_CUSTOM_API_KEY_OPENAI_${baseUrl
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')}`;
+  return {
+    id: model,
+    name: model,
+    baseUrl,
+    envKey,
+    generationConfig: { modalities: { image: true, video: false, audio: false } },
+  };
+}
+
+function makeQwenAdapter(config: Record<string, unknown>): AgentAdapter {
+  return {
+    id: 'qwen',
+    displayName: 'Qwen CLI',
+    supportedProviderTypes: ['openai-compatible'],
+    readConfig: vi.fn().mockResolvedValue(null),
+    writeConfig: vi.fn().mockResolvedValue(undefined),
+    buildConfig: vi.fn().mockReturnValue(config),
+    configPaths: vi.fn().mockReturnValue({
+      global: '/home/user/.qwen/settings.json',
+      project: '/project/.qwen/settings.json',
+    }),
+  };
+}
+
+/** Reads the patched (second) writeConfig call's modelProviders entry. */
+function patchedEntry(
+  adapter: AgentAdapter,
+  providerKey: string,
+  index: number,
+): Record<string, unknown> {
+  const calls = vi.mocked(adapter.writeConfig).mock.calls;
+  const written = calls[1]?.[0] as
+    { modelProviders?: Record<string, Array<Record<string, unknown>>> } | undefined;
+  return written?.modelProviders?.[providerKey]?.[index] ?? {};
+}
+
 describe('prepareLaunchTransaction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -104,6 +171,7 @@ describe('prepareLaunchTransaction', () => {
       stop: vi.fn(),
     });
     mockStartResponsesProxy.mockResolvedValue({ url: 'http://127.0.0.1:19999', stop: vi.fn() });
+    mockStartOpenAIParamProxy.mockResolvedValue({ url: 'http://127.0.0.1:7777', stop: vi.fn() });
   });
 
   it('writes a v2 backup manifest with cwd, path, format, hadFile, and content', async () => {
@@ -538,6 +606,155 @@ describe('prepareLaunchTransaction', () => {
     });
     expect(mockStartOpenAIProxy).not.toHaveBeenCalled();
     expect(mockStartAnthropicScrubberProxy).not.toHaveBeenCalled();
+  });
+
+  it('routes needing models through the parameter proxy and keeps envKey', async () => {
+    const entry = qwenEntry('gpt-6.1-terra', 'https://api.openai.com/v1');
+    const adapter = makeQwenAdapter({
+      env: { [entry.envKey]: 'sk-qwen' },
+      security: { auth: { selectedType: 'openai' } },
+      model: { name: entry.id },
+      modelProviders: { openai: [entry] },
+      $version: 4,
+    });
+
+    const { cleanup } = await prepareLaunchTransaction({
+      adapter,
+      profile: qwenUpstreamProfile,
+      providers: [qwenUpstreamProvider],
+      scope: 'global',
+      command: 'qwen',
+    });
+
+    expect(mockStartOpenAIParamProxy).toHaveBeenCalledTimes(1);
+    expect(mockStartOpenAIParamProxy).toHaveBeenCalledWith({
+      upstreamUrl: 'https://api.openai.com/v1',
+    });
+
+    const writeConfig = vi.mocked(adapter.writeConfig);
+    // First call writes the generated config, second call the patched one.
+    expect(writeConfig).toHaveBeenCalledTimes(2);
+    expect(writeConfig).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        model: { name: 'gpt-6.1-terra' },
+        security: { auth: { selectedType: 'openai' } },
+        modelProviders: {
+          openai: [
+            expect.objectContaining({
+              id: 'gpt-6.1-terra',
+              baseUrl: 'http://127.0.0.1:7777/v1',
+              envKey: 'QWEN_CUSTOM_API_KEY_OPENAI_HTTPS_API_OPENAI_COM_V1',
+              generationConfig: { modalities: { image: true, video: false, audio: false } },
+            }),
+          ],
+        },
+      }),
+      'global',
+      undefined,
+      false,
+    );
+
+    await cleanup();
+  });
+
+  it('preserves a custom upstream path when rewriting baseUrl', async () => {
+    const launch = async (baseUrl: string): Promise<unknown> => {
+      const adapter = makeQwenAdapter({
+        modelProviders: { openai: [qwenEntry('gpt-6', baseUrl)] },
+      });
+      const { cleanup } = await prepareLaunchTransaction({
+        adapter,
+        profile: qwenUpstreamProfile,
+        providers: [qwenUpstreamProvider],
+        scope: 'global',
+        command: 'qwen',
+      });
+      const baseUrlAfter = patchedEntry(adapter, 'openai', 0).baseUrl;
+      await cleanup();
+      return baseUrlAfter;
+    };
+
+    expect(await launch('https://openrouter.ai/api/v1')).toBe('http://127.0.0.1:7777/api/v1');
+    expect(await launch('https://openrouter.ai/api/v1/')).toBe('http://127.0.0.1:7777/api/v1');
+  });
+
+  it('leaves models that do not need the proxy on their direct baseUrl', async () => {
+    const adapter = makeQwenAdapter({
+      modelProviders: { openai: [qwenEntry('qwen3.8-max', 'https://dashscope.example.com/v1')] },
+    });
+
+    const { cleanup } = await prepareLaunchTransaction({
+      adapter,
+      profile: qwenUpstreamProfile,
+      providers: [qwenUpstreamProvider],
+      scope: 'global',
+      command: 'qwen',
+    });
+
+    expect(mockStartOpenAIParamProxy).not.toHaveBeenCalled();
+    // Only the initial generated-config write happened; no patched rewrite.
+    const writeConfig = vi.mocked(adapter.writeConfig);
+    expect(writeConfig).toHaveBeenCalledTimes(1);
+    const written = writeConfig.mock.calls[0][0] as {
+      modelProviders: Record<string, Array<{ baseUrl: unknown }>>;
+    };
+    expect(written.modelProviders.openai[0].baseUrl).toBe('https://dashscope.example.com/v1');
+
+    await cleanup();
+  });
+
+  it('starts one proxy per distinct upstream and stops all on cleanup', async () => {
+    const openai = qwenEntry('gpt-6', 'https://api.openai.com/v1');
+    const openrouter = qwenEntry('gpt-6.1', 'https://openrouter.ai/api/v1');
+    const adapter = makeQwenAdapter({ modelProviders: { openai: [openai, openrouter] } });
+
+    const stops = [vi.fn(), vi.fn()];
+    mockStartOpenAIParamProxy
+      .mockResolvedValueOnce({ url: 'http://127.0.0.1:7001', stop: stops[0] })
+      .mockResolvedValueOnce({ url: 'http://127.0.0.1:7002', stop: stops[1] });
+
+    const { cleanup } = await prepareLaunchTransaction({
+      adapter,
+      profile: qwenUpstreamProfile,
+      providers: [qwenUpstreamProvider],
+      scope: 'global',
+      command: 'qwen',
+    });
+
+    expect(mockStartOpenAIParamProxy).toHaveBeenCalledTimes(2);
+    expect(mockStartOpenAIParamProxy).toHaveBeenNthCalledWith(1, {
+      upstreamUrl: 'https://api.openai.com/v1',
+    });
+    expect(mockStartOpenAIParamProxy).toHaveBeenNthCalledWith(2, {
+      upstreamUrl: 'https://openrouter.ai/api/v1',
+    });
+    expect(patchedEntry(adapter, 'openai', 0).baseUrl).toBe('http://127.0.0.1:7001/v1');
+    expect(patchedEntry(adapter, 'openai', 1).baseUrl).toBe('http://127.0.0.1:7002/api/v1');
+
+    await cleanup();
+    expect(stops[0]).toHaveBeenCalledTimes(1);
+    expect(stops[1]).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails the launch when a parameter proxy cannot start', async () => {
+    const adapter = makeQwenAdapter({
+      modelProviders: { openai: [qwenEntry('gpt-6', 'https://api.openai.com/v1')] },
+    });
+    mockStartOpenAIParamProxy.mockRejectedValue(new Error('proxy boom'));
+
+    // The whole transaction rejects: no exec request is resolved and no
+    // patched config is written (only the initial generated-config write).
+    await expect(
+      prepareLaunchTransaction({
+        adapter,
+        profile: qwenUpstreamProfile,
+        providers: [qwenUpstreamProvider],
+        scope: 'global',
+        command: 'qwen',
+      }),
+    ).rejects.toThrow('proxy boom');
+
+    expect(vi.mocked(adapter.writeConfig)).toHaveBeenCalledTimes(1);
   });
 });
 

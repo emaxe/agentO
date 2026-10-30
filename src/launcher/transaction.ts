@@ -15,6 +15,11 @@ import {
 import { getEnvCI, setEnvCI } from '../platform/env.js';
 import { startAnthropicScrubberProxy } from '../proxy/anthropic-scrubber.js';
 import { startOpenAIProxy } from '../proxy/openai-proxy.js';
+import {
+  collectProxyUpstreams,
+  startOpenAIParamProxy,
+  type ProxyCandidate,
+} from '../proxy/openai-param-proxy.js';
 import { startResponsesProxy } from '../proxy/responses-proxy.js';
 import { shellPathResolver } from './shell-path-resolver.js';
 
@@ -262,10 +267,101 @@ async function snapshotPrimaryConfigFile(adapter: AgentAdapter, scope: LaunchSco
   ];
 }
 
+/** One `modelProviders` entry as written by the Qwen adapter. */
+interface QwenModelEntry {
+  id?: unknown;
+  baseUrl?: unknown;
+  [key: string]: unknown;
+}
+
+/**
+ * Starts one parameter proxy per distinct Qwen upstream that needs it and
+ * rewrites the qualifying entries' `baseUrl` to point at the local proxy.
+ *
+ * Qwen CLI hardcodes `max_tokens`, which newer OpenAI models reject; the
+ * param proxy swaps the parameter on the wire. Only `baseUrl` is rewritten:
+ * `envKey` (which names the env var holding the real API key), `id`, `name`
+ * and `generationConfig` stay untouched, as does every other config key.
+ * Returns a cleanup that stops every started proxy, or `undefined` when no
+ * entry qualifies. A proxy that fails to start fails the launch.
+ */
+async function startQwenParamProxies(
+  adapter: AgentAdapter,
+  scope: LaunchScope,
+  cwd: string | undefined,
+  writtenConfig: Record<string, unknown>,
+): Promise<(() => Promise<void>) | undefined> {
+  const modelProviders = writtenConfig.modelProviders;
+  if (
+    typeof modelProviders !== 'object' ||
+    modelProviders === null ||
+    Array.isArray(modelProviders)
+  ) {
+    return undefined;
+  }
+  const groups = modelProviders as Record<string, unknown>;
+
+  const candidates: ProxyCandidate[] = [];
+  for (const value of Object.values(groups)) {
+    if (!Array.isArray(value)) continue;
+    for (const rawEntry of value) {
+      if (typeof rawEntry !== 'object' || rawEntry === null) continue;
+      const entry = rawEntry as QwenModelEntry;
+      candidates.push({ model: String(entry.id ?? ''), baseUrl: String(entry.baseUrl ?? '') });
+    }
+  }
+
+  const upstreams = collectProxyUpstreams(candidates);
+  if (upstreams.length === 0) return undefined;
+
+  const proxyUrls = new Map<string, string>();
+  const stops: Array<() => Promise<void>> = [];
+  try {
+    for (const upstream of upstreams) {
+      const proxy = await startOpenAIParamProxy({ upstreamUrl: upstream });
+      stops.push(proxy.stop);
+      proxyUrls.set(upstream, proxy.url);
+    }
+  } catch (error) {
+    // Best effort: do not leak proxies that did start before the failure.
+    await Promise.allSettled(stops.map((stop) => stop()));
+    throw error;
+  }
+
+  // Deep-copy only modelProviders (entries and their arrays); every other
+  // top-level key is passed through by reference.
+  const patched: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(groups)) {
+    if (!Array.isArray(value)) {
+      patched[key] = value;
+      continue;
+    }
+    patched[key] = value.map((rawEntry) => {
+      if (typeof rawEntry !== 'object' || rawEntry === null) return rawEntry;
+      const entry: QwenModelEntry = { ...(rawEntry as QwenModelEntry) };
+      const baseUrl = String(entry.baseUrl ?? '');
+      const proxyUrl = proxyUrls.get(baseUrl);
+      // Keep the upstream path (e.g. /api/v1): the proxy forwards the
+      // incoming path verbatim, so a custom path must survive the rewrite.
+      if (proxyUrl !== undefined) {
+        entry.baseUrl = proxyUrl + new URL(baseUrl).pathname.replace(/\/+$/, '');
+      }
+      return entry;
+    });
+  }
+
+  await adapter.writeConfig({ ...writtenConfig, modelProviders: patched }, scope, cwd, false);
+
+  return async () => {
+    await Promise.all(stops.map((stop) => stop()));
+  };
+}
+
 /**
  * Starts a local proxy when the provider requires protocol translation.
  * For openai-compatible providers, starts the OpenAI→Anthropic bidirectional proxy.
  * For fireworks/openrouter/custom-api (anthropic mode), starts the anthropic scrubber proxy.
+ * For Qwen, starts the max_tokens→max_completion_tokens parameter proxy.
  */
 async function maybeStartProxy(
   adapter: AgentAdapter,
@@ -275,6 +371,9 @@ async function maybeStartProxy(
   cwd: string | undefined,
   writtenConfig: Record<string, unknown>,
 ): Promise<(() => Promise<void>) | undefined> {
+  if (adapter.id === 'qwen') {
+    return startQwenParamProxies(adapter, scope, cwd, writtenConfig);
+  }
   if (adapter.id !== 'claude-code') return;
 
   const { provider } = resolveBaseModel(profile, providers);
