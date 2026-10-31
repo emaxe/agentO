@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-31
+
+### Added
+
+- Qwen CLI: Chat Completions ↔ Responses bridge in the parameter proxy. When a gpt-6+ reasoning-only model rejects function tools on `/v1/chat/completions`, the same request is replayed once through `/v1/responses`: messages, `tool_calls`, tool results, images and `tools` are translated to the Responses format, and answers (JSON or streamed SSE with tool calls) are translated back to Chat Completions. Tool-call ids are preserved as `call_id` so the follow-up tool-result turn matches.
+
 ### Fixed
 
 - Qwen CLI: gpt-6+ reasoning-only models (`gpt-6.1-sol`, `gpt-6-astra`) now work with function tools — the parameter proxy replays the request through `/v1/responses` and translates the streamed answer back to Chat Completions.
+- Qwen CLI bridge: terminal-only answers are returned instead of an empty stream, and bridge failures surface the real upstream error instead of a misleading Chat Completions `400`.
+- Local proxies force `accept-encoding: identity` on upstream requests so compressed error bodies stay parseable and the parameter/tool detectors keep working.
 
 ## [0.12.0] - 2026-10-30
 
