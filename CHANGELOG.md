@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-01
+
+### Fixed
+
+- Hermes adapter tests no longer assume POSIX paths. The `HERMES_HOME` case pins its platform, and the file-based tests stub `HERMES_HOME` (which wins on every platform) instead of relying on the test `home`, so the Windows CI jobs no longer write to the runner's real profile and fail with `ENOENT`.
+
 ## [0.14.0] - 2026-11-01
 
 ### Added

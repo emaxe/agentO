@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/%40emaxe%2Fagento)](https://www.npmjs.com/package/@emaxe/agento)
 [![CI](https://github.com/emaxe/agentO/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/emaxe/agentO/actions/workflows/ci.yml)
-[![Changelog](https://img.shields.io/badge/changelog-0.14.0-blue)](CHANGELOG.md#0140---2026-11-01)
+[![Changelog](https://img.shields.io/badge/changelog-0.14.1-blue)](CHANGELOG.md#0141---2026-11-01)
 [![Node.js](https://img.shields.io/node/v/%40emaxe%2Fagento)](https://www.npmjs.com/package/@emaxe/agento)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue)](https://github.com/emaxe/agentO#installation)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -156,7 +156,7 @@ Defaults when adding a model: `image=true`, `video=false`, `audio=false`.
 
 For guided setup, run `agento` and choose **Set up AgentO**. Connect a provider, choose or enter a model, save a profile, select an agent, review the changes, and launch. After that, **r** repeats the last confirmed launch.
 
-The equivalent CLI workflow is below. See the [0.14.0 release notes](CHANGELOG.md#0140---2026-11-01) for the full list of changes.
+The equivalent CLI workflow is below. See the [0.14.1 release notes](CHANGELOG.md#0141---2026-11-01) for the full list of changes.
 
 ### 1. Add API Providers
 
