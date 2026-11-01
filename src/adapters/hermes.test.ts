@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HermesAdapter, hermesProviderKey, mergeHermesConfig } from './hermes.js';
@@ -97,7 +97,12 @@ describe('HermesAdapter basics', () => {
 
   it('uses HERMES_HOME for both scopes', () => {
     vi.stubEnv('HERMES_HOME', '/custom/hermes');
-    const adapter = new HermesAdapter({ id: 'hermes', displayName: 'Hermes', home: '/home/u' });
+    const adapter = new HermesAdapter({
+      id: 'hermes',
+      displayName: 'Hermes',
+      home: '/home/u',
+      platform: 'linux',
+    });
     const paths = adapter.configPaths('/any/project');
     expect(paths.global).toBe(posix('/custom/hermes/config.yaml'));
     expect(paths.project).toBe(paths.global);
@@ -251,6 +256,8 @@ describe('HermesAdapter.buildConfig', () => {
 describe('HermesAdapter write/read', () => {
   async function withTempHome(run: (home: string) => Promise<void>): Promise<void> {
     const home = await mkdtemp(join(tmpdir(), 'hermes-adapter-'));
+    // HERMES_HOME wins on every platform, which keeps the tests hermetic on Windows too.
+    vi.stubEnv('HERMES_HOME', home);
     try {
       await run(home);
     } finally {
@@ -269,7 +276,6 @@ describe('HermesAdapter write/read', () => {
     await withTempHome(async (home) => {
       const adapter = new HermesAdapter({ id: 'hermes', displayName: 'Hermes', home });
       const configPath = adapter.configPaths().global;
-      await mkdir(join(home, '.hermes'), { recursive: true });
       await writeFile(
         configPath,
         [
