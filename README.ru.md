@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/%40emaxe%2Fagento)](https://www.npmjs.com/package/@emaxe/agento)
 [![CI](https://github.com/emaxe/agentO/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/emaxe/agentO/actions/workflows/ci.yml)
-[![Changelog](https://img.shields.io/badge/changelog-0.13.0-blue)](CHANGELOG.md#0130---2026-10-31)
+[![Changelog](https://img.shields.io/badge/changelog-0.14.0-blue)](CHANGELOG.md#0140---2026-11-01)
 [![Node.js](https://img.shields.io/node/v/%40emaxe%2Fagento)](https://www.npmjs.com/package/@emaxe/agento)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue)](https://github.com/emaxe/agentO/blob/main/README.ru.md#установка)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -157,7 +157,7 @@ agento
 
 Для настройки через мастер запустите `agento` и выберите **Set up AgentO**: провайдер → модель → профиль → агент → сводка → запуск. Затем клавиша **r** повторяет последний подтверждённый запуск.
 
-Ниже — тот же сценарий через CLI. Полный список изменений — в [релизе 0.13.0](CHANGELOG.md#0130---2026-10-31).
+Ниже — тот же сценарий через CLI. Полный список изменений — в [релизе 0.14.0](CHANGELOG.md#0140---2026-11-01).
 
 ### 1. Добавьте API-провайдер
 

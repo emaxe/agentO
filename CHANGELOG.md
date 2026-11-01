@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-01
+
+### Added
+
+- **Hermes Agent** (`hermes`) and **Hermes Desktop** (`hermes-desktop`): support for [Nous Research's Hermes Agent](https://github.com/NousResearch/hermes-agent). Writes `model` (`provider`, `default`, `base_url`, `api_key`) and `providers.<key>` (`api`, `default_model`, `models`, `transport`) into `$HERMES_HOME/config.yaml` (`~/.hermes/config.yaml`, `%LOCALAPPDATA%\hermes\config.yaml` on Windows) while preserving toolsets, gateway, hooks and `_config_version`. `anthropic-compatible` and `responses-compatible` providers use Hermes' `anthropic_messages` / `codex_responses` transports. Both AgentO scopes point at the same file because Hermes has no project config; the installer uses Hermes' own `--skip-setup` script and Desktop launches through `hermes desktop`.
+- New runtime dependency: `yaml` (Hermes config is YAML; Codex remains on `smol-toml`).
+
 ## [0.13.0] - 2026-10-31
 
 ### Added
