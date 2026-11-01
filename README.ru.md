@@ -7,7 +7,7 @@
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue)](https://github.com/emaxe/agentO/blob/main/README.ru.md#установка)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> Настройте один раз, запускайте повторно одной клавишей. Общие профили моделей и API-провайдеры для девяти AI-агентов.
+> Настройте один раз, запускайте повторно одной клавишей. Общие профили моделей и API-провайдеры для одиннадцати AI-агентов.
 
 AgentO — это CLI-инструмент для централизованного управления конфигурациями популярных AI-агентов для программирования. Задайте API-провайдеры один раз, создайте профили с разными комбинациями моделей и переключайтесь между ними одной командой.
 
@@ -22,6 +22,8 @@ AgentO — это CLI-инструмент для централизованно
 | [Qwen CLI](https://github.com/QwenLM/qwen-code) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | Структура OpenAI-совместимого API; пробрасывает модальности |
 | [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `openai-compatible`, `responses-compatible`, `fireworks`, `openrouter`, `custom-api` | `wire_api: responses`. Профиль в отдельном `default.config.toml`. |
 | [Kimi Code](https://www.kimi.com/code) | `kimi` | TOML | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Пишет `~/.kimi/config.toml` (`default_model`, `providers`, `models`); legacy `~/.kimi/config.json` тоже читается. |
+| [Hermes Agent](https://github.com/NousResearch/hermes-agent) | `hermes` | YAML | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Пишет `model` и `providers` в `~/.hermes/config.yaml` (`%LOCALAPPDATA%\hermes` на Windows, `HERMES_HOME` приоритетнее). Toolsets/gateway/hooks сохраняются. Project-конфига нет: оба scope — один файл. |
+| [Hermes Desktop](https://github.com/NousResearch/hermes-agent) | `hermes` | YAML | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Тот же конфиг, что у Hermes Agent; запускает `hermes desktop`. Первый запуск собирает Electron-приложение. |
 | [Kilo Code](https://github.com/Kilo-Org/kilo-code) | `kilo` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Читает `defaultProvider`/`defaultModel` из `~/.kilocode/settings.json`. Кастомный `baseUrl` из `~/.kilocode/models.json`. |
 | [PI](https://pi.dev/docs/getting-started/installation) | `pi` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | Читает `defaultProvider`/`defaultModel` из `~/.pi/agent/settings.json`. Кастомный `baseUrl` из `~/.pi/agent/models.json`. |
 | [Copilot](https://github.com/github/copilot-cli) | `copilot` | только env-переменные | `openai-compatible`, `anthropic-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Весь конфиг передаётся через переменные окружения — файл настроек не изменяется. |
@@ -31,12 +33,12 @@ AgentO — это CLI-инструмент для централизованно
 
 | Тип провайдера | Совместимые агенты | Примеры |
 |---|---|---|
-| `openai-compatible` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek и т. д. |
-| `anthropic-compatible` | claude-code, opencode, copilot, goose, pi, kilo, kimi | Anthropic и любой endpoint с Anthropic Messages API |
-| `fireworks` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi | Fireworks AI (поддерживает все 3 типа API) |
-| `openrouter` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi | [OpenRouter](https://openrouter.ai) — универсальный шлюз (Anthropic Skin / OpenAI / Responses API) |
-| `responses-compatible` | claude-code, opencode, codex, copilot, goose, kilo, kimi | OpenAI и любой провайдер, поддерживающий OpenAI Responses API |
-| `custom-api` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi | Любой self-hosted endpoint или шлюз; протоколы задаются через `customApiModes` |
+| `openai-compatible` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi, hermes, hermes-desktop | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek и т. д. |
+| `anthropic-compatible` | claude-code, opencode, copilot, goose, pi, kilo, kimi, hermes, hermes-desktop | Anthropic и любой endpoint с Anthropic Messages API |
+| `fireworks` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi, hermes, hermes-desktop | Fireworks AI (поддерживает все 3 типа API) |
+| `openrouter` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi, hermes, hermes-desktop | [OpenRouter](https://openrouter.ai) — универсальный шлюз (Anthropic Skin / OpenAI / Responses API) |
+| `responses-compatible` | claude-code, opencode, codex, copilot, goose, kilo, kimi, hermes, hermes-desktop | OpenAI и любой провайдер, поддерживающий OpenAI Responses API |
+| `custom-api` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi, hermes, hermes-desktop | Любой self-hosted endpoint или шлюз; протоколы задаются через `customApiModes` |
 
 **Примечания:**
 - `claude-code` работает со всеми 6 типами провайдеров. Для не-`anthropic-compatible` провайдеров используется локальный proxy: Anthropic Scrubber для `fireworks`/`openrouter`; OpenAI-to-Anthropic proxy для `openai-compatible`; Responses Proxy для `responses-compatible`. Для `openrouter` используется **Anthropic Skin** — `ANTHROPIC_AUTH_TOKEN` (Bearer).
@@ -319,7 +321,8 @@ agento launch [-p <profile>] [-a <agent>] [options]
 Опции:
   -p, --profile <name>   Имя или id профиля (по умолчанию — последний запуск)
   -a, --agent <id>       id или имя агента (по умолчанию — последний запуск):
-                         claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi
+                         claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi,
+                         hermes, hermes-desktop
   -m, --mode <mode>      Режим: child или independent (последний запуск, затем настройки)
   -s, --scope <scope>    Область: global или project (последний запуск, затем настройки)
   -d, --dev              Устарело: все агенты показываются всегда; флаг оставлен для совместимости

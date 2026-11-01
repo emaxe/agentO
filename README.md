@@ -7,7 +7,7 @@
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-blue)](https://github.com/emaxe/agentO#installation)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> Set up once, launch again with one key. Share model profiles and API providers across nine AI coding agents.
+> Set up once, launch again with one key. Share model profiles and API providers across eleven AI coding agents.
 
 AgentO is a CLI tool that centralizes configuration management for popular AI coding agents. Define your API providers once, create profiles with different model combinations, and switch between them with a single command.
 
@@ -22,6 +22,8 @@ AgentO is a CLI tool that centralizes configuration management for popular AI co
 | [Qwen CLI](https://github.com/QwenLM/qwen-code) | `qwen` | JSON | `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | OpenAI-compatible API structure |
 | [Codex CLI](https://github.com/openai/codex) | `codex` | TOML | `openai-compatible`, `responses-compatible`, `fireworks`, `openrouter`, `custom-api` | `wire_api: responses`. Profile stored in separate `default.config.toml`. |
 | [Kimi Code](https://www.kimi.com/code) | `kimi` | TOML | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Writes `~/.kimi/config.toml` (`default_model`, `providers`, `models`); reads the legacy `~/.kimi/config.json` too. |
+| [Hermes Agent](https://github.com/NousResearch/hermes-agent) | `hermes` | YAML | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Writes `model` + `providers` in `~/.hermes/config.yaml` (`%LOCALAPPDATA%\hermes` on Windows, `HERMES_HOME` wins). Toolsets/gateway/hooks survive. No project config: both scopes use the same file. |
+| [Hermes Desktop](https://github.com/NousResearch/hermes-agent) | `hermes` | YAML | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Same config as Hermes Agent; launches `hermes desktop`. The first launch builds the Electron app, later ones are fast. |
 | [Kilo Code](https://github.com/Kilo-Org/kilo-code) | `kilo` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Reads `defaultProvider`/`defaultModel` from `~/.kilocode/settings.json`. Custom `baseUrl` from `~/.kilocode/models.json`. |
 | [PI](https://pi.dev/docs/getting-started/installation) | `pi` | JSON | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | Reads `defaultProvider`/`defaultModel` from `~/.pi/agent/settings.json`. Custom `baseUrl` from `~/.pi/agent/models.json`. |
 | [Copilot](https://github.com/github/copilot-cli) | `copilot` | env vars only | `openai-compatible`, `anthropic-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | Config delivered entirely via env vars — no settings file patched. |
@@ -99,12 +101,12 @@ More detail — what was verified and what still needs manual acceptance — in
 
 | Provider Type | Compatible Agents | Examples |
 |---|---|---|
-| `openai-compatible` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek, etc. |
-| `anthropic-compatible` | claude-code, opencode, copilot, goose, pi, kilo, kimi | Anthropic, and any endpoint speaking the Anthropic Messages API |
-| `fireworks` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi | Fireworks AI (supports all 3 API types) |
-| `openrouter` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi | [OpenRouter](https://openrouter.ai) — universal LLM gateway (Anthropic Skin / OpenAI / Responses API) |
-| `responses-compatible` | claude-code, opencode, codex, copilot, goose, kilo, kimi | OpenAI and any provider that speaks the OpenAI Responses API |
-| `custom-api` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi | Any self-hosted or gateway endpoint; pick the wire protocols it speaks via `customApiModes` |
+| `openai-compatible` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi, hermes, hermes-desktop | OpenAI, Together.ai, Cerebras, Perplexity, DeepSeek, etc. |
+| `anthropic-compatible` | claude-code, opencode, copilot, goose, pi, kilo, kimi, hermes, hermes-desktop | Anthropic, and any endpoint speaking the Anthropic Messages API |
+| `fireworks` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi, hermes, hermes-desktop | Fireworks AI (supports all 3 API types) |
+| `openrouter` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi, hermes, hermes-desktop | [OpenRouter](https://openrouter.ai) — universal LLM gateway (Anthropic Skin / OpenAI / Responses API) |
+| `responses-compatible` | claude-code, opencode, codex, copilot, goose, kilo, kimi, hermes, hermes-desktop | OpenAI and any provider that speaks the OpenAI Responses API |
+| `custom-api` | claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi, hermes, hermes-desktop | Any self-hosted or gateway endpoint; pick the wire protocols it speaks via `customApiModes` |
 
 **Notes:**
 - `claude-code` works with all 6 provider types. For non-`anthropic-compatible` providers, a local proxy handles protocol translation: Anthropic Scrubber for `fireworks`/`openrouter`; OpenAI-to-Anthropic proxy for `openai-compatible`; Responses Proxy for `responses-compatible`. For `openrouter` it uses OpenRouter's **Anthropic Skin** with `ANTHROPIC_AUTH_TOKEN` (Bearer auth).
@@ -316,14 +318,14 @@ Use **TUI** for exploration and interactive workflows. Use **CLI** for scripting
 
 ## Provider & Agent Compatibility Matrix
 
-| Provider Type | claude-code | opencode | qwen | codex | copilot | goose | pi | kilo | kimi |
-|---|---|---|---|---|---|---|---|---|---|
-| `openai-compatible` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `anthropic-compatible` | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `fireworks` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `openrouter` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `responses-compatible` | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ |
-| `custom-api` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Provider Type | claude-code | opencode | qwen | codex | copilot | goose | pi | kilo | kimi | hermes | hermes-desktop |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `openai-compatible` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `anthropic-compatible` | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `fireworks` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `openrouter` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `responses-compatible` | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ |
+| `custom-api` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **Key Constraints:**
 - `claude-code` works with all 6 provider types; non-`anthropic-compatible` providers use a local proxy for protocol translation
@@ -357,7 +359,8 @@ agento launch [-p <profile>] [-a <agent>] [options]
 Options:
   -p, --profile <name>   Profile name or id (default: last launch)
   -a, --agent <id>       Agent id or label (default: last launch):
-                         claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi
+                         claude-code, opencode, qwen, codex, copilot, goose, pi, kilo, kimi,
+                         hermes, hermes-desktop
   -m, --mode <mode>      Launch mode: child or independent (default: last launch, then settings)
   -s, --scope <scope>    Config scope: global or project (default: last launch, then settings)
   -d, --dev              Deprecated: all agents are shown; kept for compatibility

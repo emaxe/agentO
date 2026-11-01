@@ -132,6 +132,8 @@ export const AgentIdSchema = z.enum([
   'pi',
   'kilo',
   'kimi',
+  'hermes',
+  'hermes-desktop',
 ]);
 export type AgentId = z.infer<typeof AgentIdSchema>;
 

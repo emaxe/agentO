@@ -7,6 +7,7 @@ import { gooseAdapter } from '../adapters/goose.js';
 import { piAdapter } from '../adapters/pi.js';
 import { kiloAdapter } from '../adapters/kilo.js';
 import { kimiAdapter } from '../adapters/kimi.js';
+import { hermesAdapter, hermesDesktopAdapter } from '../adapters/hermes.js';
 import { claudeCodeInstaller } from '../installers/claude-code.js';
 import { openCodeInstaller } from '../installers/opencode.js';
 import { qwenInstaller } from '../installers/qwen.js';
@@ -16,6 +17,7 @@ import { gooseInstaller } from '../installers/goose.js';
 import { piInstaller } from '../installers/pi.js';
 import { kiloInstaller } from '../installers/kilo.js';
 import { kimiInstaller } from '../installers/kimi.js';
+import { hermesInstaller, hermesDesktopInstaller } from '../installers/hermes.js';
 import type { AgentAdapter } from '../adapters/base.js';
 import type { AgentId } from '../config/schema.js';
 import type { AgentInstaller } from '../installers/base.js';
@@ -104,6 +106,21 @@ const AGENTS: readonly AgentRegistryEntry[] = [
     adapter: kimiAdapter,
     command: 'kimi',
     installer: kimiInstaller,
+  },
+  {
+    id: 'hermes',
+    label: 'Hermes Agent',
+    adapter: hermesAdapter,
+    command: 'hermes',
+    installer: hermesInstaller,
+  },
+  {
+    id: 'hermes-desktop',
+    label: 'Hermes Desktop',
+    adapter: hermesDesktopAdapter,
+    command: 'hermes',
+    args: ['desktop'],
+    installer: hermesDesktopInstaller,
   },
 ];
 

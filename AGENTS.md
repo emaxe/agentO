@@ -36,6 +36,7 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── pi.ts              # Адаптер PI
 │   │   ├── kilo.ts            # Адаптер Kilo Code
 │   │   ├── kimi.ts            # Адаптер Kimi Code
+│   │   ├── hermes.ts          # Адаптер Hermes Agent / Hermes Desktop
 │   │   ├── resolve-base-model.ts # Выбор base-модели профиля
 │   │   └── merge-config.ts    # Хелпер conservative merge для адаптеров
 │   ├── agents/
@@ -67,7 +68,8 @@ AgentO — CLI-инструмент для управления конфигур
 │   │   ├── goose.ts           # Установщик Goose
 │   │   ├── pi.ts              # Установщик PI
 │   │   ├── kilo.ts            # Установщик Kilo Code
-│   │   └── kimi.ts            # Установщик Kimi Code
+│   │   ├── kimi.ts            # Установщик Kimi Code
+│   │   └── hermes.ts          # Установщик Hermes Agent / Hermes Desktop
 │   ├── launcher/              # Запуск агентов
 │   │   ├── child.ts           # Child mode (backup → patch → spawn → restore)
 │   │   ├── independent.ts     # Independent mode (backup → patch → exec)
@@ -222,6 +224,8 @@ AgentO — CLI-инструмент для управления конфигур
 | PI | `pi` | `pi` | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `custom-api` | JSON (`~/.pi/agent/settings.json` + `models.json`) | Игнорирует | `defaultProvider`/`defaultModel`; кастомный `baseUrl` — в `models.json`. |
 | Kilo Code | `kilo` | `kilo` | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | JSON (`~/.kilocode/settings.json` + `models.json`) | Игнорирует | `defaultProvider`/`defaultModel`; кастомный `baseUrl` — в `models.json`. |
 | Kimi Code | `kimi` | `kimi` | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | TOML (`~/.kimi/config.toml`, legacy `~/.kimi/config.json` читается) | Игнорирует | `default_model`, `providers.<name>` (`type`, `base_url`, `api_key`), `models.<name>`; project и global указывают на один файл. |
+| Hermes Agent | `hermes` | `hermes` | `anthropic-compatible`, `openai-compatible`, `fireworks`, `openrouter`, `responses-compatible`, `custom-api` | YAML (`$HERMES_HOME/config.yaml`, иначе `~/.hermes/config.yaml`; на Windows `%LOCALAPPDATA%\hermes\config.yaml`) | Игнорирует | `model` (`provider`, `default`, `base_url`, `api_key`) + `providers.<key>` (`name`, `api`, `api_key`, `default_model`, `models`, `transport`). Ключ провайдера — `agento-<slug>` (не перекрывает встроенные slug'и Hermes). `chat_completions` не пишется (дефолт Hermes), `anthropic_messages`/`codex_responses` — явно. Требует зависимости `yaml`; merge правит `model` и `providers` по ключам, остальное (`toolsets`, `gateway`, `hooks`, `_config_version`) сохраняется. `api_key` пишется инлайн: Desktop переиспользует уже запущенный Electron-инстанс, env при повторном запуске не подхватывается. |
+| Hermes Desktop | `hermes-desktop` | `hermes desktop` | те же 6 | тот же `config.yaml`, что у CLI | Игнорирует | Тот же адаптер; первый запуск собирает Electron-приложение (долго), повторные — быстрые. Оба scope указывают на один файл: project-конфига у Hermes нет. |
 
 ### Локальные proxy
 
@@ -301,6 +305,7 @@ Each supported agent has a dedicated installer under `src/installers/` that impl
 | OpenCode | `npm install -g opencode` | https://opencode.ai/docs |
 | Qwen CLI | `npm install -g @qwen-code/qwen-code@latest` | https://github.com/QwenLM/qwen-code |
 | Codex CLI | `npm install -g @openai/codex` | https://github.com/openai/codex |
+| Hermes Agent / Hermes Desktop | `curl -fsSL https://hermes-agent.nousresearch.com/install.sh \| bash -s -- --skip-setup` (Windows: `irm https://hermes-agent.nousresearch.com/install.ps1` с `-SkipSetup`) | https://github.com/NousResearch/hermes-agent |
 
 ## CLI команды
 
@@ -409,7 +414,7 @@ Independent mode использует тот же `src/launcher/transaction.ts` 
 
 Важно: перед передачей управления child process TUI вызывает `process.stdin.pause()` чтобы сбросить состояние stdin.
 
-Агенты с `dev: true` скрывались бы из TUI и CLI, но сейчас таких нет: все 9 входят в registry. Флаг `agento --dev` и `launch --dev` принимаются для совместимости и ничего не меняют.
+Агенты с `dev: true` скрывались бы из TUI и CLI, но сейчас таких нет: все 11 входят в registry. Флаг `agento --dev` и `launch --dev` принимаются для совместимости и ничего не меняют.
 
 ## Тесты
 
@@ -515,7 +520,7 @@ npm run format     # Prettier
 - Codex `project` scope — multi-file transaction: backup manifest содержит global `~/.codex/config.toml` и project `<cwd>/.codex/config.toml`; cleanup/CLI restore восстанавливает или удаляет оба файла без process-local state.
 - Child mode гарантирует восстановление при любом исходе (exit, SIGTERM, SIGINT) и удаляет backup после успешного cleanup
 - Independent mode оставляет конфиг изменённым — восстановление через `agento restore`
-- CLI restore использует `src/agents/registry.ts` с `{ dev: true }`, поэтому поддерживает все зарегистрированные агенты (`claude-code`, `opencode`, `qwen`, `codex`, `copilot`, `goose`, `pi`, `kilo`, `kimi`) без отдельного `--dev` флага и удаляет backup после успешного restore
+- CLI restore использует `src/agents/registry.ts` с `{ dev: true }`, поэтому поддерживает все зарегистрированные агенты (`claude-code`, `opencode`, `qwen`, `codex`, `copilot`, `goose`, `pi`, `kilo`, `kimi`, `hermes`, `hermes-desktop`) без отдельного `--dev` флага и удаляет backup после успешного restore
 
 ### Конфиг Scope
 

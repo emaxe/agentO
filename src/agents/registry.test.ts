@@ -21,6 +21,8 @@ describe('agent registry', () => {
       'pi',
       'kilo',
       'kimi',
+      'hermes',
+      'hermes-desktop',
     ]);
   });
 
